@@ -47,6 +47,42 @@ def get_basic_mnist_model():
     )
 
 
+class MNISTCNN(nn.Module):
+    def __init__(self):
+        super(MNISTCNN, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=1,
+                out_channels=16,
+                kernel_size=5,
+                stride=1,
+                padding=2,
+            ),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(16, 32, 5, 1, 2),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        # fully connected layer, output 10 classes
+        self.out = nn.Linear(32 * 7 * 7, 10)
+        self.sm = nn.LogSoftmax(dim=1)
+
+    def forward(self, x):
+        x = self.conv1(x[:, None])
+        x = self.conv2(x)
+        # flatten the output of conv2 to (batch_size, 32 * 7 * 7)
+        x = x.view(x.size(0), -1)
+        output = self.sm(self.out(x))
+        return output  # return x for visualization
+
+
+def get_cnn_model():
+    return MNISTCNN()
+
+
 def subspace_basis(model, seed, dim):
     torch.manual_seed(seed)
     return [torch.rand(dim, *x.shape) - 0.5 for x in model.parameters()]
@@ -60,11 +96,11 @@ class View:
 
         my_dpi = 96
         self.loss_fig, self.loss_axs = plt.subplots(
-            1, 2, figsize=(800 / my_dpi, 400 / my_dpi), dpi=my_dpi
+            1, 3, figsize=(1200 / my_dpi, 400 / my_dpi), dpi=my_dpi
         )
-        self.n_digits = 2
+        self.n_digits = 3
         self.digit_fig, self.digit_axs = plt.subplots(
-            2, self.n_digits, figsize=(800 / my_dpi, 400 / my_dpi), dpi=my_dpi
+            2, self.n_digits, figsize=(1200 / my_dpi, 400 / my_dpi), dpi=my_dpi
         )
 
         self.loss_fig.set_tight_layout(True)
@@ -78,9 +114,14 @@ class View:
         self.last_imshow = None
 
     def render_loss(self, name, loss, ax):
+        # mx = max([abs(_x[1]) for _x in loss])
         x = [_x[0] for _x in loss]
         y = [_x[1] for _x in loss]
+        # print(y)
+        # ax.set_ylim([-1.1, 1.1])
+        # ylim = ax.get_ylim()
         ax.plot(x, y, label=name)
+        # print(ylim, ax.get_ylim())
         self.loss_fig.canvas.draw()
         self.screen.blit(self.loss_fig, (10, 10))
 
@@ -100,7 +141,7 @@ class View:
         self.screen.blit(self.digit_fig, (10, 410))
 
     def render_losses(self, losses, new_batch_steps):
-        for a_idx in [0, 1]:
+        for a_idx in [0, 1, 2]:
             self.loss_axs[a_idx].cla()
             self.loss_axs[a_idx].set_xlabel("Step")
             self.loss_axs[a_idx].set_ylabel("Loss")
@@ -122,6 +163,15 @@ class View:
             subset_losses(
                 losses["train"],
                 start_idx=last_train_step_idx - 5,
+                end_idx=last_train_step_idx,
+            ),
+            self.loss_axs[2],
+        )
+        self.render_loss(
+            "train",
+            subset_losses(
+                losses["train"],
+                start_idx=last_train_step_idx - 20,
                 end_idx=last_train_step_idx,
             ),
             self.loss_axs[1],
@@ -161,6 +211,8 @@ class DescentModel:
         self.view = view
         self.pytorch_model = pytorch_model
         self.saved_weights = [x.clone() for x in pytorch_model.parameters()]
+        self.num_params = sum([x.numel() for x in self.saved_weights])
+        print(f"MODEL WITH : {self.num_params} parameters")
 
         self.train_raw = MNIST(".", train=True, transform=transform, download=True)
         self.train_batches = math.ceil(len(self.train_raw) / self.train_batch_size)
@@ -258,17 +310,14 @@ class DescentModel:
                 return
             elif cmd == "update" or cmd == "save":
                 self.update(cmd, data)
-                if self.input_q.empty():
-                    self.step += 1
-                    self.do_losses()
             elif cmd == "new batch":
                 print("New batch")
                 self.new_batch_steps.append(self.step)
                 self.current_batch_idx += 1
                 self.fetch_and_set_train_and_val_batch_tensors()
-                losses = self.get_losses()
-                self.record_losses(losses)
-                self.print_losses(losses)
+            if self.input_q.empty():
+                self.step += 1
+                self.do_losses()
 
 
 def key_to_pg_key(key):
@@ -364,7 +413,8 @@ To control each dimension use:
         while running:
             for event in pg.event.get():
                 self.process_event(event)
-            sleep(0.05)  # give the model a chance
+            sleep(0.001)  # give the model a chance
+            # print("UPDATE")
             pg.display.update()
 
 
@@ -421,8 +471,8 @@ AKAI controller usage:
                 self.board_state[f"fader_{event.fader_id}"] = event.value
             print("WTF2")
         # print(step_size)
-        if isinstance(event, controllers.MIDIMix.BlankButton):
-            print("BLANK!!")
+        if isinstance(event, controllers.MIDIMix.BlankButton) and event.state:
+            print("BLANK!!", {event.button_id}, {event.state})
             print("getting new set of vectors")
             # try:
             #     asyncio.get_running_loop().run_in_executor(
@@ -432,9 +482,14 @@ AKAI controller usage:
             # except Exception as e:
             #     print(e)
             print("got new set of vectors")
+            if event.button_id == 1:
+                self.q.put(("save", (self.seed, self.lowrank_state.clone())))
+                self.lowrank_state *= 0.0
+                self.seed += 1337
+            elif event.button_id == 0:
+                print("Getting new batch")
+                self.q.put(("new batch", None))
 
-            self.lowrank_state *= 0.0
-            self.seed += 1337
         # print(board_state_vector.shape)
         print(board_state_vector)
         if board_state_vector.shape[0] == 32:
@@ -482,7 +537,7 @@ AKAI controller usage:
 
 def main():
     parser = argparse.ArgumentParser(description="Process some integers.")
-    parser.add_argument("--train-batch-size", type=int, default=256)
+    parser.add_argument("--train-batch-size", type=int, default=512)
     parser.add_argument("--val-batch-size", type=int, default=1024)
     parser.add_argument("--input", type=str, default="keyboard")
     parser.add_argument("--seed", type=int, default=0)
@@ -492,7 +547,8 @@ def main():
     # init()
     v = View()
     dm = DescentModel(
-        pytorch_model=get_basic_mnist_model(),
+        # pytorch_model=get_basic_mnist_model(),
+        pytorch_model=get_cnn_model(),
         view=v,
         train_batch_size=args.train_batch_size,
         val_batch_size=args.val_batch_size,
@@ -509,11 +565,12 @@ def main():
         raise ValueError("No such input as ", args.input)
     # print(controller.usage_str())
     # await kc.run_loop()
-    thread = Thread(target=dm.run_loop)
+    model_thread = Thread(target=dm.run_loop)
     # thread2 = Thread(target=controller.run_loop)
-    thread.start()
+    model_thread.start()
     # thread2.start()
     controller.run_loop()
+    model_thread.join()
     # time.sleep(100000)
     # await midi_mix.start()  # Start event loop
 
