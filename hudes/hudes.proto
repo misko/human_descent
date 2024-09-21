@@ -1,0 +1,23 @@
+syntax = "proto2";
+
+package hudes;
+
+message DimAndSteps {
+  message DimAndStep {
+    required int32 dim = 1;
+    required float step = 2;
+  }
+  repeated DimAndStep dims_and_steps = 1;
+}
+
+message Control {
+  enum Type {
+    CONTROL_DIMS = 0;
+    CONTROL_RESULT = 1;
+    CONTROL_NEXT_BATCH = 101;
+    CONTROL_NEXT_DIMS = 102;
+    CONTROL_QUIT = 901;
+  }
+  required Type type = 1;
+  optional DimAndSteps dims_and_steps = 200;
+}

@@ -1,4 +1,5 @@
 import math
+from model_data_and_subspace import ModelDataAndSubspace, dot_loss
 from torchvision import datasets
 from torchvision import transforms
 from torch import nn
@@ -11,11 +12,13 @@ from functools import cache
 
 
 class DatasetBatcher:
-    def __init__(self, ds, batch_size):
+    def __init__(self, ds, batch_size, seed=0):
         self.len = math.ceil(len(ds) / batch_size)
         self.batch_size = batch_size
         self.ds = ds
-        self.idxs = torch.randperm(len(self.ds))
+        g = torch.Generator()
+        g.manual_seed(seed)
+        self.idxs = torch.randperm(len(self.ds), generator=g)
 
     # TODO optionally cache this!
     @cache
@@ -99,44 +102,44 @@ def set_parameters(model, weights):
         idx += 1
 
 
-class ModelAndData:
-    def __init__(self, model, train_batch_size, val_batch_size, store="./"):
-        self.model = model
+def mnist_model_data_and_subpace(
+    model,
+    seed=0,
+    store="./",
+    train_batch_size=512,
+    val_batch_size=1024,
+    loss_fn=dot_loss,
+):
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),  # first, convert image to PyTorch tensor
+            transforms.Normalize((0.1307,), (0.3081,)),  # normalize inputs
+        ]
+    )
 
-        torch.manual_seed(0)
-
-        self.num_params = sum([x.numel() for x in model.parameters()])
-        print(f"MODEL WITH : {self.num_params} parameters")
-
-        transform = transforms.Compose(
-            [
-                transforms.ToTensor(),  # first, convert image to PyTorch tensor
-                transforms.Normalize((0.1307,), (0.3081,)),  # normalize inputs
-            ]
-        )
-
-        self.train_data_batcher = DatasetBatcher(
-            datasets.MNIST(
-                os.path.join(store, "mnist_data"),
-                download=True,
-                train=True,
-                transform=transform,
-            ),
-            train_batch_size,
-        )
-        self.val_data_batcher = DatasetBatcher(
-            datasets.MNIST(
-                os.path.join(store, "mnist_data"),
-                download=True,
-                train=False,
-                transform=transform,
-            ),
-            train_batch_size,
-        )
-        self.input_q = Queue()
-
-    def get_batch(self, idx):
-        return {
-            "train": self.train_data_batcher[idx],
-            "val": self.val_data_batcher[idx],
-        }
+    train_data_batcher = DatasetBatcher(
+        datasets.MNIST(
+            os.path.join(store, "mnist_data"),
+            download=True,
+            train=True,
+            transform=transform,
+        ),
+        train_batch_size,
+        seed=seed,
+    )
+    val_data_batcher = DatasetBatcher(
+        datasets.MNIST(
+            os.path.join(store, "mnist_data"),
+            download=True,
+            train=False,
+            transform=transform,
+        ),
+        val_batch_size,
+        seed=seed,
+    )
+    return ModelDataAndSubspace(
+        model=model,
+        train_data_batcher=train_data_batcher,
+        val_data_batcher=val_data_batcher,
+        loss_fn=dot_loss,
+    )
