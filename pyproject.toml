@@ -16,7 +16,8 @@ dependencies = [
  "torch>=2.2",
  "torchvision",
  "websockets",
- "pytest-asyncio"
+ "pytest-asyncio",
+ "protobuf",
 ]
 requires-python = ">=3.10"
 description = "Human descent"
