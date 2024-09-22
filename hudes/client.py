@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
+import asyncio
 import json
-from websockets.sync.client import connect
+from websockets.asyncio.client import connect
 import time
-import hudes_pb2
+from hudes import hudes_pb2
 
 
-def send_dims(n=10):
-    with connect("ws://localhost:8765") as websocket:
+async def send_dims(n=10):
+    async with connect("ws://localhost:8765") as websocket:
         for _ in range(n):
 
             msg = hudes_pb2.Control(
@@ -18,14 +19,10 @@ def send_dims(n=10):
             )
             # msg = {"type": "control", "dims": {1: 0.1, 2: 0.3}}
             print(msg.SerializeToString())
-            websocket.send(msg.SerializeToString())
-            time.sleep(0.05)
-        while True:
-            message = json.loads(websocket.recv())
-            print(f"Received: {message['request idx']}")
-            if int(message["request idx"]) == n:
-                break
+            await websocket.send(msg.SerializeToString())
+            await asyncio.sleep(0.01)
 
 
 if __name__ == "__main__":
-    send_dims()
+
+    asyncio.run(send_dims())

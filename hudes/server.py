@@ -6,11 +6,11 @@ from multiprocessing import Queue
 import multiprocessing
 from threading import Thread
 from model_data_and_subspace import dot_loss
+import websockets
 from websockets.asyncio.server import serve
-import hudes_pb2
 from hudes.mnist import MNISTFFNN, ModelDataAndSubspace, mnist_model_data_and_subpace
 
-import hudes_pb2
+from hudes import hudes_pb2
 
 import logging
 import time
@@ -28,6 +28,7 @@ def listen_and_run(in_q, out_q, mad):
 
     while True:
         v = in_q.get()  # blocking
+        # breakpoint()
         if isinstance(v, str):
             if v == "quit":
                 return
@@ -40,7 +41,7 @@ def listen_and_run(in_q, out_q, mad):
             out_q.put(res)
 
 
-async def inference_runner(mad, run_in="process"):
+async def inference_runner(mad, stop=None, run_in="process"):
     global active_clients
     inference_q = Queue()
     results_q = Queue()
@@ -60,8 +61,14 @@ async def inference_runner(mad, run_in="process"):
     mad.fuse()
 
     while True:
+        if stop is not None and stop.done():
+            inference_q.put("quit")
+            return
         for client_id in range(len(active_clients)):
             client = active_clients[client_id]
+
+            # breakpoint()
+
             # TODO should be some kind of select not poll()
             if len(client["next step"]) > 0:
                 current_step = client["next step"]
@@ -79,16 +86,20 @@ async def inference_runner(mad, run_in="process"):
                 # return through websocket (add obj)
                 res = await asyncio.to_thread(results_q.get)
 
-                await client["websocket"].send(
-                    json.dumps(
-                        {
-                            "type": "result",
-                            "request idx": current_request_idx,
-                            "result": res,
-                        }
+                # TODO need to be ok with getting errors here
+                try:
+                    await client["websocket"].send(
+                        json.dumps(
+                            {
+                                "type": "result",
+                                "request idx": current_request_idx,
+                                "result": res,
+                            }
+                        )
                     )
-                )
-        await asyncio.sleep(0.1)
+                except websockets.exceptions.ConnectionClosedOK:
+                    pass
+        await asyncio.sleep(0.01)
 
 
 async def process_client(websocket):
@@ -106,26 +117,23 @@ async def process_client(websocket):
     dims_offset = 0
     max_dim = 0
     async for message in websocket:
-        print(message)
         msg = hudes_pb2.Control()
         msg.ParseFromString(message)
         print("GOT", msg)
-        msg = json.loads(message)
-        if msg["type"] == "control":
-            for dim, step in msg["dims"].items():
-                dim = int(dim)
-                max_dim = max(max_dim, dim)
-                dim += dims_offset
+        if msg.type == hudes_pb2.Control.CONTROL_DIMS:
+            for dim_and_step in msg.dims_and_steps.dims_and_steps:
+                max_dim = max(max_dim, dim_and_step.dim)
+                dim = dim_and_step.dim + dims_offset
                 if dim in client["next step"]:
-                    client["next step"][dim] += step
+                    client["next step"][dim] += dim_and_step.step
                 else:
-                    client["next step"][dim] = step
+                    client["next step"][dim] = dim_and_step.step
             client["request idx"] += 1
-        elif msg["type"] == "next batch":
+        elif msg.type == hudes_pb2.Control.CONTROL_NEXT_BATCH:
             client["batch idx"] += 1
-        elif msg["type"] == "next dims":
+        elif msg.type == hudes_pb2.Control.CONTROL_NEXT_DIMS:
             dims_offset = max_dim + 1  # make sure we dont re-use dims
-        elif msg["type"] == "quit":
+        elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
             await websocket.send(message)
             break
         else:
