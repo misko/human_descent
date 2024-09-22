@@ -1,14 +1,13 @@
 import math
-from model_data_and_subspace import ModelDataAndSubspace, dot_loss
-from torchvision import datasets
-from torchvision import transforms
-from torch import nn
-import torch
 import os
-
+from functools import cache
 from multiprocessing import Queue
 
-from functools import cache
+import torch
+from torch import nn
+from torchvision import datasets, transforms
+
+from model_data_and_subspace import ModelDataAndSubspace, dot_loss
 
 
 class DatasetBatcher:

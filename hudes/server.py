@@ -2,18 +2,18 @@
 
 import asyncio
 import json
-from multiprocessing import Queue
+import logging
 import multiprocessing
+import time
+from multiprocessing import Queue
 from threading import Thread
-from model_data_and_subspace import dot_loss
+
 import websockets
 from websockets.asyncio.server import serve
-from hudes.mnist import MNISTFFNN, ModelDataAndSubspace, mnist_model_data_and_subpace
 
 from hudes import hudes_pb2
-
-import logging
-import time
+from hudes.mnist import MNISTFFNN, ModelDataAndSubspace, mnist_model_data_and_subpace
+from model_data_and_subspace import dot_loss
 
 client_idx = 0
 active_clients = {}

@@ -2,8 +2,10 @@
 
 import asyncio
 import json
-from websockets.asyncio.client import connect
 import time
+
+from websockets.asyncio.client import connect
+
 from hudes import hudes_pb2
 
 

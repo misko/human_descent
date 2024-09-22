@@ -1,6 +1,7 @@
-from multiprocessing import Queue
-import torch
 from functools import cache
+from multiprocessing import Queue
+
+import torch
 
 MAX_DIMS = 2**16
 
