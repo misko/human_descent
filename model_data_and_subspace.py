@@ -93,8 +93,8 @@ class ModelDataAndSubspace:
         assert self.fused
         batch = self.get_batch(batch_idx)
         self.set_parameters(self.saved_weights + delta_weights)
-        train_pred = self.model(batch["train"][0])
-        val_pred = self.model(batch["val"][0])
+        train_pred = self.model.probs(self.model(batch["train"][0]))
+        val_pred = self.model.probs(self.model(batch["val"][0]))
 
         train_loss = self.loss_fn(train_pred, batch["train"][1])
         val_loss = self.loss_fn(val_pred, batch["val"][1])

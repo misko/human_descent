@@ -51,6 +51,9 @@ class MNISTFFNN(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+    def probs(self, x):
+        return x.exp()
+
 
 class MNISTCNN(nn.Module):
     def __init__(self):
@@ -82,6 +85,9 @@ class MNISTCNN(nn.Module):
         x = x.view(x.size(0), -1)
         output = self.sm(self.out(x))
         return output  # return x for visualization
+
+    def probs(self, x):
+        return x.exp()
 
 
 # precompute these for K seeds

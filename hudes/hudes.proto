@@ -19,10 +19,24 @@ message LossAndPreds {
   optional bytes preds = 4;
 }
 
+message BatchExamples {
+  enum Type {
+    IMG_BW = 0;
+  }
+  required Type type = 1;
+  required int32 n = 2;
+  required bytes train_data = 3;
+  required bytes val_data = 4;
+  required bytes train_labels = 5;
+  required bytes val_labels = 6;
+  required int32 batch_idx = 7;
+}
+
 message Control {
   enum Type {
     CONTROL_DIMS = 0;
     CONTROL_LOSS_AND_PREDS = 1;
+    CONTROL_BATCH_EXAMPLES = 2;
     CONTROL_NEXT_BATCH = 101;
     CONTROL_NEXT_DIMS = 102;
     CONTROL_CONFIG = 103;
@@ -36,5 +50,6 @@ message Control {
 
   optional LossAndPreds loss_and_preds = 202;
   optional int32 request_idx = 203;
+  optional BatchExamples batch_examples = 204;
 
 }

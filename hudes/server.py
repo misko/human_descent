@@ -24,6 +24,23 @@ active_clients = {}
 # TODO need to do brew install brew install protobuf
 
 
+# TODO cache?
+def prepare_batch_example_message(batch_idx, mad, n=4):
+    batch = mad.get_batch(batch_idx)
+    return hudes_pb2.Control(
+        type=hudes_pb2.Control.CONTROL_BATCH_EXAMPLES,
+        batch_examples=hudes_pb2.BatchExamples(
+            type=hudes_pb2.BatchExamples.Type.IMG_BW,
+            n=n,
+            train_data=pickle.dumps(batch["train"][0][:n].tolist()),
+            val_data=pickle.dumps(batch["val"][0][:n].tolist()),
+            train_labels=pickle.dumps(batch["train"][1][:n].tolist()),
+            val_labels=pickle.dumps(batch["val"][1][:n].tolist()),
+            batch_idx=batch_idx,
+        ),
+    )
+
+
 def listen_and_run(in_q, out_q, mad):
     mad.fuse()
 
@@ -69,9 +86,19 @@ async def inference_runner(mad, stop=None, run_in="process"):
             client = active_clients[client_id]
 
             # breakpoint()
+            force_update = False
 
             # TODO should be some kind of select not poll()
-            if len(client["next step"]) > 0:
+            if client["sent batch"] != client["batch idx"]:
+                await client["websocket"].send(
+                    prepare_batch_example_message(
+                        client["batch idx"], mad
+                    ).SerializeToString()
+                )
+                client["sent batch"] = client["batch idx"]
+                force_update = True
+
+            if force_update or len(client["next step"]) > 0:
                 current_step = client["next step"]
                 current_request_idx = client["request idx"]
                 client["next step"] = {}
@@ -79,10 +106,13 @@ async def inference_runner(mad, stop=None, run_in="process"):
                 if "weight vec" not in client:
                     client["weight vec"] = mad.blank_weight_vec()
                 # update weight vector for client
-                weight_vec = mad.delta_from_dims(current_step)
+                if len(current_step) > 0:
+                    client["weight vec"] += mad.delta_from_dims(current_step)
+
+                print(client["weight vec"].abs().mean())
 
                 # send weight vector for inference
-                inference_q.put((weight_vec, client["batch idx"]))
+                inference_q.put((client["weight vec"], client["batch idx"]))
 
                 # return through websocket (add obj)
                 res = await asyncio.to_thread(results_q.get)
@@ -94,8 +124,8 @@ async def inference_runner(mad, stop=None, run_in="process"):
                         hudes_pb2.Control(
                             type=hudes_pb2.Control.CONTROL_LOSS_AND_PREDS,
                             loss_and_preds=hudes_pb2.LossAndPreds(
-                                train_loss=0.1,
-                                val_loss=0.01,
+                                train_loss=res["train_loss"],
+                                val_loss=res["val_loss"],
                                 preds=pickle.dumps(res["train_preds"]),
                                 request_idx=current_request_idx,
                             ),
@@ -112,6 +142,11 @@ async def inference_runner(mad, stop=None, run_in="process"):
                     # )
                 except websockets.exceptions.ConnectionClosedOK:
                     pass
+
+                # (Pdb) batch['train'][0].shape
+                # torch.Size([512, 28, 28])
+                # (Pdb) batch['train'][1].shape
+                # torch.Size([512])
         await asyncio.sleep(0.01)
 
 
@@ -125,6 +160,7 @@ async def process_client(websocket):
         "batch idx": 0,
         "websocket": websocket,
         "request idx": 0,
+        "sent batch": -1,
     }
     active_clients[current_client] = client
     dims_offset = 0
@@ -145,13 +181,17 @@ async def process_client(websocket):
             client["request idx"] += 1
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_BATCH:
             client["batch idx"] += 1
+            # send back batch examples
+
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_DIMS:
             dims_offset += config["dims_at_a_time"]  # make sure we dont re-use dims
         elif msg.type == hudes_pb2.Control.CONTROL_CONFIG:
             config["dims_at_a_time"] = msg.config.dims_at_a_time
             config["seed"] = msg.config.seed
+            # send back batch examples
+            # websocket.send(message)
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
-            await websocket.send(message)
+            # await websocket.send(message)
             break
         else:
             logging.warning("received invalid type from client")

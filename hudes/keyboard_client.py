@@ -1,7 +1,14 @@
 import argparse
+import math
 import pickle
 
+# if PLT_PYGAME:
+#     matplotlib.use("module://pygame_matplotlib.backend_pygame")
+from time import sleep
+
 import matplotlib
+import pygame as pg
+import torch
 
 from hudes import hudes_pb2
 from hudes.client import (
@@ -10,20 +17,14 @@ from hudes.client import (
     next_batch_message,
     next_dims_message,
 )
+from hudes.view import View
 
-# matplotlib.use("Agg")
-PLT_PYGAME = True
-
-if PLT_PYGAME:
-    matplotlib.use("module://pygame_matplotlib.backend_pygame")
-from time import sleep
-
-import pygame as pg
-import torch
+# # matplotlib.use("Agg")
+# PLT_PYGAME = True
 
 
 class KeyboardClient:
-    def __init__(self, step_size=0.01, step_size_resolution=0.0005):
+    def __init__(self, log_step_size=-2, step_size_resolution=0.05):
 
         self.paired_keys = [
             ("w", "s"),
@@ -40,7 +41,11 @@ class KeyboardClient:
             u, d = self.paired_keys[idx]
             self.key_to_param_and_sign[u] = (idx, 1)
             self.key_to_param_and_sign[d] = (idx, -1)
-        self.step_size = step_size
+
+        self.log_step_size = log_step_size
+        self.max_log_step_size = 0
+        self.min_log_step_size = -10
+        self.step_size = math.pow(10, self.log_step_size)
         self.step_size_resolution = step_size_resolution
 
         self.quit_count = 0
@@ -53,9 +58,14 @@ class KeyboardClient:
         )
 
         pg.init()
-        self.screen = pg.display.set_mode((1200, 900))
+        self.window = pg.display.set_mode((1200, 900))
         self.running = True
         self.request_idx = 0
+
+        self.train_losses = []
+        self.val_losses = []
+
+        self.view = View()
 
     def usage_str(self):
         return (
@@ -95,7 +105,6 @@ To control each dimension use:
             self.quit_count = 0
 
             if key in self.key_to_param_and_sign:
-                print(key, self.key_to_param_and_sign[key], self.step_size)
                 dim, sign = self.key_to_param_and_sign[key]
                 self.hudes_client.send_q.put(
                     dims_and_steps_to_control_message(
@@ -109,11 +118,35 @@ To control each dimension use:
                 # TODO need to batch here before sending
                 # send needs to be independent of this
             elif key == "[":
-                self.step_size = max(self.step_size - self.step_size_resolution, 0)
-                print(f"Step size: {self.step_size}")
+                self.log_step_size = min(
+                    max(
+                        self.log_step_size - self.step_size_resolution,
+                        self.min_log_step_size,
+                    ),
+                    self.max_log_step_size,
+                )
+                self.step_size = math.pow(10, self.log_step_size)
+                print(
+                    f"Step size: {self.step_size} , Log step size: {self.log_step_size}"
+                )
+                self.view.update_step_size(
+                    self.log_step_size, self.max_log_step_size, self.min_log_step_size
+                )
             elif key == "]":
-                self.step_size = self.step_size + self.step_size_resolution
-                print(f"Step size: {self.step_size}")
+                self.log_step_size = min(
+                    max(
+                        self.log_step_size + self.step_size_resolution,
+                        self.min_log_step_size,
+                    ),
+                    self.max_log_step_size,
+                )
+                self.step_size = math.pow(10, self.log_step_size)
+                print(
+                    f"Step size: {self.step_size} , Log step size: {self.log_step_size}"
+                )
+                self.view.update_step_size(
+                    self.log_step_size, self.max_log_step_size, self.min_log_step_size
+                )
             elif key == " ":
                 print("getting new set of vectors")
                 self.hudes_client.send_q.put(next_dims_message().SerializeToString())
@@ -124,7 +157,11 @@ To control each dimension use:
                 # self.q.put(("new batch", None))
 
     def run_loop(self):
-
+        self.view.update_top()
+        self.view.update_step_size(
+            self.log_step_size, self.max_log_step_size, self.min_log_step_size
+        )
+        self.view.plot_train_and_val(self.train_losses, self.val_losses)
         while self.running:
             # check and send local interactions(?)
             for event in pg.event.get():
@@ -137,11 +174,31 @@ To control each dimension use:
                 msg = hudes_pb2.Control()
                 msg.ParseFromString(raw_msg)
 
-                train_preds = pickle.loads(msg.loss_and_preds.preds)
+                if msg.type == hudes_pb2.Control.CONTROL_LOSS_AND_PREDS:
+
+                    train_preds = pickle.loads(msg.loss_and_preds.preds)
+
+                    self.train_losses.append(msg.loss_and_preds.train_loss)
+                    self.val_losses.append(msg.loss_and_preds.val_loss)
+
+                    self.view.plot_train_and_val(self.train_losses, self.val_losses)
+                    self.view.update_example_preds(train_preds=train_preds)
+                elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:
+                    self.train_data = pickle.loads(msg.batch_examples.train_data)
+                    self.val_data = pickle.loads(msg.batch_examples.val_data)
+                    self.train_labels = pickle.loads(msg.batch_examples.train_labels)
+                    self.val_labels = pickle.loads(msg.batch_examples.val_labels)
+                    self.view.update_examples(
+                        train_data=self.train_data,
+                        val_data=self.val_data,
+                    )
+
+                # print(self.train_losses)
 
             # msg.ParseFromString(msg)
             # draw something?
 
+            self.view.draw()
             sleep(0.001)  # give the model a chance
             # print("UPDATE")
             # pg.display.update()
