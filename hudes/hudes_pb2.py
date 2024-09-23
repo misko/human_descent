@@ -24,19 +24,21 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bhudes.proto\x12\x05hudes\"m\n\x0b\x44imAndSteps\x12\x35\n\x0e\x64ims_and_steps\x18\x01 \x03(\x0b\x32\x1d.hudes.DimAndSteps.DimAndStep\x1a\'\n\nDimAndStep\x12\x0b\n\x03\x64im\x18\x01 \x02(\x05\x12\x0c\n\x04step\x18\x02 \x02(\x02\"\xc9\x01\n\x07\x43ontrol\x12!\n\x04type\x18\x01 \x02(\x0e\x32\x13.hudes.Control.Type\x12+\n\x0e\x64ims_and_steps\x18\xc8\x01 \x01(\x0b\x32\x12.hudes.DimAndSteps\"n\n\x04Type\x12\x10\n\x0c\x43ONTROL_DIMS\x10\x00\x12\x12\n\x0e\x43ONTROL_RESULT\x10\x01\x12\x16\n\x12\x43ONTROL_NEXT_BATCH\x10\x65\x12\x15\n\x11\x43ONTROL_NEXT_DIMS\x10\x66\x12\x11\n\x0c\x43ONTROL_QUIT\x10\x85\x07')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bhudes.proto\x12\x05hudes\"\'\n\nDimAndStep\x12\x0b\n\x03\x64im\x18\x01 \x02(\x05\x12\x0c\n\x04step\x18\x02 \x02(\x02\".\n\x06\x43onfig\x12\x0c\n\x04seed\x18\x01 \x02(\x05\x12\x16\n\x0e\x64ims_at_a_time\x18\x02 \x02(\x05\"X\n\x0cLossAndPreds\x12\x12\n\ntrain_loss\x18\x01 \x02(\x01\x12\x10\n\x08val_loss\x18\x02 \x02(\x01\x12\x13\n\x0brequest_idx\x18\x03 \x02(\x05\x12\r\n\x05preds\x18\x04 \x01(\x0c\"\xc9\x02\n\x07\x43ontrol\x12!\n\x04type\x18\x01 \x02(\x0e\x32\x13.hudes.Control.Type\x12*\n\x0e\x64ims_and_steps\x18\xc8\x01 \x03(\x0b\x32\x11.hudes.DimAndStep\x12\x1e\n\x06\x63onfig\x18\xc9\x01 \x01(\x0b\x32\r.hudes.Config\x12,\n\x0eloss_and_preds\x18\xca\x01 \x01(\x0b\x32\x13.hudes.LossAndPreds\x12\x14\n\x0brequest_idx\x18\xcb\x01 \x01(\x05\"\x8a\x01\n\x04Type\x12\x10\n\x0c\x43ONTROL_DIMS\x10\x00\x12\x1a\n\x16\x43ONTROL_LOSS_AND_PREDS\x10\x01\x12\x16\n\x12\x43ONTROL_NEXT_BATCH\x10\x65\x12\x15\n\x11\x43ONTROL_NEXT_DIMS\x10\x66\x12\x12\n\x0e\x43ONTROL_CONFIG\x10g\x12\x11\n\x0c\x43ONTROL_QUIT\x10\x85\x07')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'hudes_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_DIMANDSTEPS']._serialized_start=22
-  _globals['_DIMANDSTEPS']._serialized_end=131
-  _globals['_DIMANDSTEPS_DIMANDSTEP']._serialized_start=92
-  _globals['_DIMANDSTEPS_DIMANDSTEP']._serialized_end=131
-  _globals['_CONTROL']._serialized_start=134
-  _globals['_CONTROL']._serialized_end=335
-  _globals['_CONTROL_TYPE']._serialized_start=225
-  _globals['_CONTROL_TYPE']._serialized_end=335
+  _globals['_DIMANDSTEP']._serialized_start=22
+  _globals['_DIMANDSTEP']._serialized_end=61
+  _globals['_CONFIG']._serialized_start=63
+  _globals['_CONFIG']._serialized_end=109
+  _globals['_LOSSANDPREDS']._serialized_start=111
+  _globals['_LOSSANDPREDS']._serialized_end=199
+  _globals['_CONTROL']._serialized_start=202
+  _globals['_CONTROL']._serialized_end=531
+  _globals['_CONTROL_TYPE']._serialized_start=393
+  _globals['_CONTROL_TYPE']._serialized_end=531
 # @@protoc_insertion_point(module_scope)

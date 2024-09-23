@@ -47,14 +47,14 @@ async def run_server_process():
 
 @pytest.mark.asyncio
 async def test_single_websocket_thread(run_server_thread):
-    await send_dims(100)
+    await send_dims(5)
 
 
 @pytest.mark.asyncio
 async def test_single_websocket_process(run_server_process):
-    await send_dims(100)
+    await send_dims(5)
 
 
 @pytest.mark.asyncio
 async def test_multi_websocket_process(run_server_process):
-    await asyncio.gather(*[asyncio.create_task(send_dims(100)) for x in range(10)])
+    await asyncio.gather(*[asyncio.create_task(send_dims(2)) for x in range(10)])

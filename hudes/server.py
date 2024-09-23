@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import multiprocessing
+import pickle
 import time
 from multiprocessing import Queue
 from threading import Thread
@@ -88,15 +89,27 @@ async def inference_runner(mad, stop=None, run_in="process"):
 
                 # TODO need to be ok with getting errors here
                 try:
+                    # print(pickle.loads(pickle.dumps(res["train_preds"])))
                     await client["websocket"].send(
-                        json.dumps(
-                            {
-                                "type": "result",
-                                "request idx": current_request_idx,
-                                "result": res,
-                            }
-                        )
+                        hudes_pb2.Control(
+                            type=hudes_pb2.Control.CONTROL_LOSS_AND_PREDS,
+                            loss_and_preds=hudes_pb2.LossAndPreds(
+                                train_loss=0.1,
+                                val_loss=0.01,
+                                preds=pickle.dumps(res["train_preds"]),
+                                request_idx=current_request_idx,
+                            ),
+                        ).SerializeToString()
                     )
+
+                    #     json.dumps(
+                    #         {
+                    #             "type": "result",
+                    #             "request idx": current_request_idx,
+                    #             "result": res,
+                    #         }
+                    #     )
+                    # )
                 except websockets.exceptions.ConnectionClosedOK:
                     pass
         await asyncio.sleep(0.01)
@@ -115,14 +128,15 @@ async def process_client(websocket):
     }
     active_clients[current_client] = client
     dims_offset = 0
-    max_dim = 0
+
+    config = {}
     async for message in websocket:
         msg = hudes_pb2.Control()
         msg.ParseFromString(message)
-        print("GOT", msg)
+        print("GOT MESSAGE!", msg)
         if msg.type == hudes_pb2.Control.CONTROL_DIMS:
-            for dim_and_step in msg.dims_and_steps.dims_and_steps:
-                max_dim = max(max_dim, dim_and_step.dim)
+            for dim_and_step in msg.dims_and_steps:
+                # max_dim = max(max_dim, dim_and_step.dim)
                 dim = dim_and_step.dim + dims_offset
                 if dim in client["next step"]:
                     client["next step"][dim] += dim_and_step.step
@@ -132,7 +146,10 @@ async def process_client(websocket):
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_BATCH:
             client["batch idx"] += 1
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_DIMS:
-            dims_offset = max_dim + 1  # make sure we dont re-use dims
+            dims_offset += config["dims_at_a_time"]  # make sure we dont re-use dims
+        elif msg.type == hudes_pb2.Control.CONTROL_CONFIG:
+            config["dims_at_a_time"] = msg.config.dims_at_a_time
+            config["seed"] = msg.config.seed
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
             await websocket.send(message)
             break

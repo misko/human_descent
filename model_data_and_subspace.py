@@ -102,5 +102,5 @@ class ModelDataAndSubspace:
         return {
             "train_loss": train_loss.item(),
             "val_loss": val_loss.item(),
-            "train_preds": train_pred[: self.return_n_preds].tolist(),
+            "train_preds": train_pred[: self.return_n_preds],
         }

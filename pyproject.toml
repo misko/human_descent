@@ -18,6 +18,7 @@ dependencies = [
  "websockets",
  "pytest-asyncio",
  "protobuf",
+ "pygame"
 ]
 requires-python = ">=3.10"
 description = "Human descent"

@@ -1,0 +1,2 @@
+#compile protobuf
+protoc --proto_path=hudes/ --python_out=hudes/ ./hudes/hudes.proto
