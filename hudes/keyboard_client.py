@@ -71,7 +71,7 @@ class KeyboardClient:
 
         self.view = View()
 
-    def usage_str(self):
+    def usage_str(self) -> str:
         return (
             f"""
 Keyboard controller usage:
@@ -102,7 +102,7 @@ To control each dimension use:
             if key == "q":
                 self.quit_count += 1
                 print("Keep holding to quit!")
-                if self.quit_count > 10:
+                if self.quit_count > 4:
                     print("Quiting")
                     self.hudes_client.running = False
                 return
@@ -154,13 +154,10 @@ To control each dimension use:
             elif key == " ":
                 print("getting new set of vectors")
                 self.hudes_client.send_q.put(next_dims_message().SerializeToString())
-            # elif key == ".":
-            #    self.hudes_client.send_q.put(next_dims_message().SerializeToString())
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_RETURN:
                 print("Getting new batch")
                 self.hudes_client.send_q.put(next_batch_message().SerializeToString())
-                # self.q.put(("new batch", None))
 
     def run_loop(self):
         self.view.update_step_size(
@@ -226,15 +223,8 @@ To control each dimension use:
                         self.minimize,
                     )
 
-                # print(self.train_losses)
-
-            # msg.ParseFromString(msg)
-            # draw something?
-
             self.view.draw()
-            sleep(0.001)  # give the model a chance
-            # print("UPDATE")
-            # pg.display.update()
+            sleep(0.001)
 
 
 def main():

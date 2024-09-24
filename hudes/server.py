@@ -26,7 +26,9 @@ active_clients = {}
 
 
 # TODO cache?
-def prepare_batch_example_message(batch_idx, mad, n=4):
+def prepare_batch_example_message(
+    batch_idx: int, mad: ModelDataAndSubspace, n: int = 4
+):
     batch = mad.get_batch(batch_idx)
     return hudes_pb2.Control(
         type=hudes_pb2.Control.CONTROL_BATCH_EXAMPLES,
@@ -42,26 +44,23 @@ def prepare_batch_example_message(batch_idx, mad, n=4):
     )
 
 
-def listen_and_run(in_q, out_q, mad):
+def listen_and_run(in_q: Queue, out_q: Queue, mad: ModelDataAndSubspace):
     mad.fuse()
 
     while True:
         v = in_q.get()  # blocking
-        # breakpoint()
         if isinstance(v, str):
             if v == "quit":
                 return
         else:
             # assume its a tensor
             train_or_val, weight_tensor, batch_idx = v
-            # st = time.time()
             if train_or_val == "train":
                 res = mad.train_model_inference_with_delta_weights(
                     weight_tensor, batch_idx
                 )
             elif train_or_val == "val":
                 res = mad.val_model_inference_with_delta_weights(weight_tensor)
-            # print("INF", time.time() - st)
             out_q.put(res)
 
 
@@ -77,7 +76,9 @@ class Client:
     request_full_val: bool = False
 
 
-async def inference_runner(mad: ModelDataAndSubspace, stop=None, run_in="process"):
+async def inference_runner(
+    mad: ModelDataAndSubspace, stop=None, run_in: str = "process"
+):
     global active_clients
     inference_q = Queue()
     results_q = Queue()
@@ -135,13 +136,11 @@ async def inference_runner(mad: ModelDataAndSubspace, stop=None, run_in="process
 
                 # TODO need to be ok with getting errors here
                 try:
-                    # print(pickle.loads(pickle.dumps(res["train_preds"])))
                     await client.websocket.send(
                         hudes_pb2.Control(
                             type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
                             train_loss_and_preds=hudes_pb2.TrainLossAndPreds(
                                 train_loss=res["train_loss"],
-                                # val_loss=res["val_loss"],
                                 preds=pickle.dumps(res["train_preds"]),
                                 confusion_matrix=pickle.dumps(res["confusion_matrix"]),
                             ),
@@ -157,7 +156,6 @@ async def inference_runner(mad: ModelDataAndSubspace, stop=None, run_in="process
                 # return through websocket (add obj)
                 res = await asyncio.to_thread(results_q.get)
                 try:
-                    # print(pickle.loads(pickle.dumps(res["train_preds"])))
                     await client.websocket.send(
                         hudes_pb2.Control(
                             type=hudes_pb2.Control.CONTROL_VAL_LOSS,
@@ -170,10 +168,6 @@ async def inference_runner(mad: ModelDataAndSubspace, stop=None, run_in="process
                 except websockets.exceptions.ConnectionClosedOK:
                     pass
                 client.request_full_val = False
-                # (Pdb) batch['train'][0].shape
-                # torch.Size([512, 28, 28])
-                # (Pdb) batch['train'][1].shape
-                # torch.Size([512])
         await asyncio.sleep(0.01)
 
 
@@ -198,7 +192,6 @@ async def process_client(websocket):
         msg.ParseFromString(message)
         if msg.type == hudes_pb2.Control.CONTROL_DIMS:
             for dim_and_step in msg.dims_and_steps:
-                # max_dim = max(max_dim, dim_and_step.dim)
                 dim = dim_and_step.dim + dims_offset
                 if dim in client.next_step:
                     client.next_step[dim] += dim_and_step.step
@@ -216,9 +209,7 @@ async def process_client(websocket):
             config["dims_at_a_time"] = msg.config.dims_at_a_time
             config["seed"] = msg.config.seed
             # send back batch examples
-            # websocket.send(message)
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
-            # await websocket.send(message)
             break
         else:
             logging.warning("received invalid type from client")
@@ -228,20 +219,13 @@ async def process_client(websocket):
 async def run_server(stop):
     async with serve(process_client, "localhost", 8765):
         await stop
-        # await asyncio.get_running_loop().create_future()  # run forever
 
 
 async def run_wrapper():
     mad = mnist_model_data_and_subpace(model=MNISTFFNN(), loss_fn=indexed_loss)
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(run_server(stop), inference_runner(mad, run_in="thread"))
-    # await
 
 
 if __name__ == "__main__":
-    # ModelDataAndSubspace(MNISTFFNN(), train_batch_size=512, val_batch_size=1024)
-    # x, y = mad.train_data_batcher[0]
-    # mad.model(x)
-
-    # stop.set_result(True) # to stop server
     asyncio.run(run_wrapper())

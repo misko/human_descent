@@ -7,28 +7,7 @@ import torch
 from torch import nn
 from torchvision import datasets, transforms
 
-from model_data_and_subspace import ModelDataAndSubspace, indexed_loss
-
-
-class DatasetBatcher:
-    def __init__(self, ds, batch_size, seed=0):
-        self.len = math.ceil(len(ds) / batch_size)
-        self.batch_size = batch_size
-        self.ds = ds
-        g = torch.Generator()
-        g.manual_seed(seed)
-        self.idxs = torch.randperm(len(self.ds), generator=g)
-
-    # TODO optionally cache this!
-    @cache
-    def __getitem__(self, idx):
-        idx = idx % self.len
-        start_idx = idx * self.batch_size
-        end_idx = min(len(self.ds), start_idx + self.batch_size)
-        x, y = torch.cat(
-            [self.ds[idx][0] for idx in self.idxs[start_idx:end_idx]], dim=0
-        ), torch.tensor([self.ds[idx][1] for idx in self.idxs[start_idx:end_idx]])
-        return x, y
+from model_data_and_subspace import DatasetBatcher, ModelDataAndSubspace, indexed_loss
 
 
 class MNISTFFNN(nn.Module):
@@ -50,7 +29,7 @@ class MNISTFFNN(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-    def probs(self, x):
+    def probs(self, x: torch.Tensor):
         return x.exp()
 
 
@@ -85,18 +64,18 @@ class MNISTCNN(nn.Module):
         output = self.sm(self.out(x))
         return output  # return x for visualization
 
-    def probs(self, x):
+    def probs(self, x: torch.Tensor):
         return x.exp()
 
 
 # precompute these for K seeds
-def subspace_basis(model, seed, dim):
+def subspace_basis(model, seed: int, dim: int):
     torch.manual_seed(seed)
     return [torch.rand(dim, *x.shape) - 0.5 for x in model.parameters()]
 
 
 @torch.no_grad
-def set_parameters(model, weights):
+def set_parameters(model, weights: torch.Tensor):
     idx = 0
     for param in model.parameters():
         # assert param.shape == weights[idx].shape
@@ -107,11 +86,11 @@ def set_parameters(model, weights):
 
 
 def mnist_model_data_and_subpace(
-    model,
-    seed=0,
-    store="./",
-    train_batch_size=512,
-    val_batch_size=1024,
+    model: nn.Module,
+    seed: int = 0,
+    store: str = "./",
+    train_batch_size: int = 512,
+    val_batch_size: int = 1024,
     loss_fn=indexed_loss,
 ):
     transform = transforms.Compose(

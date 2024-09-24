@@ -50,7 +50,9 @@ def next_dims_message():
     )
 
 
-def dims_and_steps_to_control_message(dims_and_steps, request_idx):
+def dims_and_steps_to_control_message(
+    dims_and_steps: dict[int, float], request_idx: int
+):
     return hudes_pb2.Control(
         type=hudes_pb2.Control.CONTROL_DIMS,
         dims_and_steps=[
@@ -65,7 +67,7 @@ def dims_and_steps_to_control_message(dims_and_steps, request_idx):
 # dont overwhelm the connection with small instructions, istead
 # buffer client side to reduce latency between result and control
 class HudesWebsocketClient:
-    def __init__(self, remote_addr):
+    def __init__(self, remote_addr: str):
         self.remote_addr = remote_addr
         self.send_q = Queue()
         self.recv_q = Queue()
@@ -149,7 +151,7 @@ class HudesWebsocketClient:
             self.running = False
 
 
-async def send_dims(n=10):
+async def send_dims(n: int = 10):
     async with connect("ws://localhost:8765") as websocket:
         for _ in range(n):
 

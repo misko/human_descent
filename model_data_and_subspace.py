@@ -1,13 +1,36 @@
+import math
 from functools import cache
 from multiprocessing import Queue
 
 import torch
+from torch import nn
 
 MAX_DIMS = 2**16
 
 
+class DatasetBatcher:
+    def __init__(self, ds, batch_size: int, seed: int = 0):
+        self.len = math.ceil(len(ds) / batch_size)
+        self.batch_size = batch_size
+        self.ds = ds
+        g = torch.Generator()
+        g.manual_seed(seed)
+        self.idxs = torch.randperm(len(self.ds), generator=g)
+
+    # TODO optionally cache this!
+    @cache
+    def __getitem__(self, idx: int):
+        idx = idx % self.len
+        start_idx = idx * self.batch_size
+        end_idx = min(len(self.ds), start_idx + self.batch_size)
+        x, y = torch.cat(
+            [self.ds[idx][0] for idx in self.idxs[start_idx:end_idx]], dim=0
+        ), torch.tensor([self.ds[idx][1] for idx in self.idxs[start_idx:end_idx]])
+        return x, y
+
+
 # https://stackoverflow.com/questions/74865438/how-to-get-a-flattened-view-of-pytorch-model-parameters
-def fuse_parameters(model):
+def fuse_parameters(model: nn.Module):
     """Move model parameters to a contiguous tensor, and return that tensor."""
     n = sum(p.numel() for p in model.parameters())
     params = torch.zeros(n)
@@ -20,11 +43,11 @@ def fuse_parameters(model):
     return params
 
 
-def indexed_loss(pred, label):
+def indexed_loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
     return pred[torch.arange(label.shape[0]), label]
 
 
-def get_confusion_matrix(preds, labels):
+def get_confusion_matrix(preds: torch.Tensor, labels: torch.Tensor):
     # (Pdb) preds.shape
     # torch.Size([512, 10])
     # (Pdb) labels.shape
@@ -46,12 +69,12 @@ class ModelDataAndSubspace:
 
     def __init__(
         self,
-        model,
+        model: nn.Module,
         loss_fn,
-        train_data_batcher,
-        val_data_batcher,
-        seed=0,
-        minimize=False,
+        train_data_batcher: DatasetBatcher,
+        val_data_batcher: DatasetBatcher,
+        seed: int = 0,
+        minimize: bool = False,
     ):
         self.model = model
         self.num_params = sum([x.numel() for x in model.parameters()])
@@ -89,7 +112,7 @@ class ModelDataAndSubspace:
     # todo cache this?
     @cache
     @torch.no_grad
-    def get_dim_vec(self, dim):
+    def get_dim_vec(self, dim: int):
         assert self.fused
         g = torch.Generator()
         g.manual_seed(self.seeds_for_dims[dim % MAX_DIMS].item())
@@ -99,11 +122,11 @@ class ModelDataAndSubspace:
 
     # dims is a dictionary {dim:step_size}
     @torch.no_grad
-    def delta_from_dims(self, dims):
+    def delta_from_dims(self, dims: dict[int, float]):
         return torch.cat([self.get_dim_vec(d) * v for d, v in dims.items()]).sum(axis=0)
 
     @torch.no_grad
-    def set_parameters(self, weights):
+    def set_parameters(self, weights: torch.Tensor):
         assert self.fused
         # self.model_params.copy_(weights) # segfaults?
         self.model_params *= 0
@@ -111,14 +134,14 @@ class ModelDataAndSubspace:
 
     # todo cache this?
     @cache
-    def get_batch(self, idx):
+    def get_batch(self, idx: int):
         return {
             "train": self.train_data_batcher[idx],
             "val": self.val_data_batcher[idx],
         }
 
     @torch.no_grad
-    def val_model_inference_with_delta_weights(self, delta_weights):
+    def val_model_inference_with_delta_weights(self, delta_weights: torch.Tensor):
         assert self.fused
         self.set_parameters(self.saved_weights + delta_weights)
         full_val_loss = 0
@@ -134,7 +157,9 @@ class ModelDataAndSubspace:
         return {"val_loss": full_val_loss / n}
 
     @torch.no_grad
-    def train_model_inference_with_delta_weights(self, delta_weights, batch_idx):
+    def train_model_inference_with_delta_weights(
+        self, delta_weights: torch.Tensor, batch_idx: int
+    ) -> dict[str, torch.Tensor]:
         assert self.fused
         batch = self.get_batch(batch_idx)
         self.set_parameters(self.saved_weights + delta_weights)

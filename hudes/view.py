@@ -1,4 +1,5 @@
 import math
+from typing import List
 
 import matplotlib
 
@@ -58,7 +59,7 @@ class View:
 
         self.screen = pygame.display.get_surface()
 
-    def update_examples(self, train_data, val_data):
+    def update_examples(self, train_data: torch.Tensor, val_data: torch.Tensor):
         self.axd["F"].cla()
         self.axd["F"].imshow(train_data[0])
         self.axd["F"].set_title("Ex. 1 img")
@@ -81,14 +82,16 @@ class View:
             self.fig.suptitle(f"Human Descent: MNIST      Top-score: {best_score:.5e}")
         # self.fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-    def update_step_size(self, log_step_size, max_log_step_size, min_log_step_size):
+    def update_step_size(
+        self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
+    ):
         self.axd["I"].cla()
         self.axd["I"].bar([0], log_step_size)
         self.axd["I"].set_ylim(min_log_step_size, max_log_step_size)
         self.axd["I"].set_title("log(Step size)")
         self.axd["I"].set_xticks([])
 
-    def update_confusion_matrix(self, confusion_matrix):
+    def update_confusion_matrix(self, confusion_matrix: torch.Tensor):
         self.axd["E"].cla()
         self.axd["E"].imshow(confusion_matrix)
         self.axd["E"].set_yticks(range(10))
@@ -97,7 +100,7 @@ class View:
         self.axd["E"].set_xlabel("Prediction")
         self.axd["E"].set_title("Confusion matrix")
 
-    def update_example_preds(self, train_preds):
+    def update_example_preds(self, train_preds: List[float]):
         self.axd["J"].cla()
         self.axd["J"].bar(torch.arange(10), train_preds[0])
         self.axd["J"].set_title("Ex. 1 pr(y)")
@@ -114,7 +117,12 @@ class View:
         # self.axd["M"].bar(torch.arange(10), train_preds[3])
 
     def plot_train_and_val(
-        self, train_losses, train_steps, val_losses, val_steps, minimize
+        self,
+        train_losses: List[float],
+        train_steps: List[int],
+        val_losses: List[float],
+        val_steps: List[int],
+        minimize: bool,
     ):
         if minimize is None:
             self.update_top(None)
