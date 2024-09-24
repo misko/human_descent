@@ -12,11 +12,13 @@ message Config {
   required int32 dims_at_a_time = 2;
 }
 
-message LossAndPreds {
+message TrainLossAndPreds {
   required double train_loss = 1;
-  required double val_loss = 2;
-  required int32 request_idx = 3;
   optional bytes preds = 4;
+  optional bytes confusion_matrix = 5;
+}
+message ValLoss {
+  required double val_loss = 1;
 }
 
 message BatchExamples {
@@ -35,8 +37,10 @@ message BatchExamples {
 message Control {
   enum Type {
     CONTROL_DIMS = 0;
-    CONTROL_LOSS_AND_PREDS = 1;
-    CONTROL_BATCH_EXAMPLES = 2;
+    CONTROL_TRAIN_LOSS_AND_PREDS = 1;
+    CONTROL_VAL_LOSS = 2;
+    CONTROL_BATCH_EXAMPLES = 3;
+    CONTROL_FULL_LOSS = 4;
     CONTROL_NEXT_BATCH = 101;
     CONTROL_NEXT_DIMS = 102;
     CONTROL_CONFIG = 103;
@@ -48,8 +52,9 @@ message Control {
 
   optional Config config = 201;
 
-  optional LossAndPreds loss_and_preds = 202;
-  optional int32 request_idx = 203;
-  optional BatchExamples batch_examples = 204;
+  optional TrainLossAndPreds train_loss_and_preds = 202;
+  optional double val_loss = 203;
+  optional int32 request_idx = 204;
+  optional BatchExamples batch_examples = 205;
 
 }

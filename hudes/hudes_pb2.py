@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bhudes.proto\x12\x05hudes\"\'\n\nDimAndStep\x12\x0b\n\x03\x64im\x18\x01 \x02(\x05\x12\x0c\n\x04step\x18\x02 \x02(\x02\".\n\x06\x43onfig\x12\x0c\n\x04seed\x18\x01 \x02(\x05\x12\x16\n\x0e\x64ims_at_a_time\x18\x02 \x02(\x05\"X\n\x0cLossAndPreds\x12\x12\n\ntrain_loss\x18\x01 \x02(\x01\x12\x10\n\x08val_loss\x18\x02 \x02(\x01\x12\x13\n\x0brequest_idx\x18\x03 \x02(\x05\x12\r\n\x05preds\x18\x04 \x01(\x0c\"\xba\x01\n\rBatchExamples\x12\'\n\x04type\x18\x01 \x02(\x0e\x32\x19.hudes.BatchExamples.Type\x12\t\n\x01n\x18\x02 \x02(\x05\x12\x12\n\ntrain_data\x18\x03 \x02(\x0c\x12\x10\n\x08val_data\x18\x04 \x02(\x0c\x12\x14\n\x0ctrain_labels\x18\x05 \x02(\x0c\x12\x12\n\nval_labels\x18\x06 \x02(\x0c\x12\x11\n\tbatch_idx\x18\x07 \x02(\x05\"\x12\n\x04Type\x12\n\n\x06IMG_BW\x10\x00\"\x94\x03\n\x07\x43ontrol\x12!\n\x04type\x18\x01 \x02(\x0e\x32\x13.hudes.Control.Type\x12*\n\x0e\x64ims_and_steps\x18\xc8\x01 \x03(\x0b\x32\x11.hudes.DimAndStep\x12\x1e\n\x06\x63onfig\x18\xc9\x01 \x01(\x0b\x32\r.hudes.Config\x12,\n\x0eloss_and_preds\x18\xca\x01 \x01(\x0b\x32\x13.hudes.LossAndPreds\x12\x14\n\x0brequest_idx\x18\xcb\x01 \x01(\x05\x12-\n\x0e\x62\x61tch_examples\x18\xcc\x01 \x01(\x0b\x32\x14.hudes.BatchExamples\"\xa6\x01\n\x04Type\x12\x10\n\x0c\x43ONTROL_DIMS\x10\x00\x12\x1a\n\x16\x43ONTROL_LOSS_AND_PREDS\x10\x01\x12\x1a\n\x16\x43ONTROL_BATCH_EXAMPLES\x10\x02\x12\x16\n\x12\x43ONTROL_NEXT_BATCH\x10\x65\x12\x15\n\x11\x43ONTROL_NEXT_DIMS\x10\x66\x12\x12\n\x0e\x43ONTROL_CONFIG\x10g\x12\x11\n\x0c\x43ONTROL_QUIT\x10\x85\x07')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bhudes.proto\x12\x05hudes\"\'\n\nDimAndStep\x12\x0b\n\x03\x64im\x18\x01 \x02(\x05\x12\x0c\n\x04step\x18\x02 \x02(\x02\".\n\x06\x43onfig\x12\x0c\n\x04seed\x18\x01 \x02(\x05\x12\x16\n\x0e\x64ims_at_a_time\x18\x02 \x02(\x05\"P\n\x11TrainLossAndPreds\x12\x12\n\ntrain_loss\x18\x01 \x02(\x01\x12\r\n\x05preds\x18\x04 \x01(\x0c\x12\x18\n\x10\x63onfusion_matrix\x18\x05 \x01(\x0c\"\x1b\n\x07ValLoss\x12\x10\n\x08val_loss\x18\x01 \x02(\x01\"\xba\x01\n\rBatchExamples\x12\'\n\x04type\x18\x01 \x02(\x0e\x32\x19.hudes.BatchExamples.Type\x12\t\n\x01n\x18\x02 \x02(\x05\x12\x12\n\ntrain_data\x18\x03 \x02(\x0c\x12\x10\n\x08val_data\x18\x04 \x02(\x0c\x12\x14\n\x0ctrain_labels\x18\x05 \x02(\x0c\x12\x12\n\nval_labels\x18\x06 \x02(\x0c\x12\x11\n\tbatch_idx\x18\x07 \x02(\x05\"\x12\n\x04Type\x12\n\n\x06IMG_BW\x10\x00\"\xe5\x03\n\x07\x43ontrol\x12!\n\x04type\x18\x01 \x02(\x0e\x32\x13.hudes.Control.Type\x12*\n\x0e\x64ims_and_steps\x18\xc8\x01 \x03(\x0b\x32\x11.hudes.DimAndStep\x12\x1e\n\x06\x63onfig\x18\xc9\x01 \x01(\x0b\x32\r.hudes.Config\x12\x37\n\x14train_loss_and_preds\x18\xca\x01 \x01(\x0b\x32\x18.hudes.TrainLossAndPreds\x12\x11\n\x08val_loss\x18\xcb\x01 \x01(\x01\x12\x14\n\x0brequest_idx\x18\xcc\x01 \x01(\x05\x12-\n\x0e\x62\x61tch_examples\x18\xcd\x01 \x01(\x0b\x32\x14.hudes.BatchExamples\"\xd9\x01\n\x04Type\x12\x10\n\x0c\x43ONTROL_DIMS\x10\x00\x12 \n\x1c\x43ONTROL_TRAIN_LOSS_AND_PREDS\x10\x01\x12\x14\n\x10\x43ONTROL_VAL_LOSS\x10\x02\x12\x1a\n\x16\x43ONTROL_BATCH_EXAMPLES\x10\x03\x12\x15\n\x11\x43ONTROL_FULL_LOSS\x10\x04\x12\x16\n\x12\x43ONTROL_NEXT_BATCH\x10\x65\x12\x15\n\x11\x43ONTROL_NEXT_DIMS\x10\x66\x12\x12\n\x0e\x43ONTROL_CONFIG\x10g\x12\x11\n\x0c\x43ONTROL_QUIT\x10\x85\x07')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,14 +35,16 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_DIMANDSTEP']._serialized_end=61
   _globals['_CONFIG']._serialized_start=63
   _globals['_CONFIG']._serialized_end=109
-  _globals['_LOSSANDPREDS']._serialized_start=111
-  _globals['_LOSSANDPREDS']._serialized_end=199
-  _globals['_BATCHEXAMPLES']._serialized_start=202
-  _globals['_BATCHEXAMPLES']._serialized_end=388
-  _globals['_BATCHEXAMPLES_TYPE']._serialized_start=370
-  _globals['_BATCHEXAMPLES_TYPE']._serialized_end=388
-  _globals['_CONTROL']._serialized_start=391
-  _globals['_CONTROL']._serialized_end=795
-  _globals['_CONTROL_TYPE']._serialized_start=629
-  _globals['_CONTROL_TYPE']._serialized_end=795
+  _globals['_TRAINLOSSANDPREDS']._serialized_start=111
+  _globals['_TRAINLOSSANDPREDS']._serialized_end=191
+  _globals['_VALLOSS']._serialized_start=193
+  _globals['_VALLOSS']._serialized_end=220
+  _globals['_BATCHEXAMPLES']._serialized_start=223
+  _globals['_BATCHEXAMPLES']._serialized_end=409
+  _globals['_BATCHEXAMPLES_TYPE']._serialized_start=391
+  _globals['_BATCHEXAMPLES_TYPE']._serialized_end=409
+  _globals['_CONTROL']._serialized_start=412
+  _globals['_CONTROL']._serialized_end=897
+  _globals['_CONTROL_TYPE']._serialized_start=680
+  _globals['_CONTROL_TYPE']._serialized_end=897
 # @@protoc_insertion_point(module_scope)

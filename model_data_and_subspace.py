@@ -20,8 +20,26 @@ def fuse_parameters(model):
     return params
 
 
-def dot_loss(pred, label):
-    return -pred[torch.arange(label.shape[0]), label].mean()
+def indexed_loss(pred, label):
+    return pred[torch.arange(label.shape[0]), label]
+
+
+def get_confusion_matrix(preds, labels):
+    # (Pdb) preds.shape
+    # torch.Size([512, 10])
+    # (Pdb) labels.shape
+    # torch.Size([512])
+    assert preds.ndim == 2 and labels.ndim == 1
+    n = preds.shape[1]
+    c_matrix = torch.vstack(
+        [
+            torch.zeros(10, device=preds.device).scatter_(
+                0, preds.argmax(dim=1)[labels == idx], 1, reduce="add"
+            )
+            for idx in torch.arange(n)
+        ]
+    )
+    return torch.nn.functional.normalize(c_matrix, p=1, dim=1)
 
 
 class ModelDataAndSubspace:
@@ -89,18 +107,30 @@ class ModelDataAndSubspace:
         }
 
     @torch.no_grad
-    def model_inference_with_delta_weights(self, delta_weights, batch_idx):
+    def val_model_inference_with_delta_weights(self, delta_weights):
+        assert self.fused
+        self.set_parameters(self.saved_weights + delta_weights)
+        full_val_loss = 0
+        n = 0
+        for batch_idx in range(self.val_data_batcher.len):
+            batch = self.get_batch(batch_idx)
+            val_pred = self.model.probs(self.model(batch["val"][0]))
+            full_val_loss -= self.loss_fn(val_pred, batch["val"][1]).sum().item()
+            n += batch["val"][1].shape[0]
+        return {"val_loss": full_val_loss / n}
+
+    @torch.no_grad
+    def train_model_inference_with_delta_weights(self, delta_weights, batch_idx):
         assert self.fused
         batch = self.get_batch(batch_idx)
         self.set_parameters(self.saved_weights + delta_weights)
         train_pred = self.model.probs(self.model(batch["train"][0]))
-        val_pred = self.model.probs(self.model(batch["val"][0]))
+        train_loss = -self.loss_fn(train_pred, batch["train"][1]).mean().item()
 
-        train_loss = self.loss_fn(train_pred, batch["train"][1])
-        val_loss = self.loss_fn(val_pred, batch["val"][1])
+        confusion_matrix = get_confusion_matrix(train_pred, batch["train"][1])
 
         return {
-            "train_loss": train_loss.item(),
-            "val_loss": val_loss.item(),
+            "train_loss": train_loss,
             "train_preds": train_pred[: self.return_n_preds],
+            "confusion_matrix": confusion_matrix,
         }

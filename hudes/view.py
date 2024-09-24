@@ -41,7 +41,7 @@ class View:
         )
 
         self.fig.subplots_adjust(
-            left=0.05, right=0.95, hspace=1, top=0.95, bottom=0.05, wspace=0.5
+            left=0.07, right=0.95, hspace=0.8, top=0.92, bottom=0.07, wspace=0.5  # 0.5
         )
         self.axd = self.fig.subplot_mosaic(
             #    AAAAAA
@@ -52,70 +52,83 @@ class View:
                 EEJKLI
                 """
         )
+        # self.fig.tight_layout()
 
         self.screen = pygame.display.get_surface()
 
     def update_examples(self, train_data, val_data):
         self.axd["F"].cla()
         self.axd["F"].imshow(train_data[0])
-        self.axd["F"].set_title("Train ex1")
+        self.axd["F"].set_title("Ex. 1 img")
 
         self.axd["G"].cla()
         self.axd["G"].imshow(train_data[1])
-        self.axd["G"].set_title("Train ex2")
+        self.axd["G"].set_title("Ex. 2 img")
 
         self.axd["H"].cla()
         self.axd["H"].imshow(train_data[2])
-        self.axd["H"].set_title("Train ex3")
+        self.axd["H"].set_title("Ex. 3 img")
 
         # self.axd["I"].cla()
         # self.axd["I"].imshow(train_data[3])
 
     def update_top(self):
         self.fig.suptitle("Human Descent: MNIST")
-        self.fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+        # self.fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     def update_step_size(self, log_step_size, max_log_step_size, min_log_step_size):
         self.axd["I"].cla()
         self.axd["I"].bar([0], log_step_size)
         self.axd["I"].set_ylim(min_log_step_size, max_log_step_size)
-        self.axd["I"].set_title("Step")
+        self.axd["I"].set_title("log(Step size)")
+        self.axd["I"].set_xticks([])
+
+    def update_confusion_matrix(self, confusion_matrix):
+        self.axd["E"].cla()
+        self.axd["E"].imshow(confusion_matrix)
+        self.axd["E"].set_yticks(range(10))
+        self.axd["E"].set_xticks(range(10))
+        self.axd["E"].set_ylabel("Ground truth")
+        self.axd["E"].set_xlabel("Prediction")
+        self.axd["E"].set_title("Confusion matrix")
 
     def update_example_preds(self, train_preds):
         self.axd["J"].cla()
         self.axd["J"].bar(torch.arange(10), train_preds[0])
-        self.axd["J"].set_title("Train ex1")
+        self.axd["J"].set_title("Ex. 1 pr(y)")
 
         self.axd["K"].cla()
         self.axd["K"].bar(torch.arange(10), train_preds[1])
-        self.axd["K"].set_title("Train ex2")
+        self.axd["K"].set_title("Ex. 2 pr(y)")
 
         self.axd["L"].cla()
         self.axd["L"].bar(torch.arange(10), train_preds[2])
-        self.axd["L"].set_title("Train ex2")
+        self.axd["L"].set_title("Ex. 3 pr(y)")
 
         # self.axd["M"].cla()
         # self.axd["M"].bar(torch.arange(10), train_preds[3])
 
-    def plot_train_and_val(self, train_losses, val_losses):
+    def plot_train_and_val(self, train_losses, train_steps, val_losses, val_steps):
         n = len(train_losses)
-        x = torch.arange(n)
+        # x = torch.arange(n)
         self.axd["B"].cla()
-        self.axd["B"].plot(x, train_losses, label="train")
-        self.axd["B"].plot(x, val_losses, label="val")
+        self.axd["B"].plot(train_steps, train_losses, label="train")
+        self.axd["B"].plot(val_steps, val_losses, label="val")
         self.axd["B"].legend(loc="upper right")
         self.axd["B"].set_title("Loss")
         self.axd["B"].set_xlabel("Step")
         self.axd["B"].set_ylabel("Loss")
 
         self.axd["C"].cla()
-        self.axd["C"].plot(x[n // 2 :], train_losses[n // 2 :], label="train")
-        self.axd["C"].set_title("Loss")
+        self.axd["C"].plot(train_steps[n // 2 :], train_losses[n // 2 :], label="train")
+        self.axd["C"].set_title("Loss [half time]")
         self.axd["C"].set_xlabel("Step")
+        self.axd["C"].set_yticks([])
 
         self.axd["D"].cla()
-        self.axd["D"].plot(x[-8:], train_losses[-8:], label="train")
-        self.axd["D"].set_title("Loss")
+        self.axd["D"].plot(train_steps[-8:], train_losses[-8:], label="train")
+        self.axd["D"].set_title("Loss [last 8steps]")
+        self.axd["D"].set_yticks([])
         self.axd["D"].set_xlabel("Step")
 
     def draw(self):

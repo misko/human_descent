@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torchvision import datasets, transforms
 
-from model_data_and_subspace import ModelDataAndSubspace, dot_loss
+from model_data_and_subspace import ModelDataAndSubspace, indexed_loss
 
 
 class DatasetBatcher:
@@ -22,8 +22,7 @@ class DatasetBatcher:
     # TODO optionally cache this!
     @cache
     def __getitem__(self, idx):
-        if idx > self.len:
-            raise ValueError(f"Batch {idx} is out of bounds [0,{self.len}]")
+        idx = idx % self.len
         start_idx = idx * self.batch_size
         end_idx = min(len(self.ds), start_idx + self.batch_size)
         x, y = torch.cat(
@@ -113,7 +112,7 @@ def mnist_model_data_and_subpace(
     store="./",
     train_batch_size=512,
     val_batch_size=1024,
-    loss_fn=dot_loss,
+    loss_fn=indexed_loss,
 ):
     transform = transforms.Compose(
         [
@@ -146,5 +145,5 @@ def mnist_model_data_and_subpace(
         model=model,
         train_data_batcher=train_data_batcher,
         val_data_batcher=val_data_batcher,
-        loss_fn=dot_loss,
+        loss_fn=indexed_loss,
     )

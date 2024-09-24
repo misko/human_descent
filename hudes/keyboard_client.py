@@ -62,7 +62,10 @@ class KeyboardClient:
         self.running = True
         self.request_idx = 0
 
+        self.train_steps = []
         self.train_losses = []
+
+        self.val_steps = []
         self.val_losses = []
 
         self.view = View()
@@ -150,6 +153,8 @@ To control each dimension use:
             elif key == " ":
                 print("getting new set of vectors")
                 self.hudes_client.send_q.put(next_dims_message().SerializeToString())
+            # elif key == ".":
+            #    self.hudes_client.send_q.put(next_dims_message().SerializeToString())
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_RETURN:
                 print("Getting new batch")
@@ -161,7 +166,9 @@ To control each dimension use:
         self.view.update_step_size(
             self.log_step_size, self.max_log_step_size, self.min_log_step_size
         )
-        self.view.plot_train_and_val(self.train_losses, self.val_losses)
+        self.view.plot_train_and_val(
+            self.train_losses, self.train_steps, self.val_losses, self.val_steps
+        )
         while self.running:
             # check and send local interactions(?)
             for event in pg.event.get():
@@ -173,16 +180,25 @@ To control each dimension use:
                 raw_msg = self.hudes_client.recv_msg()
                 msg = hudes_pb2.Control()
                 msg.ParseFromString(raw_msg)
+                if msg.type == hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS:
 
-                if msg.type == hudes_pb2.Control.CONTROL_LOSS_AND_PREDS:
+                    train_preds = pickle.loads(msg.train_loss_and_preds.preds)
+                    confusion_matrix = pickle.loads(
+                        msg.train_loss_and_preds.confusion_matrix
+                    )
 
-                    train_preds = pickle.loads(msg.loss_and_preds.preds)
+                    self.train_losses.append(msg.train_loss_and_preds.train_loss)
+                    self.train_steps.append(msg.request_idx)
+                    # self.val_losses.append(msg.loss_and_preds.val_loss)
 
-                    self.train_losses.append(msg.loss_and_preds.train_loss)
-                    self.val_losses.append(msg.loss_and_preds.val_loss)
-
-                    self.view.plot_train_and_val(self.train_losses, self.val_losses)
+                    self.view.plot_train_and_val(
+                        self.train_losses,
+                        self.train_steps,
+                        self.val_losses,
+                        self.val_steps,
+                    )
                     self.view.update_example_preds(train_preds=train_preds)
+                    self.view.update_confusion_matrix(confusion_matrix)
                 elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:
                     self.train_data = pickle.loads(msg.batch_examples.train_data)
                     self.val_data = pickle.loads(msg.batch_examples.val_data)
@@ -191,6 +207,16 @@ To control each dimension use:
                     self.view.update_examples(
                         train_data=self.train_data,
                         val_data=self.val_data,
+                    )
+                elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:
+                    self.val_losses.append(msg.val_loss)
+                    self.val_steps.append(msg.request_idx)
+
+                    self.view.plot_train_and_val(
+                        self.train_losses,
+                        self.train_steps,
+                        self.val_losses,
+                        self.val_steps,
                     )
 
                 # print(self.train_losses)

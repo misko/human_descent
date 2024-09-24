@@ -6,6 +6,7 @@ import logging
 import multiprocessing
 import pickle
 import time
+from dataclasses import dataclass, field
 from multiprocessing import Queue
 from threading import Thread
 
@@ -14,7 +15,7 @@ from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
 from hudes.mnist import MNISTFFNN, ModelDataAndSubspace, mnist_model_data_and_subpace
-from model_data_and_subspace import dot_loss
+from model_data_and_subspace import indexed_loss
 
 client_idx = 0
 active_clients = {}
@@ -52,14 +53,31 @@ def listen_and_run(in_q, out_q, mad):
                 return
         else:
             # assume its a tensor
-            weight_tensor, batch_idx = v
+            train_or_val, weight_tensor, batch_idx = v
             # st = time.time()
-            res = mad.model_inference_with_delta_weights(weight_tensor, batch_idx)
+            if train_or_val == "train":
+                res = mad.train_model_inference_with_delta_weights(
+                    weight_tensor, batch_idx
+                )
+            elif train_or_val == "val":
+                res = mad.val_model_inference_with_delta_weights(weight_tensor)
             # print("INF", time.time() - st)
             out_q.put(res)
 
 
-async def inference_runner(mad, stop=None, run_in="process"):
+@dataclass
+class Client:
+    last_seen: float = 0.0
+    next_step: dict = field(default_factory=lambda: dict())
+    batch_idx: int = 0
+    websocket: None = None
+    request_idx: int = 0
+    sent_batch: int = -1
+    weight_vec: None = None
+    request_full_val: bool = False
+
+
+async def inference_runner(mad, stop=None, run_in="thread"):
     global active_clients
     inference_q = Queue()
     results_q = Queue()
@@ -89,30 +107,28 @@ async def inference_runner(mad, stop=None, run_in="process"):
             force_update = False
 
             # TODO should be some kind of select not poll()
-            if client["sent batch"] != client["batch idx"]:
-                await client["websocket"].send(
+            if client.sent_batch != client.batch_idx:
+                await client.websocket.send(
                     prepare_batch_example_message(
-                        client["batch idx"], mad
+                        client.batch_idx, mad
                     ).SerializeToString()
                 )
-                client["sent batch"] = client["batch idx"]
+                client.sent_batch = client.batch_idx
                 force_update = True
 
-            if force_update or len(client["next step"]) > 0:
-                current_step = client["next step"]
-                current_request_idx = client["request idx"]
-                client["next step"] = {}
+            if force_update or len(client.next_step) > 0:
+                current_step = client.next_step
+                current_request_idx = client.request_idx
+                client.next_step = {}
 
-                if "weight vec" not in client:
-                    client["weight vec"] = mad.blank_weight_vec()
+                if client.weight_vec is None:
+                    client.weight_vec = mad.blank_weight_vec()
                 # update weight vector for client
                 if len(current_step) > 0:
-                    client["weight vec"] += mad.delta_from_dims(current_step)
-
-                print(client["weight vec"].abs().mean())
+                    client.weight_vec += mad.delta_from_dims(current_step)
 
                 # send weight vector for inference
-                inference_q.put((client["weight vec"], client["batch idx"]))
+                inference_q.put(("train", client.weight_vec, client.batch_idx))
 
                 # return through websocket (add obj)
                 res = await asyncio.to_thread(results_q.get)
@@ -120,29 +136,38 @@ async def inference_runner(mad, stop=None, run_in="process"):
                 # TODO need to be ok with getting errors here
                 try:
                     # print(pickle.loads(pickle.dumps(res["train_preds"])))
-                    await client["websocket"].send(
+                    await client.websocket.send(
                         hudes_pb2.Control(
-                            type=hudes_pb2.Control.CONTROL_LOSS_AND_PREDS,
-                            loss_and_preds=hudes_pb2.LossAndPreds(
+                            type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
+                            train_loss_and_preds=hudes_pb2.TrainLossAndPreds(
                                 train_loss=res["train_loss"],
-                                val_loss=res["val_loss"],
+                                # val_loss=res["val_loss"],
                                 preds=pickle.dumps(res["train_preds"]),
-                                request_idx=current_request_idx,
+                                confusion_matrix=pickle.dumps(res["confusion_matrix"]),
                             ),
+                            request_idx=current_request_idx,
                         ).SerializeToString()
                     )
-
-                    #     json.dumps(
-                    #         {
-                    #             "type": "result",
-                    #             "request idx": current_request_idx,
-                    #             "result": res,
-                    #         }
-                    #     )
-                    # )
                 except websockets.exceptions.ConnectionClosedOK:
                     pass
+            elif client.request_full_val:
+                # send weight vector for inference
+                inference_q.put(("val", client.weight_vec, None))
 
+                # return through websocket (add obj)
+                res = await asyncio.to_thread(results_q.get)
+                try:
+                    # print(pickle.loads(pickle.dumps(res["train_preds"])))
+                    await client.websocket.send(
+                        hudes_pb2.Control(
+                            type=hudes_pb2.Control.CONTROL_VAL_LOSS,
+                            val_loss=res["val_loss"],
+                            request_idx=current_request_idx,
+                        ).SerializeToString()
+                    )
+                except websockets.exceptions.ConnectionClosedOK:
+                    pass
+                client.request_full_val = False
                 # (Pdb) batch['train'][0].shape
                 # torch.Size([512, 28, 28])
                 # (Pdb) batch['train'][1].shape
@@ -154,14 +179,14 @@ async def process_client(websocket):
     global client_idx, active_clients
     current_client = client_idx
     client_idx += 1
-    client = {
-        "last seen": time.time(),
-        "next step": {},
-        "batch idx": 0,
-        "websocket": websocket,
-        "request idx": 0,
-        "sent batch": -1,
-    }
+    client = Client(
+        last_seen=time.time(),
+        next_step={},
+        batch_idx=0,
+        websocket=websocket,
+        request_idx=0,
+        sent_batch=-1,
+    )
     active_clients[current_client] = client
     dims_offset = 0
 
@@ -169,18 +194,18 @@ async def process_client(websocket):
     async for message in websocket:
         msg = hudes_pb2.Control()
         msg.ParseFromString(message)
-        print("GOT MESSAGE!", msg)
         if msg.type == hudes_pb2.Control.CONTROL_DIMS:
             for dim_and_step in msg.dims_and_steps:
                 # max_dim = max(max_dim, dim_and_step.dim)
                 dim = dim_and_step.dim + dims_offset
-                if dim in client["next step"]:
-                    client["next step"][dim] += dim_and_step.step
+                if dim in client.next_step:
+                    client.next_step[dim] += dim_and_step.step
                 else:
-                    client["next step"][dim] = dim_and_step.step
-            client["request idx"] += 1
+                    client.next_step[dim] = dim_and_step.step
+            client.request_idx += 1
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_BATCH:
-            client["batch idx"] += 1
+            client.batch_idx += 1
+            client.request_full_val = True
             # send back batch examples
 
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_DIMS:
@@ -205,7 +230,7 @@ async def run_server(stop):
 
 
 async def run_wrapper():
-    mad = mnist_model_data_and_subpace(model=MNISTFFNN(), loss_fn=dot_loss)
+    mad = mnist_model_data_and_subpace(model=MNISTFFNN(), loss_fn=indexed_loss)
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(run_server(stop), inference_runner(mad))
     # await
