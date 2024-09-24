@@ -77,7 +77,7 @@ class Client:
     request_full_val: bool = False
 
 
-async def inference_runner(mad, stop=None, run_in="thread"):
+async def inference_runner(mad, stop=None, run_in="process"):
     global active_clients
     inference_q = Queue()
     results_q = Queue()

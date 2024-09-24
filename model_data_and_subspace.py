@@ -114,9 +114,11 @@ class ModelDataAndSubspace:
         n = 0
         for batch_idx in range(self.val_data_batcher.len):
             batch = self.get_batch(batch_idx)
-            val_pred = self.model.probs(self.model(batch["val"][0]))
-            full_val_loss -= self.loss_fn(val_pred, batch["val"][1]).sum().item()
+            model_output = self.model(batch["val"][0])
+            full_val_loss = self.loss_fn(model_output, batch["val"][1]).sum().item()
             n += batch["val"][1].shape[0]
+        if not self.model.minimize:
+            full_val_loss = -full_val_loss
         return {"val_loss": full_val_loss / n}
 
     @torch.no_grad
@@ -124,11 +126,13 @@ class ModelDataAndSubspace:
         assert self.fused
         batch = self.get_batch(batch_idx)
         self.set_parameters(self.saved_weights + delta_weights)
-        train_pred = self.model.probs(self.model(batch["train"][0]))
-        train_loss = -self.loss_fn(train_pred, batch["train"][1]).mean().item()
+        model_output = self.model(batch["train"][0])
+        train_loss = self.loss_fn(model_output, batch["train"][1]).mean().item()
+        train_pred = self.model.probs(model_output)
+        if not self.model.minimize:
+            train_loss = -train_loss
 
         confusion_matrix = get_confusion_matrix(train_pred, batch["train"][1])
-
         return {
             "train_loss": train_loss,
             "train_preds": train_pred[: self.return_n_preds],
