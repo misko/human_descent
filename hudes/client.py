@@ -7,6 +7,7 @@ from functools import cache
 from multiprocessing import Queue
 from threading import Thread
 
+import websockets
 from websockets.asyncio.client import connect
 from websockets.sync.client import connect as sync_connect
 
@@ -66,11 +67,13 @@ def dims_and_steps_to_control_message(dims_and_steps, request_idx):
 class HudesWebsocketClient:
     def __init__(self, remote_addr):
         self.remote_addr = remote_addr
+        self.send_q = Queue()
+        self.recv_q = Queue()
+        self.running = True
+
         self.thread = Thread(target=self.run_loop)  # , args=(send_q, recv_q))
         self.thread.daemon = True
         self.thread.start()
-        self.send_q = Queue()
-        self.recv_q = Queue()
 
     def send_config(self, dims_at_a_time, seed):
         self.send_q.put(
@@ -87,55 +90,63 @@ class HudesWebsocketClient:
         return self.recv_q.get(timeout=0.0)
 
     def run_loop(self):
-        with sync_connect(self.remote_addr) as websocket:
-            while True:
-                # figure out what if we should send
-                send_or_recv = False
-                request_idx = -1
-                dims_and_steps = {}
-                while not self.send_q.empty():
-                    raw_msg = self.send_q.get()
-                    msg = hudes_pb2.Control()
-                    msg.ParseFromString(raw_msg)
-                    if msg.type == hudes_pb2.Control.CONTROL_DIMS:
-                        request_idx = max(request_idx, msg.request_idx)
-                        for dim_and_step in msg.dims_and_steps:
-                            dim = dim_and_step.dim
-                            if dim not in dims_and_steps:
-                                dims_and_steps[dim] = dim_and_step.step
-                            else:
-                                dims_and_steps[dim] += dim_and_step.step
-                    else:
-                        if len(dims_and_steps) != 0:
-                            websocket.send(
-                                dims_and_steps_to_control_message(
-                                    dims_and_steps=dims_and_steps,
-                                    request_idx=request_idx,
-                                ).SerializeToString()
-                            )
-                            dims_and_steps = {}
-                        websocket.send(raw_msg)
-                        send_or_recv = True
-                if len(dims_and_steps) != 0:
-                    websocket.send(
-                        dims_and_steps_to_control_message(
-                            dims_and_steps=dims_and_steps, request_idx=request_idx
-                        ).SerializeToString()
-                    )
+        try:
+            with sync_connect(self.remote_addr) as websocket:
+                while self.running:
+                    # figure out what if we should send
+                    send_or_recv = False
+                    request_idx = -1
                     dims_and_steps = {}
-                    send_or_recv = True
+                    while not self.send_q.empty():
+                        raw_msg = self.send_q.get()
+                        msg = hudes_pb2.Control()
+                        msg.ParseFromString(raw_msg)
+                        if msg.type == hudes_pb2.Control.CONTROL_DIMS:
+                            request_idx = max(request_idx, msg.request_idx)
+                            for dim_and_step in msg.dims_and_steps:
+                                dim = dim_and_step.dim
+                                if dim not in dims_and_steps:
+                                    dims_and_steps[dim] = dim_and_step.step
+                                else:
+                                    dims_and_steps[dim] += dim_and_step.step
+                        else:
+                            if len(dims_and_steps) != 0:
+                                websocket.send(
+                                    dims_and_steps_to_control_message(
+                                        dims_and_steps=dims_and_steps,
+                                        request_idx=request_idx,
+                                    ).SerializeToString()
+                                )
+                                dims_and_steps = {}
+                            websocket.send(raw_msg)
+                            send_or_recv = True
+                    if len(dims_and_steps) != 0:
+                        websocket.send(
+                            dims_and_steps_to_control_message(
+                                dims_and_steps=dims_and_steps, request_idx=request_idx
+                            ).SerializeToString()
+                        )
+                        dims_and_steps = {}
+                        send_or_recv = True
 
-                # figure out what we are recv'ing if anything
-                try:
-                    msg = websocket.recv(timeout=0.0)
-                    send_or_recv = True
-                    self.recv_q.put(msg)
-                except TimeoutError:
-                    pass
+                    # figure out what we are recv'ing if anything
+                    try:
+                        msg = websocket.recv(timeout=0.0)
+                        send_or_recv = True
+                        self.recv_q.put(msg)
+                    except TimeoutError:
+                        pass
+                    except (
+                        websockets.exceptions.ConnectionClosedError,
+                        websockets.exceptions.ConnectionClosedOK,
+                    ) as e:
+                        self.running = False
 
-                # when there is no interaction give the system a break(?)
-                if not send_or_recv:
-                    time.sleep(0.05)
+                    # when there is no interaction give the system a break(?)
+                    if not send_or_recv:
+                        time.sleep(0.05)
+        except ConnectionRefusedError:
+            self.running = False
 
 
 async def send_dims(n=10):

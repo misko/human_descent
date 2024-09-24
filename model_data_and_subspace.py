@@ -44,13 +44,22 @@ def get_confusion_matrix(preds, labels):
 
 class ModelDataAndSubspace:
 
-    def __init__(self, model, loss_fn, train_data_batcher, val_data_batcher, seed=0):
+    def __init__(
+        self,
+        model,
+        loss_fn,
+        train_data_batcher,
+        val_data_batcher,
+        seed=0,
+        minimize=False,
+    ):
         self.model = model
         self.num_params = sum([x.numel() for x in model.parameters()])
         print(f"MODEL WITH : {self.num_params} parameters")
         self.train_data_batcher = train_data_batcher
         self.val_data_batcher = val_data_batcher
         self.input_q = Queue()
+        self.minimize = minimize
 
         # fuse all params
         # self.model_params = fuse_parameters(model)
@@ -84,7 +93,9 @@ class ModelDataAndSubspace:
         assert self.fused
         g = torch.Generator()
         g.manual_seed(self.seeds_for_dims[dim % MAX_DIMS].item())
-        return torch.rand(1, *self.model_params.shape, generator=g) - 0.5
+        return torch.nn.functional.normalize(
+            torch.rand(1, *self.model_params.shape, generator=g) - 0.5, p=2, dim=1
+        )
 
     # dims is a dictionary {dim:step_size}
     @torch.no_grad
@@ -115,9 +126,10 @@ class ModelDataAndSubspace:
         for batch_idx in range(self.val_data_batcher.len):
             batch = self.get_batch(batch_idx)
             model_output = self.model(batch["val"][0])
-            full_val_loss = self.loss_fn(model_output, batch["val"][1]).sum().item()
+            full_val_loss += self.loss_fn(model_output, batch["val"][1]).sum().item()
             n += batch["val"][1].shape[0]
-        if not self.model.minimize:
+            a = 1
+        if not self.minimize:
             full_val_loss = -full_val_loss
         return {"val_loss": full_val_loss / n}
 
@@ -129,7 +141,7 @@ class ModelDataAndSubspace:
         model_output = self.model(batch["train"][0])
         train_loss = self.loss_fn(model_output, batch["train"][1]).mean().item()
         train_pred = self.model.probs(model_output)
-        if not self.model.minimize:
+        if not self.minimize:
             train_loss = -train_loss
 
         confusion_matrix = get_confusion_matrix(train_pred, batch["train"][1])

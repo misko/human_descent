@@ -77,7 +77,7 @@ class Client:
     request_full_val: bool = False
 
 
-async def inference_runner(mad, stop=None, run_in="process"):
+async def inference_runner(mad: ModelDataAndSubspace, stop=None, run_in="process"):
     global active_clients
     inference_q = Queue()
     results_q = Queue()
@@ -161,7 +161,9 @@ async def inference_runner(mad, stop=None, run_in="process"):
                     await client.websocket.send(
                         hudes_pb2.Control(
                             type=hudes_pb2.Control.CONTROL_VAL_LOSS,
-                            val_loss=res["val_loss"],
+                            val_loss=hudes_pb2.ValLoss(
+                                val_loss=res["val_loss"], minimize=mad.minimize
+                            ),
                             request_idx=current_request_idx,
                         ).SerializeToString()
                     )
@@ -232,7 +234,7 @@ async def run_server(stop):
 async def run_wrapper():
     mad = mnist_model_data_and_subpace(model=MNISTFFNN(), loss_fn=indexed_loss)
     stop = asyncio.get_running_loop().create_future()
-    await asyncio.gather(run_server(stop), inference_runner(mad))
+    await asyncio.gather(run_server(stop), inference_runner(mad, run_in="thread"))
     # await
 
 

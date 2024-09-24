@@ -59,7 +59,6 @@ class KeyboardClient:
 
         pg.init()
         self.window = pg.display.set_mode((1200, 900))
-        self.running = True
         self.request_idx = 0
 
         self.train_steps = []
@@ -67,6 +66,8 @@ class KeyboardClient:
 
         self.val_steps = []
         self.val_losses = []
+
+        self.minimize = None
 
         self.view = View()
 
@@ -103,7 +104,7 @@ To control each dimension use:
                 print("Keep holding to quit!")
                 if self.quit_count > 10:
                     print("Quiting")
-                    self.running = False
+                    self.hudes_client.running = False
                 return
             self.quit_count = 0
 
@@ -162,14 +163,17 @@ To control each dimension use:
                 # self.q.put(("new batch", None))
 
     def run_loop(self):
-        self.view.update_top()
         self.view.update_step_size(
             self.log_step_size, self.max_log_step_size, self.min_log_step_size
         )
         self.view.plot_train_and_val(
-            self.train_losses, self.train_steps, self.val_losses, self.val_steps
+            self.train_losses,
+            self.train_steps,
+            self.val_losses,
+            self.val_steps,
+            minimize=self.minimize,
         )
-        while self.running:
+        while self.hudes_client.running:
             # check and send local interactions(?)
             for event in pg.event.get():
                 self.process_event(event)
@@ -196,6 +200,7 @@ To control each dimension use:
                         self.train_steps,
                         self.val_losses,
                         self.val_steps,
+                        minimize=self.minimize,
                     )
                     self.view.update_example_preds(train_preds=train_preds)
                     self.view.update_confusion_matrix(confusion_matrix)
@@ -209,7 +214,8 @@ To control each dimension use:
                         val_data=self.val_data,
                     )
                 elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:
-                    self.val_losses.append(msg.val_loss)
+                    self.minimize = msg.val_loss.minimize
+                    self.val_losses.append(msg.val_loss.val_loss)
                     self.val_steps.append(msg.request_idx)
 
                     self.view.plot_train_and_val(
@@ -217,6 +223,7 @@ To control each dimension use:
                         self.train_steps,
                         self.val_losses,
                         self.val_steps,
+                        self.minimize,
                     )
 
                 # print(self.train_losses)

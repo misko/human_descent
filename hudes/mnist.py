@@ -46,7 +46,6 @@ class MNISTFFNN(nn.Module):
             nn.Linear(hidden, mnist_classes),
             nn.LogSoftmax(dim=1),
         )
-        self.minimize = False
 
     def forward(self, x):
         return self.net(x)
@@ -77,8 +76,6 @@ class MNISTCNN(nn.Module):
         # fully connected layer, output 10 classes
         self.out = nn.Linear(32 * 7 * 7, 10)
         self.sm = nn.LogSoftmax(dim=1)
-
-        self.minimize = False
 
     def forward(self, x):
         x = self.conv1(x[:, None])

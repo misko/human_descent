@@ -19,6 +19,7 @@ message TrainLossAndPreds {
 }
 message ValLoss {
   required double val_loss = 1;
+  required bool minimize = 2;
 }
 
 message BatchExamples {
@@ -53,7 +54,7 @@ message Control {
   optional Config config = 201;
 
   optional TrainLossAndPreds train_loss_and_preds = 202;
-  optional double val_loss = 203;
+  optional ValLoss val_loss = 203;
   optional int32 request_idx = 204;
   optional BatchExamples batch_examples = 205;
 

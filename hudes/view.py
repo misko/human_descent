@@ -1,3 +1,5 @@
+import math
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -72,8 +74,11 @@ class View:
         # self.axd["I"].cla()
         # self.axd["I"].imshow(train_data[3])
 
-    def update_top(self):
-        self.fig.suptitle("Human Descent: MNIST")
+    def update_top(self, best_score):
+        if best_score is None:
+            self.fig.suptitle("Human Descent: MNIST      Top-score: ?")
+        else:
+            self.fig.suptitle(f"Human Descent: MNIST      Top-score: {best_score:.5e}")
         # self.fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     def update_step_size(self, log_step_size, max_log_step_size, min_log_step_size):
@@ -108,7 +113,18 @@ class View:
         # self.axd["M"].cla()
         # self.axd["M"].bar(torch.arange(10), train_preds[3])
 
-    def plot_train_and_val(self, train_losses, train_steps, val_losses, val_steps):
+    def plot_train_and_val(
+        self, train_losses, train_steps, val_losses, val_steps, minimize
+    ):
+        if minimize is None:
+            self.update_top(None)
+        else:
+            if minimize:
+                best_score = min(val_losses) if len(val_losses) > 0 else math.inf
+            else:
+                best_score = max(val_losses) if len(val_losses) > 0 else -math.inf
+            self.update_top(best_score)
+
         n = len(train_losses)
         # x = torch.arange(n)
         self.axd["B"].cla()
