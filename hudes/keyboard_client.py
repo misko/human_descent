@@ -24,7 +24,7 @@ from hudes.view import View
 
 
 class KeyboardClient:
-    def __init__(self, log_step_size=-2, step_size_resolution=0.05):
+    def __init__(self, log_step_size=-0.5, step_size_resolution=0.05):
 
         self.paired_keys = [
             ("w", "s"),

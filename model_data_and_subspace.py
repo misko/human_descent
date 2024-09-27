@@ -151,7 +151,6 @@ class ModelDataAndSubspace:
             model_output = self.model(batch["val"][0])
             full_val_loss += self.loss_fn(model_output, batch["val"][1]).sum().item()
             n += batch["val"][1].shape[0]
-            a = 1
         if not self.minimize:
             full_val_loss = -full_val_loss
         return {"val_loss": full_val_loss / n}

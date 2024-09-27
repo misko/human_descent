@@ -127,10 +127,11 @@ class View:
         if minimize is None:
             self.update_top(None)
         else:
+            # TODO THIS LOGIC DOES NOT MAKE SENSE
             if minimize:
-                best_score = min(val_losses) if len(val_losses) > 0 else math.inf
+                best_score = max(val_losses) if len(val_losses) > 0 else math.inf
             else:
-                best_score = max(val_losses) if len(val_losses) > 0 else -math.inf
+                best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
             self.update_top(best_score)
 
         n = len(train_losses)

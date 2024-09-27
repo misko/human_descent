@@ -11,8 +11,9 @@ from model_data_and_subspace import DatasetBatcher, ModelDataAndSubspace, indexe
 
 
 class MNISTFFNN(nn.Module):
-    def __init__(self):
+    def __init__(self, seed=0):
         super().__init__()
+        torch.manual_seed(seed)
         mnist_width_height = 28
         mnist_classes = 10
         hidden = 32
@@ -34,8 +35,9 @@ class MNISTFFNN(nn.Module):
 
 
 class MNISTCNN(nn.Module):
-    def __init__(self):
+    def __init__(self, seed=0):
         super().__init__()
+        torch.manual_seed(seed)
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
@@ -125,4 +127,5 @@ def mnist_model_data_and_subpace(
         train_data_batcher=train_data_batcher,
         val_data_batcher=val_data_batcher,
         loss_fn=indexed_loss,
+        minimize=False,
     )
