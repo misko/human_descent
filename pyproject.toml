@@ -2,6 +2,9 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["hudes/"]
 
@@ -18,7 +21,8 @@ dependencies = [
  "websockets",
  "pytest-asyncio",
  "protobuf",
- "pygame"
+ "pygame",
+ "akai-pro-py@git+https://github.com/secretowo/apc-mini-py"
 ]
 requires-python = ">=3.10"
 description = "Human descent"

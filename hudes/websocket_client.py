@@ -145,8 +145,8 @@ class HudesWebsocketClient:
                         self.running = False
 
                     # when there is no interaction give the system a break(?)
-                    if not send_or_recv:
-                        time.sleep(0.05)
+                    # if not send_or_recv:
+                    time.sleep(0.05)
         except ConnectionRefusedError:
             self.running = False
 
