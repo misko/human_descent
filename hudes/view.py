@@ -122,17 +122,9 @@ class View:
         train_steps: List[int],
         val_losses: List[float],
         val_steps: List[int],
-        minimize: bool,
     ):
-        if minimize is None:
-            self.update_top(None)
-        else:
-            # TODO THIS LOGIC DOES NOT MAKE SENSE
-            if minimize:
-                best_score = max(val_losses) if len(val_losses) > 0 else math.inf
-            else:
-                best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
-            self.update_top(best_score)
+        best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
+        self.update_top(best_score)
 
         n = len(train_losses)
         # x = torch.arange(n)

@@ -4,10 +4,10 @@ import pytest
 import pytest_asyncio
 import websockets
 
-from hudes.client import send_dims
 from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
 from hudes.model_data_and_subspace import indexed_loss
-from hudes.server import inference_runner, process_client
+from hudes.websocket_client import send_dims
+from hudes.websocket_server import inference_runner, process_client
 
 
 async def echo(websocket):

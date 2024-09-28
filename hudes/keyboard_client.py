@@ -11,20 +11,96 @@ import pygame as pg
 import torch
 
 from hudes import hudes_pb2
-from hudes.client import (
+from hudes.view import View
+from hudes.websocket_client import (
     HudesWebsocketClient,
     dims_and_steps_to_control_message,
     next_batch_message,
     next_dims_message,
 )
-from hudes.view import View
 
 # # matplotlib.use("Agg")
 # PLT_PYGAME = True
 
 
-class KeyboardClient:
-    def __init__(self, log_step_size=-0.5, step_size_resolution=0.05):
+class HudesClient:
+    def __init__(self, log_step_size=-0.5, step_size_resolution=0.05, seed=0):
+        self.log_step_size = log_step_size
+        self.max_log_step_size = 0
+        self.min_log_step_size = -10
+        self.step_size = math.pow(10, self.log_step_size)
+        self.step_size_resolution = step_size_resolution
+
+        self.quit_count = 0
+        self.seed = seed
+
+        self.hudes_websocket_client = HudesWebsocketClient("ws://localhost:8765")
+
+        pg.init()
+        self.window = pg.display.set_mode((1200, 900))
+        self.request_idx = 0
+
+        self.train_steps = []
+        self.train_losses = []
+
+        self.val_steps = []
+        self.val_losses = []
+
+        self.view = View()
+
+        self.init_input()
+
+        self.hudes_websocket_client.send_config(seed=self.seed, dims_at_a_time=self.n)
+
+    def receive_messages(self):
+        # listen from server?
+        while self.hudes_websocket_client.recv_ready():
+            # recv and process!
+            raw_msg = self.hudes_websocket_client.recv_msg()
+            msg = hudes_pb2.Control()
+            msg.ParseFromString(raw_msg)
+            if msg.type == hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS:
+
+                train_preds = pickle.loads(msg.train_loss_and_preds.preds)
+                confusion_matrix = pickle.loads(
+                    msg.train_loss_and_preds.confusion_matrix
+                )
+
+                self.train_losses.append(msg.train_loss_and_preds.train_loss)
+                self.train_steps.append(msg.request_idx)
+                # self.val_losses.append(msg.loss_and_preds.val_loss)
+
+                self.view.plot_train_and_val(
+                    self.train_losses,
+                    self.train_steps,
+                    self.val_losses,
+                    self.val_steps,
+                )
+                self.view.update_example_preds(train_preds=train_preds)
+                self.view.update_confusion_matrix(confusion_matrix)
+            elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:
+                self.train_data = pickle.loads(msg.batch_examples.train_data)
+                self.val_data = pickle.loads(msg.batch_examples.val_data)
+                self.train_labels = pickle.loads(msg.batch_examples.train_labels)
+                self.val_labels = pickle.loads(msg.batch_examples.val_labels)
+                self.view.update_examples(
+                    train_data=self.train_data,
+                    val_data=self.val_data,
+                )
+            elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:
+                self.val_losses.append(msg.val_loss.val_loss)
+                self.val_steps.append(msg.request_idx)
+
+                self.view.plot_train_and_val(
+                    self.train_losses,
+                    self.train_steps,
+                    self.val_losses,
+                    self.val_steps,
+                )
+
+
+class KeyboardClient(HudesClient):
+    def init_input(self):
 
         self.paired_keys = [
             ("w", "s"),
@@ -41,35 +117,6 @@ class KeyboardClient:
             u, d = self.paired_keys[idx]
             self.key_to_param_and_sign[u] = (idx, 1)
             self.key_to_param_and_sign[d] = (idx, -1)
-
-        self.log_step_size = log_step_size
-        self.max_log_step_size = 0
-        self.min_log_step_size = -10
-        self.step_size = math.pow(10, self.log_step_size)
-        self.step_size_resolution = step_size_resolution
-
-        self.quit_count = 0
-        self.seed = 0
-
-        self.hudes_client = HudesWebsocketClient("ws://localhost:8765")
-
-        self.hudes_client.send_config(
-            seed=self.seed, dims_at_a_time=len(self.paired_keys)
-        )
-
-        pg.init()
-        self.window = pg.display.set_mode((1200, 900))
-        self.request_idx = 0
-
-        self.train_steps = []
-        self.train_losses = []
-
-        self.val_steps = []
-        self.val_losses = []
-
-        self.minimize = None
-
-        self.view = View()
 
     def usage_str(self) -> str:
         return (
@@ -95,7 +142,7 @@ To control each dimension use:
             + "\nGOOD LUCK!\n"
         )
 
-    def process_event(self, event):
+    def process_key_press(self, event):
         if event.type == pg.TEXTINPUT:  # event.type == pg.KEYDOWN or
             key = event.text
 
@@ -104,13 +151,13 @@ To control each dimension use:
                 print("Keep holding to quit!")
                 if self.quit_count > 4:
                     print("Quiting")
-                    self.hudes_client.running = False
+                    self.hudes_websocket_client.running = False
                 return
             self.quit_count = 0
 
             if key in self.key_to_param_and_sign:
                 dim, sign = self.key_to_param_and_sign[key]
-                self.hudes_client.send_q.put(
+                self.hudes_websocket_client.send_q.put(
                     dims_and_steps_to_control_message(
                         dims_and_steps={dim: self.step_size * sign},
                         request_idx=self.request_idx,
@@ -153,11 +200,15 @@ To control each dimension use:
                 )
             elif key == " ":
                 print("getting new set of vectors")
-                self.hudes_client.send_q.put(next_dims_message().SerializeToString())
+                self.hudes_websocket_client.send_q.put(
+                    next_dims_message().SerializeToString()
+                )
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_RETURN:
                 print("Getting new batch")
-                self.hudes_client.send_q.put(next_batch_message().SerializeToString())
+                self.hudes_websocket_client.send_q.put(
+                    next_batch_message().SerializeToString()
+                )
 
     def run_loop(self):
         self.view.update_step_size(
@@ -168,85 +219,26 @@ To control each dimension use:
             self.train_steps,
             self.val_losses,
             self.val_steps,
-            minimize=self.minimize,
         )
-        while self.hudes_client.running:
+        while self.hudes_websocket_client.running:
             # check and send local interactions(?)
             for event in pg.event.get():
-                self.process_event(event)
+                self.process_key_press(event)
 
-            # listen from server?
-            while self.hudes_client.recv_ready():
-                # recv and process!
-                raw_msg = self.hudes_client.recv_msg()
-                msg = hudes_pb2.Control()
-                msg.ParseFromString(raw_msg)
-                if msg.type == hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS:
-
-                    train_preds = pickle.loads(msg.train_loss_and_preds.preds)
-                    confusion_matrix = pickle.loads(
-                        msg.train_loss_and_preds.confusion_matrix
-                    )
-
-                    self.train_losses.append(msg.train_loss_and_preds.train_loss)
-                    self.train_steps.append(msg.request_idx)
-                    # self.val_losses.append(msg.loss_and_preds.val_loss)
-
-                    self.view.plot_train_and_val(
-                        self.train_losses,
-                        self.train_steps,
-                        self.val_losses,
-                        self.val_steps,
-                        minimize=self.minimize,
-                    )
-                    self.view.update_example_preds(train_preds=train_preds)
-                    self.view.update_confusion_matrix(confusion_matrix)
-                elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:
-                    self.train_data = pickle.loads(msg.batch_examples.train_data)
-                    self.val_data = pickle.loads(msg.batch_examples.val_data)
-                    self.train_labels = pickle.loads(msg.batch_examples.train_labels)
-                    self.val_labels = pickle.loads(msg.batch_examples.val_labels)
-                    self.view.update_examples(
-                        train_data=self.train_data,
-                        val_data=self.val_data,
-                    )
-                elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:
-                    self.minimize = msg.val_loss.minimize
-                    self.val_losses.append(msg.val_loss.val_loss)
-                    self.val_steps.append(msg.request_idx)
-
-                    self.view.plot_train_and_val(
-                        self.train_losses,
-                        self.train_steps,
-                        self.val_losses,
-                        self.val_steps,
-                        self.minimize,
-                    )
-
+            self.receive_messages()
             self.view.draw()
             sleep(0.001)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Process some integers.")
-    parser.add_argument("--train-batch-size", type=int, default=512)
-    parser.add_argument("--val-batch-size", type=int, default=1024)
+    parser = argparse.ArgumentParser(description="Hudes: Keyboardclient")
     parser.add_argument("--input", type=str, default="keyboard")
     parser.add_argument("--seed", type=int, default=0)
 
     args = parser.parse_args()
 
-    controller = KeyboardClient()
-
+    controller = KeyboardClient(seed=args.seed)
     controller.run_loop()
-    # pg.init()
-    # screen = pg.display.set_mode((1200, 900))
-    # while True:
-    #     print("RUN")
-    #     for event in pg.event.get():
-    #         print(event)
-    #         # elf.process_event(event)
-    #     sleep(0.001)  # give the model a chance
 
 
 if __name__ == "__main__":

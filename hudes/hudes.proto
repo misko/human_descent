@@ -19,7 +19,6 @@ message TrainLossAndPreds {
 }
 message ValLoss {
   required double val_loss = 1;
-  required bool minimize = 2;
 }
 
 message BatchExamples {

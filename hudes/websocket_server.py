@@ -162,7 +162,7 @@ async def inference_runner(
                         hudes_pb2.Control(
                             type=hudes_pb2.Control.CONTROL_VAL_LOSS,
                             val_loss=hudes_pb2.ValLoss(
-                                val_loss=res["val_loss"], minimize=mad.minimize
+                                val_loss=res["val_loss"],
                             ),
                             request_idx=current_request_idx,
                         ).SerializeToString()
