@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import asyncio
-import json
 import logging
 import multiprocessing
 import pickle
@@ -15,7 +14,7 @@ from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
 from hudes.mnist import MNISTFFNN, ModelDataAndSubspace, mnist_model_data_and_subpace
-from model_data_and_subspace import indexed_loss
+from hudes.model_data_and_subspace import indexed_loss
 
 client_idx = 0
 active_clients = {}
@@ -109,11 +108,14 @@ async def inference_runner(
 
             # TODO should be some kind of select not poll()
             if client.sent_batch != client.batch_idx:
-                await client.websocket.send(
-                    prepare_batch_example_message(
-                        client.batch_idx, mad
-                    ).SerializeToString()
-                )
+                try:
+                    await client.websocket.send(
+                        prepare_batch_example_message(
+                            client.batch_idx, mad
+                        ).SerializeToString()
+                    )
+                except websockets.exceptions.ConnectionClosedOK:
+                    pass
                 client.sent_batch = client.batch_idx
                 force_update = True
 

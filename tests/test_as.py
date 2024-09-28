@@ -1,6 +1,4 @@
 import asyncio
-import json
-import time
 
 import pytest
 import pytest_asyncio
@@ -8,8 +6,8 @@ import websockets
 
 from hudes.client import send_dims
 from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
+from hudes.model_data_and_subspace import indexed_loss
 from hudes.server import inference_runner, process_client
-from model_data_and_subspace import indexed_loss
 
 
 async def echo(websocket):

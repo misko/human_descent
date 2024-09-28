@@ -1,13 +1,14 @@
-import math
 import os
-from functools import cache
-from multiprocessing import Queue
 
 import torch
 from torch import nn
 from torchvision import datasets, transforms
 
-from model_data_and_subspace import DatasetBatcher, ModelDataAndSubspace, indexed_loss
+from hudes.model_data_and_subspace import (
+    DatasetBatcher,
+    ModelDataAndSubspace,
+    indexed_loss,
+)
 
 
 class MNISTFFNN(nn.Module):
