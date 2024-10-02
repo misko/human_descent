@@ -219,8 +219,9 @@ def main(height_map, spacing=0.1):
     arange = torch.linspace(-5, 5, grid_size, device=device)
     brange = torch.linspace(-5, 5, grid_size, device=device)
 
-    batch = mad.get_batch(0)["train"]
     dim_idx = 0
+    batch_idx = 0
+    batch = mad.get_batch(batch_idx)["train"]
 
     loss_np = get_loss(
         mad, batch, arange=arange, brange=brange, dims=[dim_idx, dim_idx + 1]
@@ -267,7 +268,9 @@ def main(height_map, spacing=0.1):
                     is_mouse_dragging = False
 
             if event.type == pygame.KEYDOWN:
-                dim_idx += 1
+                batch_idx += 1
+                batch = mad.get_batch(batch_idx)["train"]
+                # dim_idx += 1
                 loss_np = get_loss(
                     mad,
                     batch,

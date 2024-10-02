@@ -16,8 +16,8 @@ if __name__ == "__main__":
     mad.init_param_model()
     mp = mad.dim_idxs_and_ranges_to_models_parms(
         [0, 10],
-        arange=torch.linspace(-1, 1, 50, device=device),
-        brange=torch.linspace(-1, 1, 100, device=device),
+        arange=torch.linspace(-1, 1, 64, device=device),
+        brange=torch.linspace(-1, 1, 64, device=device),
     )
 
     mp_reshaped = mp.reshape(-1, 26506)
