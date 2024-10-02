@@ -115,6 +115,7 @@ def mnist_model_data_and_subpace(
     train_batch_size: int = 512,
     val_batch_size: int = 1024,
     device="cpu",
+    dtype=torch.float32,
     loss_fn=indexed_loss,
     constructor=ModelDataAndSubspaceInference,
 ):
@@ -152,4 +153,5 @@ def mnist_model_data_and_subpace(
         loss_fn=indexed_loss,
         minimize=False,
         device=device,
+        dtype=dtype,
     )

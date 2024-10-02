@@ -33,10 +33,10 @@ class DatasetBatcher:
 
 
 # https://stackoverflow.com/questions/74865438/how-to-get-a-flattened-view-of-pytorch-model-parameters
-def fuse_parameters(model: nn.Module, device):
+def fuse_parameters(model: nn.Module, device, dtype):
     """Move model parameters to a contiguous tensor, and return that tensor."""
     n = sum(p.numel() for p in model.parameters())
-    params = torch.zeros(n, device=device)
+    params = torch.zeros(n, device=device, dtype=dtype)
     i = 0
     for p in model.parameters():
         params_slice = params[i : i + p.numel()]
@@ -79,8 +79,10 @@ class ModelDataAndSubspace:
         seed: int = 0,
         minimize: bool = False,
         device="cpu",
+        dtype=torch.float32,
     ):
         self.device = device
+        self.dtype = dtype
         self.model = model  # .to(self.device)
         self.train_data_batcher = train_data_batcher
         self.val_data_batcher = val_data_batcher
@@ -97,24 +99,10 @@ class ModelDataAndSubspace:
         self.return_n_preds = 5
 
     def move_to_device(self):
-        self.model = self.model.to(self.device)
-
-    # return model parameters for given ranges
-    def dim_idxs_and_ranges_to_models_parms(
-        self, dims: torch.Tensor, arange: torch.Tensor, brange: torch.Tensor
-    ):
-        assert len(dims) == 2
-        vs = torch.vstack([self.get_dim_vec(dim) for dim in dims])
-
-        agrid, bgrid = torch.meshgrid(torch.tensor(arange), torch.tensor(brange))
-        agrid = agrid.unsqueeze(2)
-        bgrid = bgrid.unsqueeze(2)
-        return torch.concatenate(
-            [agrid, bgrid], dim=2
-        ).float() @ vs + self.saved_weights.reshape(1, 1, -1)
+        self.model = self.model.to(self.dtype).to(self.device)
 
     def fuse(self):
-        self.model_params = fuse_parameters(self.model, self.device)
+        self.model_params = fuse_parameters(self.model, self.device, self.dtype)
         self.saved_weights = self.model_params.detach().clone()
         self.fused = True
 
@@ -126,7 +114,13 @@ class ModelDataAndSubspace:
         g = torch.Generator(device=self.device)
         g.manual_seed(self.seeds_for_dims[dim % MAX_DIMS].item())
         return torch.nn.functional.normalize(
-            torch.rand(1, *self.model_params.shape, generator=g, device=self.device)
+            torch.rand(
+                1,
+                *self.model_params.shape,
+                generator=g,
+                device=self.device,
+                dtype=self.dtype,
+            )
             - 0.5,
             p=2,
             dim=1,
@@ -238,11 +232,6 @@ class ParamModelDataAndSubspace(ModelDataAndSubspace):
         agrid, bgrid = torch.meshgrid(torch.tensor(arange), torch.tensor(brange))
         agrid = agrid.unsqueeze(2)
         bgrid = bgrid.unsqueeze(2)
-        return torch.concatenate(
-            [agrid, bgrid], dim=2
-        ).float() @ vs + self.saved_weights.reshape(1, 1, -1)
-
-    def fuse(self):
-        self.model_params = fuse_parameters(self.model, self.device)
-        self.saved_weights = self.model_params.detach().clone()
-        self.fused = True
+        return torch.concatenate([agrid, bgrid], dim=2).to(
+            self.dtype
+        ) @ vs + self.saved_weights.reshape(1, 1, -1)
