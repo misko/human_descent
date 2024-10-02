@@ -83,19 +83,22 @@ class HudesClient:
         self.request_idx += 1
 
     def run_loop(self):
-
         while self.hudes_websocket_client.running:
             # check and send local interactions(?)
             for event in pg.event.get():
                 self.process_key_press(event)
 
-            self.receive_messages()
-            self.view.draw()
-            sleep(0.001)
+            redraw = self.receive_messages()
+            if redraw:
+                self.view.draw()
+            else:
+                sleep(0.01)
 
     def receive_messages(self):
         # listen from server?
+        received_message = False
         while self.hudes_websocket_client.recv_ready():
+            received_message = True
             # recv and process!
             raw_msg = self.hudes_websocket_client.recv_msg()
             msg = hudes_pb2.Control()
@@ -138,3 +141,4 @@ class HudesClient:
                     self.val_losses,
                     self.val_steps,
                 )
+        return received_message

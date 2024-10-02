@@ -94,6 +94,7 @@ def mnist_model_data_and_subpace(
     store: str = "./",
     train_batch_size: int = 512,
     val_batch_size: int = 1024,
+    device="cpu",
     loss_fn=indexed_loss,
 ):
     transform = transforms.Compose(
@@ -129,4 +130,5 @@ def mnist_model_data_and_subpace(
         val_data_batcher=val_data_batcher,
         loss_fn=indexed_loss,
         minimize=False,
+        device=device,
     )

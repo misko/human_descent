@@ -20,20 +20,21 @@ class DatasetBatcher:
     # TODO optionally cache this!
     @cache
     def __getitem__(self, idx: int):
+        print("BATCHER", idx)
         idx = idx % self.len
         start_idx = idx * self.batch_size
         end_idx = min(len(self.ds), start_idx + self.batch_size)
         x, y = torch.cat(
             [self.ds[idx][0] for idx in self.idxs[start_idx:end_idx]], dim=0
         ), torch.tensor([self.ds[idx][1] for idx in self.idxs[start_idx:end_idx]])
-        return x, y
+        return {"data": x, "label": y}
 
 
 # https://stackoverflow.com/questions/74865438/how-to-get-a-flattened-view-of-pytorch-model-parameters
-def fuse_parameters(model: nn.Module):
+def fuse_parameters(model: nn.Module, device):
     """Move model parameters to a contiguous tensor, and return that tensor."""
     n = sum(p.numel() for p in model.parameters())
-    params = torch.zeros(n)
+    params = torch.zeros(n, device=device)
     i = 0
     for p in model.parameters():
         params_slice = params[i : i + p.numel()]
@@ -75,8 +76,10 @@ class ModelDataAndSubspace:
         val_data_batcher: DatasetBatcher,
         seed: int = 0,
         minimize: bool = False,
+        device="cpu",
     ):
-        self.model = model
+        self.device = device
+        self.model = model  # .to(self.device)
         self.num_params = sum([x.numel() for x in model.parameters()])
         print(f"MODEL WITH : {self.num_params} parameters")
         self.train_data_batcher = train_data_batcher
@@ -98,15 +101,19 @@ class ModelDataAndSubspace:
         self.loss_fn = loss_fn
         self.return_n_preds = 5
 
+    def move_to_device(self):
+        self.model = self.model.to(self.device)
+
     def fuse(self):
-        self.model_params = fuse_parameters(self.model)
+        self.model_params = fuse_parameters(self.model, self.device)
         self.saved_weights = self.model_params.detach().clone()
         self.fused = True
 
     # TODO could optimize with one large chunk of shared memory? and slice it?
+    @cache
     def blank_weight_vec(self):
-        wv = torch.zeros(*self.model_params.shape)
-        wv.share_memory_()
+        wv = torch.zeros(*self.model_params.shape, device=self.device)
+        # wv.share_memory_()
         return wv
 
     # todo cache this?
@@ -114,16 +121,26 @@ class ModelDataAndSubspace:
     @torch.no_grad
     def get_dim_vec(self, dim: int):
         assert self.fused
-        g = torch.Generator()
+        g = torch.Generator(device=self.device)
         g.manual_seed(self.seeds_for_dims[dim % MAX_DIMS].item())
         return torch.nn.functional.normalize(
-            torch.rand(1, *self.model_params.shape, generator=g) - 0.5, p=2, dim=1
+            torch.rand(1, *self.model_params.shape, generator=g, device=self.device)
+            - 0.5,
+            p=2,
+            dim=1,
         )
 
     # dims is a dictionary {dim:step_size}
     @torch.no_grad
     def delta_from_dims(self, dims: dict[int, float]):
-        return torch.cat([self.get_dim_vec(d) * v for d, v in dims.items()]).sum(axis=0)
+        if len(dims) > 0:
+            return torch.cat(
+                [
+                    self.get_dim_vec(d) * v for d, v in dims.items()
+                ]  # , device=self.device
+            ).sum(axis=0)
+        else:
+            return self.blank_weight_vec()
 
     @torch.no_grad
     def set_parameters(self, weights: torch.Tensor):
@@ -135,10 +152,14 @@ class ModelDataAndSubspace:
     # todo cache this?
     @cache
     def get_batch(self, idx: int):
-        return {
-            "train": self.train_data_batcher[idx],
-            "val": self.val_data_batcher[idx],
-        }
+        r = {}
+        for name, batcher in (
+            ("train", self.train_data_batcher),
+            ("val", self.val_data_batcher),
+        ):
+            batch = batcher[idx]
+            r[name] = (batch["data"].to(self.device), batch["label"].to(self.device))
+        return r
 
     @torch.no_grad
     def val_model_inference_with_delta_weights(self, delta_weights: torch.Tensor):
@@ -171,6 +192,6 @@ class ModelDataAndSubspace:
         confusion_matrix = get_confusion_matrix(train_pred, batch["train"][1])
         return {
             "train_loss": train_loss,
-            "train_preds": train_pred[: self.return_n_preds],
-            "confusion_matrix": confusion_matrix,
+            "train_preds": train_pred[: self.return_n_preds].cpu(),
+            "confusion_matrix": confusion_matrix.cpu(),
         }
