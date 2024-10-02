@@ -5,6 +5,8 @@ from multiprocessing import Queue
 import torch
 from torch import nn
 
+import hudes.param_nn as param_nn
+
 MAX_DIMS = 2**16
 
 
@@ -80,17 +82,10 @@ class ModelDataAndSubspace:
     ):
         self.device = device
         self.model = model  # .to(self.device)
-        self.num_params = sum([x.numel() for x in model.parameters()])
-        print(f"MODEL WITH : {self.num_params} parameters")
         self.train_data_batcher = train_data_batcher
         self.val_data_batcher = val_data_batcher
-        self.input_q = Queue()
         self.minimize = minimize
 
-        # fuse all params
-        # self.model_params = fuse_parameters(model)
-        # copy original weights
-        # self.saved_weights = self.model_params.detach().clone()
         self.fused = False  # Cant fuse before forking
 
         g = torch.Generator()
@@ -104,17 +99,24 @@ class ModelDataAndSubspace:
     def move_to_device(self):
         self.model = self.model.to(self.device)
 
+    # return model parameters for given ranges
+    def dim_idxs_and_ranges_to_models_parms(
+        self, dims: torch.Tensor, arange: torch.Tensor, brange: torch.Tensor
+    ):
+        assert len(dims) == 2
+        vs = torch.vstack([self.get_dim_vec(dim) for dim in dims])
+
+        agrid, bgrid = torch.meshgrid(torch.tensor(arange), torch.tensor(brange))
+        agrid = agrid.unsqueeze(2)
+        bgrid = bgrid.unsqueeze(2)
+        return torch.concatenate(
+            [agrid, bgrid], dim=2
+        ).float() @ vs + self.saved_weights.reshape(1, 1, -1)
+
     def fuse(self):
         self.model_params = fuse_parameters(self.model, self.device)
         self.saved_weights = self.model_params.detach().clone()
         self.fused = True
-
-    # TODO could optimize with one large chunk of shared memory? and slice it?
-    @cache
-    def blank_weight_vec(self):
-        wv = torch.zeros(*self.model_params.shape, device=self.device)
-        # wv.share_memory_()
-        return wv
 
     # todo cache this?
     @cache
@@ -142,13 +144,6 @@ class ModelDataAndSubspace:
         else:
             return self.blank_weight_vec()
 
-    @torch.no_grad
-    def set_parameters(self, weights: torch.Tensor):
-        assert self.fused
-        # self.model_params.copy_(weights) # segfaults?
-        self.model_params *= 0
-        self.model_params += weights
-
     # todo cache this?
     @cache
     def get_batch(self, idx: int):
@@ -160,6 +155,23 @@ class ModelDataAndSubspace:
             batch = batcher[idx]
             r[name] = (batch["data"].to(self.device), batch["label"].to(self.device))
         return r
+
+
+class ModelDataAndSubspaceInference(ModelDataAndSubspace):
+
+    # TODO could optimize with one large chunk of shared memory? and slice it?
+    @cache
+    def blank_weight_vec(self):
+        wv = torch.zeros(*self.model_params.shape, device=self.device)
+        # wv.share_memory_()
+        return wv
+
+    @torch.no_grad
+    def set_parameters(self, weights: torch.Tensor):
+        assert self.fused
+        # self.model_params.copy_(weights) # segfaults?
+        self.model_params *= 0
+        self.model_params += weights
 
     @torch.no_grad
     def val_model_inference_with_delta_weights(self, delta_weights: torch.Tensor):
@@ -195,3 +207,42 @@ class ModelDataAndSubspace:
             "train_preds": train_pred[: self.return_n_preds].cpu(),
             "confusion_matrix": confusion_matrix.cpu(),
         }
+
+
+class ParamModelDataAndSubspace(ModelDataAndSubspace):
+
+    def get_param_module(self, module):
+        if isinstance(module, torch.nn.Flatten):
+            return torch.nn.Flatten(start_dim=module.start_dim + 1)
+        if not hasattr(module, "parameters") or len(list(module.parameters())) == 0:
+            return module
+        if isinstance(module, torch.nn.Linear):
+            out_channels, in_channels = module.weight.shape
+            return param_nn.Linear(
+                input_channels=in_channels, output_channels=out_channels
+            )
+        raise ValueError(type(module))
+
+    def init_param_model(self):
+        self.param_model = param_nn.Sequential(
+            [self.get_param_module(m) for m in self.model.net]
+        )
+
+    # return model parameters for given ranges
+    def dim_idxs_and_ranges_to_models_parms(
+        self, dims: torch.Tensor, arange: torch.Tensor, brange: torch.Tensor
+    ):
+        assert len(dims) == 2
+        vs = torch.vstack([self.get_dim_vec(dim) for dim in dims])
+
+        agrid, bgrid = torch.meshgrid(torch.tensor(arange), torch.tensor(brange))
+        agrid = agrid.unsqueeze(2)
+        bgrid = bgrid.unsqueeze(2)
+        return torch.concatenate(
+            [agrid, bgrid], dim=2
+        ).float() @ vs + self.saved_weights.reshape(1, 1, -1)
+
+    def fuse(self):
+        self.model_params = fuse_parameters(self.model, self.device)
+        self.saved_weights = self.model_params.detach().clone()
+        self.fused = True

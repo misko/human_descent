@@ -16,7 +16,11 @@ import websockets
 from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
-from hudes.mnist import MNISTFFNN, ModelDataAndSubspace, mnist_model_data_and_subpace
+from hudes.mnist import (
+    MNISTFFNN,
+    ModelDataAndSubspaceInference,
+    mnist_model_data_and_subpace,
+)
 from hudes.model_data_and_subspace import indexed_loss
 
 client_idx = 0
@@ -30,7 +34,7 @@ active_clients = {}
 
 # TODO cache?
 def prepare_batch_example_message(
-    batch_idx: int, mad: ModelDataAndSubspace, n: int = 4
+    batch_idx: int, mad: ModelDataAndSubspaceInference, n: int = 4
 ):
     batch = mad.get_batch(batch_idx)
     return hudes_pb2.Control(
@@ -50,7 +54,7 @@ def prepare_batch_example_message(
 def listen_and_run(
     in_q: aioprocessing.AioQueue,
     out_q: aioprocessing.AioQueue,
-    mad: ModelDataAndSubspace,
+    mad: ModelDataAndSubspaceInference,
 ):
     mad.move_to_device()
     mad.fuse()
@@ -203,7 +207,7 @@ async def wait_for_stop(inference_q, results_q, stop, event):
 
 
 async def inference_runner(
-    mad: ModelDataAndSubspace,
+    mad: ModelDataAndSubspaceInference,
     event: aioprocessing.AioEvent,
     stop=None,
     run_in: str = "process",
