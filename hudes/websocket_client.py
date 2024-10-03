@@ -36,6 +36,15 @@ While True:
 """
 
 
+def mesh_grid_config_message(dimA, dimB, grid_size, step_size):
+    return hudes_pb2.Control(
+        type=hudes_pb2.Control.CONTROL_MESHGRID_CONFIG,
+        mesh_grid_config=hudes_pb2.MeshGridConfig(
+            dimA=dimA, dimB=dimB, grid_size=grid_size, step_size=step_size
+        ),
+    )
+
+
 @cache
 def next_batch_message():
     return hudes_pb2.Control(
@@ -96,7 +105,6 @@ class HudesWebsocketClient:
             with sync_connect(self.remote_addr) as websocket:
                 while self.running:
                     # figure out what if we should send
-                    send_or_recv = False
                     request_idx = -1
                     dims_and_steps = {}
                     while not self.send_q.empty():
@@ -121,7 +129,6 @@ class HudesWebsocketClient:
                                 )
                                 dims_and_steps = {}
                             websocket.send(raw_msg)
-                            send_or_recv = True
                     if len(dims_and_steps) != 0:
                         websocket.send(
                             dims_and_steps_to_control_message(
@@ -129,12 +136,10 @@ class HudesWebsocketClient:
                             ).SerializeToString()
                         )
                         dims_and_steps = {}
-                        send_or_recv = True
 
                     # figure out what we are recv'ing if anything
                     try:
                         msg = websocket.recv(timeout=0.0)
-                        send_or_recv = True
                         self.recv_q.put(msg)
                     except TimeoutError:
                         pass
@@ -146,7 +151,7 @@ class HudesWebsocketClient:
 
                     # when there is no interaction give the system a break(?)
                     # if not send_or_recv:
-                    time.sleep(0.05)
+                    time.sleep(0.01)
         except ConnectionRefusedError:
             self.running = False
 

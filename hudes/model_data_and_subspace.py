@@ -84,6 +84,7 @@ class ModelDataAndSubspace:
         self.device = device
         self.dtype = dtype
         self.model = model  # .to(self.device)
+        self.num_params = sum([p.numel() for p in self.model.parameters()])
         self.train_data_batcher = train_data_batcher
         self.val_data_batcher = val_data_batcher
         self.minimize = minimize
@@ -147,11 +148,11 @@ class ModelDataAndSubspace:
             ("val", self.val_data_batcher),
         ):
             batch = batcher[idx]
-            r[name] = (batch["data"].to(self.device), batch["label"].to(self.device))
+            r[name] = (
+                batch["data"].to(device=self.device, dtype=self.dtype),
+                batch["label"].to(device=self.device),
+            )
         return r
-
-
-class ModelDataAndSubspaceInference(ModelDataAndSubspace):
 
     # TODO could optimize with one large chunk of shared memory? and slice it?
     @cache
@@ -164,8 +165,9 @@ class ModelDataAndSubspaceInference(ModelDataAndSubspace):
     def set_parameters(self, weights: torch.Tensor):
         assert self.fused
         # self.model_params.copy_(weights) # segfaults?
-        self.model_params *= 0
-        self.model_params += weights
+        # self.model_params *= 0
+        # self.model_params += weights
+        self.model_params.data.copy_(weights)
 
     @torch.no_grad
     def val_model_inference_with_delta_weights(self, delta_weights: torch.Tensor):
@@ -202,9 +204,6 @@ class ModelDataAndSubspaceInference(ModelDataAndSubspace):
             "confusion_matrix": confusion_matrix.cpu(),
         }
 
-
-class ParamModelDataAndSubspace(ModelDataAndSubspace):
-
     def get_param_module(self, module):
         if isinstance(module, torch.nn.Flatten):
             return torch.nn.Flatten(start_dim=module.start_dim + 1)
@@ -224,7 +223,11 @@ class ParamModelDataAndSubspace(ModelDataAndSubspace):
 
     # return model parameters for given ranges
     def dim_idxs_and_ranges_to_models_parms(
-        self, dims: torch.Tensor, arange: torch.Tensor, brange: torch.Tensor
+        self,
+        base_weights,
+        dims: torch.Tensor,
+        arange: torch.Tensor,
+        brange: torch.Tensor,
     ):
         assert len(dims) == 2
         vs = torch.vstack([self.get_dim_vec(dim) for dim in dims])
@@ -234,4 +237,39 @@ class ParamModelDataAndSubspace(ModelDataAndSubspace):
         bgrid = bgrid.unsqueeze(2)
         return torch.concatenate([agrid, bgrid], dim=2).to(
             self.dtype
-        ) @ vs + self.saved_weights.reshape(1, 1, -1)
+        ) @ vs + base_weights.reshape(1, 1, -1)
+
+    def get_loss(self, base_weights, batch_idx, dims, grid_size, step_size):
+        assert grid_size % 2 == 1
+        assert grid_size > 3
+
+        r = (torch.arange(grid_size, device=self.device) - grid_size // 2) * step_size
+        mp = self.dim_idxs_and_ranges_to_models_parms(
+            base_weights, dims, arange=r, brange=r
+        )
+
+        mp_reshaped = mp.reshape(-1, self.num_params)
+        # batch = torch.rand(1, 512, 28, 28, device=device)
+        batch = self.get_batch(batch_idx)["train"]
+        data = batch[0].unsqueeze(0)
+        batch_size = data.shape[1]
+        label = batch[1]
+
+        predictions = self.param_model.forward(mp_reshaped, data)[1].reshape(
+            *mp.shape[:2], batch_size, -1
+        )
+        loss = torch.gather(
+            predictions,
+            3,
+            label.reshape(1, 1, -1, 1).expand(*mp.shape[:2], batch_size, 1),
+        ).mean(axis=[2, 3])
+
+        # loss_np = loss.detach().cpu().numpy()
+        # breakpoint()
+        loss -= loss.mean()
+        loss /= loss.std() + 1e-5
+
+        # invert loss_np
+        loss = -loss
+        # breakpoint()
+        return loss

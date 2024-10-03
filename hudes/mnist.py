@@ -7,7 +7,7 @@ from torchvision import datasets, transforms
 import hudes.param_nn as param_nn
 from hudes.model_data_and_subspace import (
     DatasetBatcher,
-    ModelDataAndSubspaceInference,
+    ModelDataAndSubspace,
     indexed_loss,
 )
 
@@ -117,7 +117,6 @@ def mnist_model_data_and_subpace(
     device="cpu",
     dtype=torch.float32,
     loss_fn=indexed_loss,
-    constructor=ModelDataAndSubspaceInference,
 ):
     transform = transforms.Compose(
         [
@@ -146,7 +145,7 @@ def mnist_model_data_and_subpace(
         val_batch_size,
         seed=seed,
     )
-    return constructor(
+    return ModelDataAndSubspace(
         model=model,
         train_data_batcher=train_data_batcher,
         val_data_batcher=val_data_batcher,

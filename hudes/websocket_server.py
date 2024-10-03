@@ -12,16 +12,13 @@ from multiprocessing import Queue
 from threading import Thread
 
 import aioprocessing
+import torch
 import websockets
 from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
-from hudes.mnist import (
-    MNISTFFNN,
-    ModelDataAndSubspaceInference,
-    mnist_model_data_and_subpace,
-)
-from hudes.model_data_and_subspace import indexed_loss
+from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
+from hudes.model_data_and_subspace import ModelDataAndSubspace, indexed_loss
 
 client_idx = 0
 active_clients = {}
@@ -34,7 +31,7 @@ active_clients = {}
 
 # TODO cache?
 def prepare_batch_example_message(
-    batch_idx: int, mad: ModelDataAndSubspaceInference, n: int = 4
+    batch_idx: int, mad: ModelDataAndSubspace, n: int = 4
 ):
     batch = mad.get_batch(batch_idx)
     return hudes_pb2.Control(
@@ -54,38 +51,54 @@ def prepare_batch_example_message(
 def listen_and_run(
     in_q: aioprocessing.AioQueue,
     out_q: aioprocessing.AioQueue,
-    mad: ModelDataAndSubspaceInference,
+    mad: ModelDataAndSubspace,
 ):
     mad.move_to_device()
     mad.fuse()
+    mad.init_param_model()
+    # breakpoint()
 
     client_weights = {}  # TODO memory leak, but prevents continously copying models
 
+    print("Listen and run running ...")
     while True:
         try:
             v = in_q.get()  # blocking
         except EOFError:
+            print("Listen and run returning...")
             return
+
         if v is None:
             return
         else:
-            # assume its a tensor
-            train_or_val, current_step, client_id, batch_idx = v
-
             # prepare weights
-            if client_id not in client_weights:
-                client_weights[client_id] = mad.saved_weights.clone()
-            client_weights[client_id] += mad.delta_from_dims(current_step)
+            client_id = v["client_id"]
 
-            if train_or_val == "train":
+            if v["mode"] in ("train", "mesh"):
+                if client_id not in client_weights:
+                    client_weights[client_id] = mad.saved_weights.clone()
+                client_weights[client_id] += mad.delta_from_dims(v["current_step"])
+
+            if v["mode"] == "train":
                 res = mad.train_model_inference_with_delta_weights(
-                    client_weights[client_id], batch_idx
+                    client_weights[client_id], v["batch_idx"]
                 )
-            elif train_or_val == "val":
+            elif v["mode"] == "val":
                 res = mad.val_model_inference_with_delta_weights(
                     client_weights[client_id]
                 )
-            out_q.put((client_id, train_or_val, res))
+            elif v["mode"] == "mesh":
+                res = mad.get_loss(
+                    client_weights[client_id],
+                    v["batch_idx"],
+                    dims=v["dims"],
+                    grid_size=v["grid_size"],
+                    step_size=v["step_size"],
+                )
+            else:
+                raise ValueError
+
+            out_q.put((client_id, v["mode"], res))
 
 
 @dataclass
@@ -99,6 +112,10 @@ class Client:
     request_full_val: bool = False
     active_inference: bool = False
     active_request_idx: int = -1
+    mesh_grid_size: int = -1
+    mesh_dimA: int = -1
+    mesh_dimB: int = -1
+    mesh_step_size: float = 0.0
 
 
 async def inference_runner_clients(mad, event, inference_q, stop):
@@ -138,32 +155,48 @@ async def inference_runner_clients(mad, event, inference_q, stop):
 
                 client.active_inference = True
                 client.active_request_idx = client.request_idx
-                await inference_q.coro_put(
-                    (
-                        "train",
-                        current_step,
-                        client_id,
-                        client.batch_idx,
+
+                if client.mesh_grid_size > 0:
+                    print("SENDING MESH")
+                    await inference_q.coro_put(
+                        {
+                            "mode": "mesh",
+                            "current_step": current_step,
+                            "grid_size": client.mesh_grid_size,
+                            "step_size": client.mesh_step_size,
+                            "dims": [client.mesh_dimA, client.mesh_dimB],
+                            "batch_idx": client.batch_idx,
+                            "client_id": client_id,
+                        }
                     )
-                )
+                else:
+                    await inference_q.coro_put(
+                        {
+                            "mode": "train",
+                            "current_step": current_step,
+                            "client_id": client_id,
+                            "batch_idx": client.batch_idx,
+                        }
+                    )
 
             if client.request_full_val:
                 # send weight vector for inference
                 await inference_q.coro_put(
-                    (
-                        "val",
-                        {},
-                        client_id,
-                        client.batch_idx,
-                    )
+                    {
+                        "mode": "val",
+                        "client_id": client_id,
+                        "batch_idx": client.batch_idx,
+                    }
                 )
 
 
 async def inference_result_sender(results_q, stop):
+    print("Result sender online...")
     while True:
         msg = await results_q.coro_get()
 
-        if stop is not None and stop.done:
+        if stop is not None and stop.done():
+            print("Result sender ending...")
             return
 
         client_id, train_or_val, res = msg
@@ -177,8 +210,10 @@ async def inference_result_sender(results_q, stop):
                         type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
                         train_loss_and_preds=hudes_pb2.TrainLossAndPreds(
                             train_loss=res["train_loss"],
-                            preds=pickle.dumps(res["train_preds"]),
-                            confusion_matrix=pickle.dumps(res["confusion_matrix"]),
+                            preds=pickle.dumps(res["train_preds"].cpu().float()),
+                            confusion_matrix=pickle.dumps(
+                                res["confusion_matrix"].cpu().float()
+                            ),
                         ),
                         request_idx=client.active_request_idx,
                     ).SerializeToString()
@@ -194,6 +229,15 @@ async def inference_result_sender(results_q, stop):
                     ).SerializeToString()
                 )
                 client.request_full_val = False
+            elif train_or_val == "mesh":
+                await client.websocket.send(
+                    hudes_pb2.Control(
+                        type=hudes_pb2.Control.CONTROL_MESHGRID_RESULTS,
+                        mesh_grid_results=pickle.dumps(res.cpu().float()),
+                    ).SerializeToString()
+                )
+            else:
+                raise ValueError
         except websockets.exceptions.ConnectionClosedOK:
             pass
         client.active_inference = False
@@ -207,9 +251,9 @@ async def wait_for_stop(inference_q, results_q, stop, event):
 
 
 async def inference_runner(
-    mad: ModelDataAndSubspaceInference,
+    mad: ModelDataAndSubspace,
     event: aioprocessing.AioEvent,
-    stop=None,
+    stop,
     run_in: str = "process",
 ):
     global active_clients
@@ -227,11 +271,13 @@ async def inference_runner(
     process_or_thread.daemon = True
     process_or_thread.start()
 
+    print("Inference runner running...")
     await asyncio.gather(
         inference_runner_clients(mad, event, inference_q, stop),
         inference_result_sender(results_q, stop),
         wait_for_stop(inference_q, results_q, stop, event),
     )
+    print("Inference runner stopping...")
     process_or_thread.join()
 
 
@@ -273,9 +319,15 @@ async def process_client(websocket, event):
         elif msg.type == hudes_pb2.Control.CONTROL_CONFIG:
             config["dims_at_a_time"] = msg.config.dims_at_a_time
             config["seed"] = msg.config.seed
+
             # send back batch examples
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
             break
+        elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_CONFIG:
+            client.mesh_grid_size = msg.mesh_grid_config.grid_size
+            client.mesh_dimA = msg.mesh_grid_config.dimA
+            client.mesh_dimB = msg.mesh_grid_config.dimB
+            client.mesh_step_size = msg.mesh_grid_config.step_size
         else:
             logging.warning("received invalid type from client")
 
@@ -291,11 +343,15 @@ async def run_server(stop, event):
 async def run_wrapper(args):
     event = aioprocessing.AioEvent()
     mad = mnist_model_data_and_subpace(
-        model=MNISTFFNN(), loss_fn=indexed_loss, device=args.device
+        model=MNISTFFNN(),
+        loss_fn=indexed_loss,
+        device=args.device,
+        dtype=getattr(torch, args.dtype),
     )
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(
-        run_server(stop, event), inference_runner(mad, run_in="process", event=event)
+        run_server(stop, event),
+        inference_runner(mad, run_in="thread", event=event, stop=stop),
     )
 
 
@@ -303,6 +359,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Hudes: Server")
     parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--dtype", type=str, default="float")
 
     args = parser.parse_args()
     asyncio.run(run_wrapper(args))

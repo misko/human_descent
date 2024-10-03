@@ -2,7 +2,13 @@ import argparse
 import math
 from time import sleep
 
+import numpy as np
+import pygame
 import pygame as pg
+import torch
+from OpenGL.GL import *
+from OpenGL.GLU import *  # Import GLU for perspective functions
+from pygame.locals import *
 
 from hudes.hudes_client import HudesClient
 from hudes.websocket_client import (
@@ -11,8 +17,12 @@ from hudes.websocket_client import (
     next_dims_message,
 )
 
+"""
+I used chatGPT a lot for this, I have no idea how to use openGL
+"""
 
-class KeyboardClient(HudesClient):
+
+class KeyboardClientGL(HudesClient):
     def init_input(self):
 
         self.paired_keys = [
@@ -85,15 +95,27 @@ To control each dimension use:
                 self.hudes_websocket_client.send_q.put(
                     next_dims_message().SerializeToString()
                 )
-            # elif key == "x":
-            #     self.hudes_websocket_client.send_q.put(
-            #         mesh_grid_config_message(
-            #             dimA=0, dimB=1, grid_size=9, step_size=0.01
-            #         ).SerializeToString()
-            #     )
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_RETURN:
                 print("Getting new batch")
                 self.hudes_websocket_client.send_q.put(
                     next_batch_message().SerializeToString()
                 )
+
+    def run_loop(self):
+        self.hudes_websocket_client.send_q.put(
+            mesh_grid_config_message(
+                dimA=0, dimB=1, grid_size=self.view.grid_size, step_size=0.01
+            ).SerializeToString()
+        )
+        while self.hudes_websocket_client.running:
+            # print("RUN")
+            # check and send local interactions(?)
+            for event in pg.event.get():
+                self.process_key_press(event)
+
+            redraw = self.receive_messages()
+            if redraw:
+                self.view.draw()
+            else:
+                sleep(0.01)

@@ -13,15 +13,13 @@ from hudes.websocket_client import (
 
 
 class HudesClient:
-    def __init__(self, step_size_resolution=-0.05, seed=0):
+    def __init__(self, view, step_size_resolution=-0.05, seed=0):
 
         self.quit_count = 0
         self.seed = seed
 
         self.hudes_websocket_client = HudesWebsocketClient("ws://localhost:8765")
 
-        pg.init()
-        self.window = pg.display.set_mode((1200, 900))
         self.request_idx = 0
 
         self.train_steps = []
@@ -34,7 +32,7 @@ class HudesClient:
 
         self.hudes_websocket_client.send_config(seed=self.seed, dims_at_a_time=self.n)
 
-        self.view = View()
+        self.view = view  # View()
 
         self.max_log_step_size = 0
         self.min_log_step_size = -10
@@ -141,4 +139,7 @@ class HudesClient:
                     self.val_losses,
                     self.val_steps,
                 )
+            elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_RESULTS:
+                self.view.update_mesh_grid(pickle.loads(msg.mesh_grid_results))
+                # print("GOT MESH GRID", self.mesh_grid.shape)
         return received_message
