@@ -23,6 +23,11 @@ from hudes.model_data_and_subspace import ModelDataAndSubspace, indexed_loss
 client_idx = 0
 active_clients = {}
 
+logging.basicConfig(
+    format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 # TODO
 # move to protobuf https://protobuf.dev/getting-started/pythontutorial/
@@ -60,12 +65,12 @@ def listen_and_run(
 
     client_weights = {}  # TODO memory leak, but prevents continously copying models
 
-    print("Listen and run running ...")
+    logging.info("listen_and_run: started")
     while True:
         try:
             v = in_q.get()  # blocking
         except EOFError:
-            print("Listen and run returning...")
+            logging.info("listen_and_run: returning")
             return
 
         if v is None:
@@ -74,6 +79,7 @@ def listen_and_run(
             # prepare weights
             client_id = v["client_id"]
 
+            logging.info(f"listen_and_run: got {v['mode']}")
             if v["mode"] in ("train", "mesh"):
                 if client_id not in client_weights:
                     client_weights[client_id] = mad.saved_weights.clone()
@@ -98,6 +104,7 @@ def listen_and_run(
             else:
                 raise ValueError
 
+            logging.info(f"listen_and_run: return {v['mode']}")
             out_q.put((client_id, v["mode"], res))
 
 
@@ -119,9 +126,11 @@ class Client:
 
 
 async def inference_runner_clients(mad, event, inference_q, stop):
+    logging.info(f"inference_runner_clients: started")
     while True:
         await event.coro_wait()
         if stop is not None and stop.done():
+            logging.info(f"inference_result_sender: returning")
             return
 
         event.clear()
@@ -139,6 +148,7 @@ async def inference_runner_clients(mad, event, inference_q, stop):
             # TODO should be some kind of select not poll()
             if client.sent_batch != client.batch_idx:
                 try:
+                    logging.info(f"inference_runner_clients: send batch msg")
                     await client.websocket.send(
                         prepare_batch_example_message(
                             client.batch_idx, mad
@@ -157,7 +167,7 @@ async def inference_runner_clients(mad, event, inference_q, stop):
                 client.active_request_idx = client.request_idx
 
                 if client.mesh_grid_size > 0:
-                    print("SENDING MESH")
+                    logging.info(f"inference_runner_clients: req mesh")
                     await inference_q.coro_put(
                         {
                             "mode": "mesh",
@@ -170,6 +180,7 @@ async def inference_runner_clients(mad, event, inference_q, stop):
                         }
                     )
                 else:
+                    logging.info(f"inference_runner_clients: req train")
                     await inference_q.coro_put(
                         {
                             "mode": "train",
@@ -181,6 +192,7 @@ async def inference_runner_clients(mad, event, inference_q, stop):
 
             if client.request_full_val:
                 # send weight vector for inference
+                logging.info(f"inference_runner_clients: req inference")
                 await inference_q.coro_put(
                     {
                         "mode": "val",
@@ -191,12 +203,13 @@ async def inference_runner_clients(mad, event, inference_q, stop):
 
 
 async def inference_result_sender(results_q, stop):
-    print("Result sender online...")
+
+    logging.info(f"inference_result_sender: started")
     while True:
         msg = await results_q.coro_get()
 
         if stop is not None and stop.done():
-            print("Result sender ending...")
+            logging.info(f"inference_result_sender: returning")
             return
 
         client_id, train_or_val, res = msg
@@ -205,6 +218,7 @@ async def inference_result_sender(results_q, stop):
         try:
             if train_or_val == "train":
                 # TODO need to be ok with getting errors here
+                logging.info(f"inference_result_sender: sent train to client")
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
@@ -218,7 +232,9 @@ async def inference_result_sender(results_q, stop):
                         request_idx=client.active_request_idx,
                     ).SerializeToString()
                 )
+                logging.info(f"inference_result_sender: sent train to client : done")
             elif train_or_val == "val":
+                logging.info(f"inference_result_sender: sent val to client")
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_VAL_LOSS,
@@ -228,14 +244,17 @@ async def inference_result_sender(results_q, stop):
                         request_idx=client.active_request_idx,
                     ).SerializeToString()
                 )
+                logging.info(f"inference_result_sender: sent val to client : done")
                 client.request_full_val = False
             elif train_or_val == "mesh":
+                logging.info(f"inference_result_sender: sent mesh to client")
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_MESHGRID_RESULTS,
                         mesh_grid_results=pickle.dumps(res.cpu().float()),
                     ).SerializeToString()
                 )
+                logging.info(f"inference_result_sender: sent mesh to client : done")
             else:
                 raise ValueError
         except websockets.exceptions.ConnectionClosedOK:
@@ -297,11 +316,13 @@ async def process_client(websocket, event):
     active_clients[current_client] = client
     dims_offset = 0
 
+    logging.info(f"process_client: start for client {client_idx}")
     config = {}
     async for message in websocket:
         msg = hudes_pb2.Control()
         msg.ParseFromString(message)
         if msg.type == hudes_pb2.Control.CONTROL_DIMS:
+            logging.info(f"process_client: {client_idx} : control dims")
             for dim_and_step in msg.dims_and_steps:
                 dim = dim_and_step.dim + dims_offset
                 if dim in client.next_step:
@@ -310,20 +331,25 @@ async def process_client(websocket, event):
                     client.next_step[dim] = dim_and_step.step
             client.request_idx += 1
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_BATCH:
+            logging.info(f"process_client: {client_idx} : next batch")
             client.batch_idx += 1
             client.request_full_val = True
             # send back batch examples
 
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_DIMS:
+            logging.info(f"process_client: {client_idx} : next dims")
             dims_offset += config["dims_at_a_time"]  # make sure we dont re-use dims
         elif msg.type == hudes_pb2.Control.CONTROL_CONFIG:
+            logging.info(f"process_client: {client_idx} : control config")
             config["dims_at_a_time"] = msg.config.dims_at_a_time
             config["seed"] = msg.config.seed
 
             # send back batch examples
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
+            logging.info(f"process_client: {client_idx} : quit")
             break
         elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_CONFIG:
+            logging.info(f"process_client: {client_idx} : meshgrid")
             client.mesh_grid_size = msg.mesh_grid_config.grid_size
             client.mesh_dimA = msg.mesh_grid_config.dimA
             client.mesh_dimB = msg.mesh_grid_config.dimB
@@ -351,7 +377,7 @@ async def run_wrapper(args):
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(
         run_server(stop, event),
-        inference_runner(mad, run_in="thread", event=event, stop=stop),
+        inference_runner(mad, run_in="process", event=event, stop=stop),
     )
 
 

@@ -16,7 +16,7 @@ def main():
     if args.input == "keyboard":
         controller = KeyboardClient(seed=args.seed, view=View())
     if args.input == "keyboardGL":
-        controller = KeyboardClientGL(seed=args.seed, view=OpenGLView(grid_size=33))
+        controller = KeyboardClientGL(seed=args.seed, view=OpenGLView(grid_size=51))
     elif args.input == "akai":
         controller = AkaiClient(seed=args.seed, view=View())
     else:
