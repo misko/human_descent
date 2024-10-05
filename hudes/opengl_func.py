@@ -13,6 +13,62 @@ I used chatGPT a lot for this, I have no idea how to use openGL
 """
 
 
+def draw_arrow(start, end, color=(1.0, 0.0, 0.0), arrow_length=0.2, arrow_angle=20):
+    """
+    Draw an arrow from start to end.
+    :param start: Starting point of the arrow (tuple of x, y, z)
+    :param end: Ending point of the arrow (tuple of x, y, z)
+    :param color: Color of the arrow as an (r, g, b) tuple
+    :param arrow_length: Length of the arrowhead lines
+    :param arrow_angle: Angle of the arrowhead in degrees
+    """
+    print(start, end)
+    glColor3f(*color)
+    glLineWidth(2)
+
+    # Draw the main line of the arrow
+    glBegin(GL_LINES)
+    glVertex3f(*start)
+    glVertex3f(*end)
+    glEnd()
+
+    # Calculate the direction vector of the arrow
+    direction = np.array(end) - np.array(start)
+    length = np.linalg.norm(direction)
+    direction /= length  # Normalize the direction vector
+
+    # Find orthogonal vectors to the direction for the arrowhead
+    up = np.array([0.0, 1.0, 0.0])
+    if np.allclose(direction, up):  # If direction is parallel to up, use another axis
+        up = np.array([1.0, 0.0, 0.0])
+
+    # Cross product to get orthogonal vectors
+    right = np.cross(direction, up)
+    right = right / np.linalg.norm(right)
+    up = np.cross(right, direction)
+
+    # Arrowhead points
+    end = np.array(end)
+    arrow_end1 = (
+        end
+        - (direction * arrow_length)
+        + (right * arrow_length * np.tan(np.radians(arrow_angle)))
+    )
+    arrow_end2 = (
+        end
+        - (direction * arrow_length)
+        - (right * arrow_length * np.tan(np.radians(arrow_angle)))
+    )
+
+    # Draw the arrowhead
+    glBegin(GL_LINES)
+    glVertex3f(*end)
+    glVertex3f(*arrow_end1)
+    glVertex3f(*end)
+    glVertex3f(*arrow_end2)
+    glEnd()
+
+
 def draw_red_sphere(z_position):
     """
     Draw a red sphere at the position (0, 0, z_position).
@@ -28,46 +84,130 @@ def draw_red_sphere(z_position):
     glPopMatrix()  # Restore the previous matrix state
 
 
-def create_grid_vbo(height_map, spacing):
-    """
-    Creates a grid of points and indices for rendering a wireframe grid, with heights determined by a height_map.
+import numpy as np
 
-    :param height_map: A 2D numpy array of shape (H, W) representing the heights (Z values) at each (h, w) grid point.
+
+def create_grid_points(height_maps, spacing):
+    """
+    Creates grid points and indices for rendering multiple wireframe grids,
+    with heights determined by a set of height maps using NumPy operations.
+
+    :param height_maps: A 3D numpy array of shape (n, H, W) representing the heights
+                        (Z values) at each (h, w) grid point for each height map.
     :param spacing: The distance between adjacent points in the grid.
-    :return: (points, indices) - The points and indices for the grid.
+    :return: (points, indices) - The points and indices for all grids.
     """
-    H, W = height_map.shape  # Get the dimensions of the height map
+    n, H, W = height_maps.shape  # Get the dimensions of the height maps
 
-    # Create the grid points based on the height_map
-    points = []
-    offset_h = (H - 1) / 2.0  # Offset to center the grid along height (H)
-    offset_w = (W - 1) / 2.0  # Offset to center the grid along width (W)
-    for i in range(H):
-        for j in range(W):
-            x = (i - offset_h) * spacing  # X coordinate centered
-            y = height_map[i, j]  # Z coordinate (height) from the height_map
-            z = (j - offset_w) * spacing  # Y coordinate centered
-            points.append((x, y, z))
+    # Calculate X and Z coordinates for the grid (centered around 0)
+    offset_h = (H - 1) / 2.0
+    offset_w = (W - 1) / 2.0
 
-    # Convert points to a numpy array (flatten for use with VBOs)
-    points = np.array(points, dtype=np.float32).flatten()
+    x_coords = (np.arange(H) - offset_h) * spacing  # X coordinates for all rows
+    z_coords = (np.arange(W) - offset_w) * spacing  # Z coordinates for all columns
 
-    # Create line segments connecting the points (indices for wireframe grid)
+    # Create a meshgrid of X and Z coordinates (Shape: (H, W) for both)
+    x_grid, z_grid = np.meshgrid(x_coords, z_coords, indexing="ij")  # Shape (H, W)
+
+    # Repeat x_grid and z_grid across the n height maps to match the shape (n, H, W)
+    x_grid = np.repeat(x_grid[np.newaxis, :, :], n, axis=0)  # Shape (n, H, W)
+    z_grid = np.repeat(z_grid[np.newaxis, :, :], n, axis=0)  # Shape (n, H, W)
+
+    # Now x_grid, height_maps, and z_grid all have shape (n, H, W)
+
+    # Combine X, Y (heights), and Z coordinates into a single (n, H, W, 3) array
+    points = np.stack([x_grid, height_maps, z_grid], axis=-1)  # Shape (n, H, W, 3)
+
+    # Flatten the points array to shape (n * H * W, 3) for use with VBOs
+    return points.reshape(-1, 3).astype(np.float32)
+
+
+def create_grid_indices(height_maps, spacing):
+    n, H, W = height_maps.shape  # Get the dimensions of the height maps
+
+    # Create line segments (indices) for one grid
     indices = []
+
+    # Horizontal lines
     for i in range(H):
-        for j in range(W - 1):  # Horizontal lines
+        for j in range(W - 1):
             indices.append(i * W + j)
             indices.append(i * W + j + 1)
 
+    # Vertical lines
     for i in range(H - 1):
-        for j in range(W):  # Vertical lines
+        for j in range(W):
             indices.append(i * W + j)
             indices.append((i + 1) * W + j)
 
-    # Convert indices to a numpy array
-    indices = np.array(indices, dtype=np.uint32)
+    # Convert indices to numpy array
+    return np.array(indices, dtype=np.uint32)
 
-    return points, indices
+
+def create_surface_grid_points(height_maps, spacing):
+    """
+    Creates grid points for rendering multiple surfaces (triangle grids),
+    with heights determined by a set of height maps using NumPy operations.
+
+    :param height_maps: A 3D numpy array of shape (n, H, W) representing the heights
+                        (Z values) at each (h, w) grid point for each height map.
+    :param spacing: The distance between adjacent points in the grid.
+    :return: points - The points for all grids, shape (n * H * W, 3).
+    """
+    n, H, W = height_maps.shape  # Get the dimensions of the height maps
+
+    # Calculate X and Z coordinates for the grid (centered around 0)
+    offset_h = (H - 1) / 2.0
+    offset_w = (W - 1) / 2.0
+
+    x_coords = (np.arange(H) - offset_h) * spacing  # X coordinates for all rows
+    z_coords = (np.arange(W) - offset_w) * spacing  # Z coordinates for all columns
+
+    # Create a meshgrid of X and Z coordinates (Shape: (H, W) for both)
+    x_grid, z_grid = np.meshgrid(x_coords, z_coords, indexing="ij")  # Shape (H, W)
+
+    # Repeat x_grid and z_grid across the n height maps to match the shape (n, H, W)
+    x_grid = np.repeat(x_grid[np.newaxis, :, :], n, axis=0)  # Shape (n, H, W)
+    z_grid = np.repeat(z_grid[np.newaxis, :, :], n, axis=0)  # Shape (n, H, W)
+
+    # Now x_grid, height_maps, and z_grid all have shape (n, H, W)
+
+    # Combine X, Y (heights), and Z coordinates into a single (n, H, W, 3) array
+    points = np.stack([x_grid, height_maps, z_grid], axis=-1)  # Shape (n, H, W, 3)
+
+    # Flatten the points array to shape (n * H * W, 3) for use with VBOs
+    return points.reshape(-1, 3).astype(np.float32)
+
+
+def create_surface_grid_indices(height_maps, spacing):
+    """
+    Creates indices for rendering multiple surface grids as triangle grids.
+
+    :param height_maps: A 3D numpy array of shape (n, H, W) representing the heights
+                        (Z values) at each (h, w) grid point for each height map.
+    :param spacing: The distance between adjacent points in the grid.
+    :return: indices - The indices for all grids to render triangles.
+    """
+    n, H, W = height_maps.shape  # Get the dimensions of the height maps
+
+    indices = []
+
+    for k in range(n):  # For each height map
+        for i in range(H - 1):
+            for j in range(W - 1):
+                # For each grid cell, generate two triangles:
+
+                # Triangle 1: Top-left, Bottom-left, Bottom-right
+                indices.append(k * H * W + i * W + j)
+                indices.append(k * H * W + (i + 1) * W + j)
+                indices.append(k * H * W + (i + 1) * W + (j + 1))
+
+                # Triangle 2: Top-left, Bottom-right, Top-right
+                indices.append(k * H * W + i * W + j)
+                indices.append(k * H * W + (i + 1) * W + (j + 1))
+                indices.append(k * H * W + i * W + (j + 1))
+
+    return np.array(indices, dtype=np.uint32)
 
 
 def t20_get_mad(device):

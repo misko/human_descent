@@ -5,11 +5,7 @@ from time import sleep
 import pygame as pg
 
 from hudes.hudes_client import HudesClient
-from hudes.websocket_client import (
-    mesh_grid_config_message,
-    next_batch_message,
-    next_dims_message,
-)
+from hudes.websocket_client import next_batch_message, next_dims_message
 
 
 class KeyboardClient(HudesClient):
@@ -65,7 +61,7 @@ To control each dimension use:
                 if self.quit_count > 4:
                     print("Quiting")
                     self.hudes_websocket_client.running = False
-                return
+                return False
             self.quit_count = 0
 
             if key in self.key_to_param_and_sign:
@@ -78,13 +74,16 @@ To control each dimension use:
                 # send needs to be independent of this
             elif key == "[":
                 self.step_size_decrease()
+                return True
             elif key == "]":
                 self.step_size_increase()
+                return True
             elif key == " ":
                 print("getting new set of vectors")
                 self.hudes_websocket_client.send_q.put(
                     next_dims_message().SerializeToString()
                 )
+                return False
             # elif key == "x":
             #     self.hudes_websocket_client.send_q.put(
             #         mesh_grid_config_message(
@@ -97,3 +96,5 @@ To control each dimension use:
                 self.hudes_websocket_client.send_q.put(
                     next_batch_message().SerializeToString()
                 )
+                return False
+        return False

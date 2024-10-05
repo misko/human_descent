@@ -240,50 +240,66 @@ class ModelDataAndSubspace:
             self.dtype
         ) @ vs + base_weights.reshape(1, 1, -1)
 
-    def get_loss(self, base_weights, batch_idx, dims, grid_size, step_size):
+    def get_loss_grid(
+        self, base_weights, batch_idx, dims_offset, grids, grid_size, step_size
+    ):
         logging.info("get_loss: start")
         assert grid_size % 2 == 1
         assert grid_size > 3
-        logging.info("get_loss: start")
+        assert grids > 0
 
-        r = (torch.arange(grid_size, device=self.device) - grid_size // 2) * step_size
-        mp = self.dim_idxs_and_ranges_to_models_parms(
-            base_weights, dims, arange=r, brange=r
-        )
+        grid_losses = []
+        for grid_idx in range(grids):
+            dims = [
+                dims_offset + grid_idx * 2,
+                dims_offset + grid_idx * 2 + 1,
+            ]  # which dims are doing this for
+            r = (
+                torch.arange(grid_size, device=self.device) - grid_size // 2
+            ) * step_size
+            mp = self.dim_idxs_and_ranges_to_models_parms(
+                base_weights, dims, arange=r, brange=r
+            )
 
-        logging.info(f"get_loss: mp done {mp.device} {mp.dtype}")
+            logging.info(f"get_loss: mp done {mp.device} {mp.dtype}")
 
-        mp_reshaped = mp.reshape(-1, self.num_params).contiguous()
-        # batch = torch.rand(1, 512, 28, 28, device=device)
-        logging.info("get_loss: get bach")
-        batch = self.get_batch(batch_idx)["train"]
-        logging.info("get_loss: get batch done")
-        data = batch[0].unsqueeze(0)
-        batch_size = data.shape[1]
-        label = batch[1]
+            mp_reshaped = mp.reshape(-1, self.num_params).contiguous()
+            # batch = torch.rand(1, 512, 28, 28, device=device)
+            logging.info("get_loss: get bach")
+            batch = self.get_batch(batch_idx)["train"]
+            logging.info("get_loss: get batch done")
+            data = batch[0].unsqueeze(0)
+            batch_size = data.shape[1]
+            label = batch[1]
 
-        logging.info(f"get_loss: fwd start , batch size {batch_size}")
-        predictions = self.param_model.forward(mp_reshaped, data)[1].reshape(
-            *mp.shape[:2], batch_size, -1
-        )
-        logging.info("get_loss: done fwd")
-        loss = torch.gather(
-            predictions,
-            3,
-            label.reshape(1, 1, -1, 1).expand(*mp.shape[:2], batch_size, 1),
-        ).mean(axis=[2, 3])
-        logging.info("get_loss: gather done")
-        logging.info(
-            f"get_loss: {label.shape} {predictions.shape} {label.device} {predictions.device} {mp.device}"
-        )
+            logging.info(f"get_loss: fwd start , batch size {batch_size}")
+            predictions = self.param_model.forward(mp_reshaped, data)[1].reshape(
+                *mp.shape[:2], batch_size, -1
+            )
+            logging.info("get_loss: done fwd")
+            loss = torch.gather(
+                predictions,
+                3,
+                label.reshape(1, 1, -1, 1).expand(*mp.shape[:2], batch_size, 1),
+            ).mean(axis=[2, 3])
+            logging.info("get_loss: gather done")
+            logging.info(
+                f"get_loss: {label.shape} {predictions.shape} {label.device} {predictions.device} {mp.device}"
+            )
 
-        # loss_np = loss.detach().cpu().numpy()
-        # breakpoint()
-        # loss -= loss.mean()
-        # loss /= loss.std() + 1e-5
-
-        # invert loss_np
-        loss = -loss.cpu()
+            # loss_np = loss.detach().cpu().numpy()
+            # breakpoint()
+            # loss -= loss.mean()
+            # loss /= loss.std() + 1e-5
+            # print(loss.mean())
+            # invert loss_np
+            loss = -loss
+            grid_losses.append(loss.unsqueeze(0))
+            #
+            # loss = -loss.cpu()
+            # breakpoint()
+            # a = 1
+        loss = torch.concatenate(grid_losses, dim=0).cpu()
         # breakpoint()
         logging.info("get_loss: return loss")
         return loss

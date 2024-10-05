@@ -36,13 +36,13 @@ While True:
 """
 
 
-def mesh_grid_config_message(dimA, dimB, grid_size, step_size):
-    return hudes_pb2.Control(
-        type=hudes_pb2.Control.CONTROL_MESHGRID_CONFIG,
-        mesh_grid_config=hudes_pb2.MeshGridConfig(
-            dimA=dimA, dimB=dimB, grid_size=grid_size, step_size=step_size
-        ),
-    )
+# def mesh_grid_config_message(dimA, dimB, grid_size, step_size):
+#     return hudes_pb2.Control(
+#         type=hudes_pb2.Control.CONTROL_MESHGRID_CONFIG,
+#         mesh_grid_config=hudes_pb2.MeshGridConfig(
+#             dimA=dimA, dimB=dimB, grid_size=grid_size, step_size=step_size
+#         ),
+#     )
 
 
 @cache
@@ -86,11 +86,19 @@ class HudesWebsocketClient:
         self.thread.daemon = True
         self.thread.start()
 
-    def send_config(self, dims_at_a_time, seed):
+    def send_config(
+        self, dims_at_a_time, seed, mesh_grid_size, mesh_step_size, mesh_grids
+    ):
         self.send_q.put(
             hudes_pb2.Control(
                 type=hudes_pb2.Control.CONTROL_CONFIG,
-                config=hudes_pb2.Config(seed=seed, dims_at_a_time=dims_at_a_time),
+                config=hudes_pb2.Config(
+                    seed=seed,
+                    dims_at_a_time=dims_at_a_time,
+                    mesh_grid_size=mesh_grid_size,
+                    mesh_step_size=mesh_step_size,
+                    mesh_grids=mesh_grids,
+                ),
             ).SerializeToString()
         )
 

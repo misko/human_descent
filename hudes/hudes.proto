@@ -10,13 +10,9 @@ message DimAndStep {
 message Config {
   required int32 seed = 1;
   required int32 dims_at_a_time = 2;
-}
-
-message MeshGridConfig {
-  required int32 dimA = 1;
-  required int32 dimB = 2;
-  required int32 grid_size = 3;
-  required float step_size = 4;
+  required int32 mesh_grid_size = 3;
+  required float mesh_step_size = 4;
+  required int32 mesh_grids = 5;
 }
 
 
@@ -52,8 +48,7 @@ message Control {
     CONTROL_NEXT_BATCH = 101;
     CONTROL_NEXT_DIMS = 102;
     CONTROL_CONFIG = 103;
-    CONTROL_MESHGRID_CONFIG= 104;
-    CONTROL_MESHGRID_RESULTS= 105;
+    CONTROL_MESHGRID_RESULTS= 104;
     CONTROL_QUIT = 901;
   }
   required Type type = 1;
@@ -66,7 +61,6 @@ message Control {
   optional ValLoss val_loss = 203;
   optional int32 request_idx = 204;
   optional BatchExamples batch_examples = 205;
-  optional MeshGridConfig mesh_grid_config = 206;
   optional bytes mesh_grid_results = 207;
 
 }

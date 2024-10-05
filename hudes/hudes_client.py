@@ -13,8 +13,17 @@ from hudes.websocket_client import (
 
 
 class HudesClient:
-    def __init__(self, view, step_size_resolution=-0.05, seed=0):
-
+    def __init__(
+        self,
+        view,
+        step_size_resolution=-0.05,
+        inital_step_size_idx=10,
+        seed=0,
+        mesh_grids=0,
+        mesh_grid_size=31,
+    ):
+        self.mesh_grids = mesh_grids
+        self.mesh_grid_size = mesh_grid_size
         self.quit_count = 0
         self.seed = seed
 
@@ -30,15 +39,15 @@ class HudesClient:
 
         self.init_input()
 
-        self.hudes_websocket_client.send_config(seed=self.seed, dims_at_a_time=self.n)
-
         self.view = view  # View()
 
-        self.max_log_step_size = 0
+        self.max_log_step_size = 10
         self.min_log_step_size = -10
         self.step_size_resolution = step_size_resolution
 
-        self.set_step_size_idx(10)
+        self.set_step_size_idx(inital_step_size_idx)
+
+        self.send_config()
 
         self.view.update_step_size(
             self.log_step_size, self.max_log_step_size, self.min_log_step_size
@@ -50,6 +59,15 @@ class HudesClient:
             self.val_steps,
         )
 
+    def send_config(self):
+        self.hudes_websocket_client.send_config(
+            seed=self.seed,
+            dims_at_a_time=self.n,
+            mesh_step_size=self.step_size,
+            mesh_grids=self.mesh_grids,
+            mesh_grid_size=self.mesh_grid_size,
+        )
+
     def step_size_increase(self):
         self.set_step_size_idx(self.step_size_idx + 1)
 
@@ -57,7 +75,7 @@ class HudesClient:
         self.set_step_size_idx(self.step_size_idx - 1)
 
     def set_step_size_idx(self, idx):
-        self.step_size_idx = max(idx, 0)
+        self.step_size_idx = idx
         self.log_step_size = min(
             max(
                 self.step_size_idx * self.step_size_resolution,
@@ -72,6 +90,7 @@ class HudesClient:
         )
 
     def send_dims_and_steps(self, dims_and_steps):
+        print(dims_and_steps)
         self.hudes_websocket_client.send_q.put(
             dims_and_steps_to_control_message(
                 dims_and_steps=dims_and_steps,
@@ -83,10 +102,11 @@ class HudesClient:
     def run_loop(self):
         while self.hudes_websocket_client.running:
             # check and send local interactions(?)
+            redraw = False
             for event in pg.event.get():
-                self.process_key_press(event)
+                redraw |= self.process_key_press(event)
 
-            redraw = self.receive_messages()
+            redraw |= self.receive_messages()
             if redraw:
                 self.view.draw()
             else:
@@ -139,7 +159,8 @@ class HudesClient:
                     self.val_losses,
                     self.val_steps,
                 )
+            # called if we only changed scale etc?
             elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_RESULTS:
-                self.view.update_mesh_grid(pickle.loads(msg.mesh_grid_results))
+                self.view.update_mesh_grids(pickle.loads(msg.mesh_grid_results))
                 # print("GOT MESH GRID", self.mesh_grid.shape)
         return received_message

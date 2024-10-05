@@ -94,12 +94,13 @@ def listen_and_run(
                     client_weights[client_id]
                 )
             elif v["mode"] == "mesh":
-                res = mad.get_loss(
-                    client_weights[client_id],
-                    v["batch_idx"],
-                    dims=v["dims"],
+                res = mad.get_loss_grid(
+                    base_weights=client_weights[client_id],
                     grid_size=v["grid_size"],
                     step_size=v["step_size"],
+                    grids=v["grids"],
+                    dims_offset=v["dims_offset"],
+                    batch_idx=v["batch_idx"],
                 )
             else:
                 raise ValueError
@@ -120,9 +121,13 @@ class Client:
     active_inference: bool = False
     active_request_idx: int = -1
     mesh_grid_size: int = -1
-    mesh_dimA: int = -1
-    mesh_dimB: int = -1
+    mesh_grids: int = 0
     mesh_step_size: float = 0.0
+    force_update: bool = False
+    dims_offset: int = 0
+    dims_at_a_time: int = 0
+    seed: int = 0
+    dtype: str = "float32"
 
 
 async def inference_runner_clients(mad, event, inference_q, stop):
@@ -143,8 +148,6 @@ async def inference_runner_clients(mad, event, inference_q, stop):
             if client.active_inference:
                 continue
 
-            force_update = False
-
             # TODO should be some kind of select not poll()
             if client.sent_batch != client.batch_idx:
                 try:
@@ -157,9 +160,9 @@ async def inference_runner_clients(mad, event, inference_q, stop):
                 except websockets.exceptions.ConnectionClosedOK:
                     pass
                 client.sent_batch = client.batch_idx
-                force_update = True
+                client.force_update = True
 
-            if force_update or len(client.next_step) > 0:
+            if client.force_update or len(client.next_step) > 0:
                 current_step = client.next_step
                 client.next_step = {}
 
@@ -174,7 +177,8 @@ async def inference_runner_clients(mad, event, inference_q, stop):
                             "current_step": current_step,
                             "grid_size": client.mesh_grid_size,
                             "step_size": client.mesh_step_size,
-                            "dims": [client.mesh_dimA, client.mesh_dimB],
+                            "grids": client.mesh_grids,
+                            "dims_offset": client.dims_offset,
                             "batch_idx": client.batch_idx,
                             "client_id": client_id,
                         }
@@ -189,6 +193,7 @@ async def inference_runner_clients(mad, event, inference_q, stop):
                             "batch_idx": client.batch_idx,
                         }
                     )
+                client.force_update = False
 
             if client.request_full_val:
                 # send weight vector for inference
@@ -257,7 +262,10 @@ async def inference_result_sender(results_q, stop):
                 logging.info(f"inference_result_sender: sent mesh to client : done")
             else:
                 raise ValueError
-        except websockets.exceptions.ConnectionClosedOK:
+        except (
+            websockets.exceptions.ConnectionClosedOK,
+            websockets.exceptions.ConnectionClosedError,
+        ) as e:
             pass
         client.active_inference = False
 
@@ -314,17 +322,15 @@ async def process_client(websocket, event):
         sent_batch=-1,
     )
     active_clients[current_client] = client
-    dims_offset = 0
 
     logging.info(f"process_client: start for client {client_idx}")
-    config = {}
     async for message in websocket:
         msg = hudes_pb2.Control()
         msg.ParseFromString(message)
         if msg.type == hudes_pb2.Control.CONTROL_DIMS:
             logging.info(f"process_client: {client_idx} : control dims")
             for dim_and_step in msg.dims_and_steps:
-                dim = dim_and_step.dim + dims_offset
+                dim = dim_and_step.dim + client.dims_offset
                 if dim in client.next_step:
                     client.next_step[dim] += dim_and_step.step
                 else:
@@ -338,22 +344,29 @@ async def process_client(websocket, event):
 
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_DIMS:
             logging.info(f"process_client: {client_idx} : next dims")
-            dims_offset += config["dims_at_a_time"]  # make sure we dont re-use dims
+            client.dims_offset += client.dims_at_a_time  # make sure we dont re-use dims
+            # client.mesh_dimA += dims_offset
+            # client.mesh_dimB += dims_offset
+            print("NEXT DIMS")
+            client.force_update = True
         elif msg.type == hudes_pb2.Control.CONTROL_CONFIG:
             logging.info(f"process_client: {client_idx} : control config")
-            config["dims_at_a_time"] = msg.config.dims_at_a_time
-            config["seed"] = msg.config.seed
+            client.dims_at_a_time = msg.config.dims_at_a_time
+            client.seed = msg.config.seed
+            client.mesh_grid_size = msg.config.mesh_grid_size
+            client.mesh_grids = msg.config.mesh_grids
+            client.mesh_step_size = msg.config.mesh_step_size
+            client.force_update = True
 
             # send back batch examples
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
             logging.info(f"process_client: {client_idx} : quit")
             break
-        elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_CONFIG:
-            logging.info(f"process_client: {client_idx} : meshgrid")
-            client.mesh_grid_size = msg.mesh_grid_config.grid_size
-            client.mesh_dimA = msg.mesh_grid_config.dimA
-            client.mesh_dimB = msg.mesh_grid_config.dimB
-            client.mesh_step_size = msg.mesh_grid_config.step_size
+        # elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_CONFIG:
+        #     logging.info(
+        #         f"process_client: {client_idx} : meshgrid, {client.dims_offset}, {config['dims_at_a_time']}"
+        #     )
+
         else:
             logging.warning("received invalid type from client")
 
@@ -377,7 +390,7 @@ async def run_wrapper(args):
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(
         run_server(stop, event),
-        inference_runner(mad, run_in="process", event=event, stop=stop),
+        inference_runner(mad, run_in="thread", event=event, stop=stop),
     )
 
 
