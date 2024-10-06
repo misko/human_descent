@@ -90,7 +90,6 @@ class HudesClient:
         )
 
     def send_dims_and_steps(self, dims_and_steps):
-        print(dims_and_steps)
         self.hudes_websocket_client.send_q.put(
             dims_and_steps_to_control_message(
                 dims_and_steps=dims_and_steps,

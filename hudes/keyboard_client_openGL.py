@@ -94,17 +94,22 @@ To control each dimension use:
                 )
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_RETURN:
-                print("Getting new batch")
                 self.hudes_websocket_client.send_q.put(
                     next_batch_message().SerializeToString()
                 )
 
         if event.type == pg.JOYBUTTONDOWN:
-            print("Joystick button pressed.")
+            if event.button == 2:
+                self.hudes_websocket_client.send_q.put(
+                    next_dims_message().SerializeToString()
+                )
+
             if event.button == 0:
                 joystick = self.joysticks[event.instance_id]
-                if joystick.rumble(0, 0.7, 500):
-                    print(f"Rumble effect played on joystick {event.instance_id}")
+                joystick.rumble(0, 0.7, 500)
+                self.hudes_websocket_client.send_q.put(
+                    next_batch_message().SerializeToString()
+                )
 
         if event.type == pg.JOYBUTTONUP:
             print("Joystick button released.")
@@ -123,11 +128,8 @@ To control each dimension use:
 
     def run_loop(self):
         i = 0
-        last_dims_press = 0
-        last_step_press = 0
         last_select_press = 0
         while self.hudes_websocket_client.running:
-            # print("RUN")
             # check and send local interactions(?)
             redraw = False
             for event in pg.event.get():
@@ -136,7 +138,6 @@ To control each dimension use:
                 if event.type == pg.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Left mouse button pressed
                         self.view.is_mouse_dragging = True
-                        # print("DRAG")
                         self.view.last_mouse_pos = pg.mouse.get_pos()
                         redraw = True
 
@@ -144,12 +145,11 @@ To control each dimension use:
                     if event.button == 1:  # Left mouse button released
                         self.view.is_mouse_dragging = False
                         redraw = True
-                        # print("STOP DRAG")
 
             angle_adjust = 0
             ct = time.time()
             for joystick in self.joysticks.values():
-                axes = joystick.get_numaxes()
+                # axes = joystick.get_numaxes()
                 # print(f"Number of axes: {axes}")
                 # for i in range(axes):
                 #     axis = joystick.get_axis(i)
@@ -174,12 +174,6 @@ To control each dimension use:
                 if joystick.get_button(12) > 0.5:
                     self.view.decrease_zoom()
                     redraw = True
-
-                if joystick.get_button(2) > 0.5 and (ct - last_dims_press) > 1:
-                    self.hudes_websocket_client.send_q.put(
-                        next_dims_message().SerializeToString()
-                    )
-                    last_dims_press = ct
 
                 if joystick.get_axis(4) > 0.5 and (ct - last_select_press) > 0.2:
                     self.view.decrement_selected_grid()
@@ -224,13 +218,6 @@ To control each dimension use:
                     #     adjustV += -1
                     redraw = True
                     self.view.adjust_angles(adjustH, adjustV)
-                # B_x = joystick.get_axis(2)
-                # B_y = joystick.get_axis(3)
-                # if math.sqrt(B_x**2 + B_y**2) > 0.2:
-                #     print(math.atan2(B_x, B_y))
-                # print(A_x, A_y, B_x, B_y)
-
-            # print("VIEW DRAW")
             redraw = redraw | self.view.is_mouse_dragging | self.receive_messages()
             if redraw:
                 self.view.draw()

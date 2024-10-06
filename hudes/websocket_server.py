@@ -79,30 +79,30 @@ def listen_and_run(
             # prepare weights
             client_id = v["client_id"]
 
-            logging.info(f"listen_and_run: got {v['mode']}")
+            res = {}
+            logging.info(f"listen_and_run: got {v['mode']} {v['batch_idx']}")
             if v["mode"] in ("train", "mesh"):
                 if client_id not in client_weights:
                     client_weights[client_id] = mad.saved_weights.clone()
                 client_weights[client_id] += mad.delta_from_dims(v["current_step"])
 
-            if v["mode"] == "train":
-                res = mad.train_model_inference_with_delta_weights(
+                res["train"] = mad.train_model_inference_with_delta_weights(
                     client_weights[client_id], v["batch_idx"]
                 )
-            elif v["mode"] == "val":
-                res = mad.val_model_inference_with_delta_weights(
+            if v["mode"] == "val":
+                res["val"] = mad.val_model_inference_with_delta_weights(
                     client_weights[client_id]
                 )
-            elif v["mode"] == "mesh":
-                res = mad.get_loss_grid(
+            if v["mode"] == "mesh":
+                res["mesh"] = mad.get_loss_grid(
                     base_weights=client_weights[client_id],
                     grid_size=v["grid_size"],
-                    step_size=v["step_size"],
+                    step_size=v["step_size"] / 2,
                     grids=v["grids"],
                     dims_offset=v["dims_offset"],
                     batch_idx=v["batch_idx"],
                 )
-            else:
+            if v["mode"] not in ("train", "mesh", "val"):
                 raise ValueError
 
             logging.info(f"listen_and_run: return {v['mode']}")
@@ -221,46 +221,48 @@ async def inference_result_sender(results_q, stop):
         client = active_clients[client_id]
 
         try:
-            if train_or_val == "train":
+            if train_or_val in ("train", "mesh"):
                 # TODO need to be ok with getting errors here
                 logging.info(f"inference_result_sender: sent train to client")
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
                         train_loss_and_preds=hudes_pb2.TrainLossAndPreds(
-                            train_loss=res["train_loss"],
-                            preds=pickle.dumps(res["train_preds"].cpu().float()),
+                            train_loss=res["train"]["train_loss"],
+                            preds=pickle.dumps(
+                                res["train"]["train_preds"].cpu().float()
+                            ),
                             confusion_matrix=pickle.dumps(
-                                res["confusion_matrix"].cpu().float()
+                                res["train"]["confusion_matrix"].cpu().float()
                             ),
                         ),
                         request_idx=client.active_request_idx,
                     ).SerializeToString()
                 )
                 logging.info(f"inference_result_sender: sent train to client : done")
-            elif train_or_val == "val":
+            if train_or_val == "val":
                 logging.info(f"inference_result_sender: sent val to client")
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_VAL_LOSS,
                         val_loss=hudes_pb2.ValLoss(
-                            val_loss=res["val_loss"],
+                            val_loss=res["val"]["val_loss"],
                         ),
                         request_idx=client.active_request_idx,
                     ).SerializeToString()
                 )
                 logging.info(f"inference_result_sender: sent val to client : done")
                 client.request_full_val = False
-            elif train_or_val == "mesh":
+            if train_or_val == "mesh":
                 logging.info(f"inference_result_sender: sent mesh to client")
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_MESHGRID_RESULTS,
-                        mesh_grid_results=pickle.dumps(res.cpu().float()),
+                        mesh_grid_results=pickle.dumps(res["mesh"].cpu().float()),
                     ).SerializeToString()
                 )
                 logging.info(f"inference_result_sender: sent mesh to client : done")
-            else:
+            if train_or_val not in ("train", "val", "mesh"):
                 raise ValueError
         except (
             websockets.exceptions.ConnectionClosedOK,
@@ -386,11 +388,12 @@ async def run_wrapper(args):
         loss_fn=indexed_loss,
         device=args.device,
         dtype=getattr(torch, args.dtype),
+        train_batch_size=args.train_batch_size,
     )
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(
         run_server(stop, event),
-        inference_runner(mad, run_in="thread", event=event, stop=stop),
+        inference_runner(mad, run_in=args.run_in, event=event, stop=stop),
     )
 
 
@@ -399,6 +402,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hudes: Server")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--dtype", type=str, default="float")
+    parser.add_argument("--run-in", type=str, default="process")
+    parser.add_argument("--train-batch-size", type=int, default=512)
 
     args = parser.parse_args()
     asyncio.run(run_wrapper(args))

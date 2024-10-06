@@ -21,8 +21,8 @@ def main():
         controller = KeyboardClientGL(
             seed=args.seed,
             view=OpenGLView(grid_size=args.grid_size, grids=args.grids),
-            step_size_resolution=-0.001,
-            inital_step_size_idx=500,
+            step_size_resolution=-0.005,
+            inital_step_size_idx=100,
             mesh_grids=args.grids,
             mesh_grid_size=args.grid_size,
         )

@@ -34,6 +34,12 @@ class Linear:
         ].reshape(-1, 1, self.bias_params)
         # x ~ (batch,input_dim)
         output = torch.einsum("moi,mbi->mbo", _weights, x) + _bias
+        # print(
+        #     "PARAMNN",
+        #     _weights[0].abs().mean().item(),
+        #     _bias[0].abs().mean().item(),
+        #     output[0].abs().mean(),
+        # )
         return (
             models_params[:, self.params :],
             output,

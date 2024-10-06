@@ -86,6 +86,7 @@ def draw_red_sphere(z_position):
     )  # Draw a sphere with radius 0.5 and high resolution (32 slices, 32 stacks)
     gluDeleteQuadric(quadric)  # Delete the quadric object to clean up
     glPopMatrix()  # Restore the previous matrix state
+    glColor3f(1.0, 1.0, 1.0)
 
 
 import numpy as np
@@ -218,6 +219,73 @@ def create_texture_from_surface(surf):
     return texture_id, width, height
 
 
+def render_texture_rgba(texture_id, width, height, window_size):
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+
+    # Set up orthographic projection to render the texture in 2D
+    glOrtho(0, window_size[0], window_size[1], 0, -1, 1)
+
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+
+    # Enable transparency
+    glEnable(GL_BLEND)
+    # glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+    # Bind the texture and draw a quad with it
+    glBindTexture(GL_TEXTURE_2D, texture_id)
+    glEnable(GL_TEXTURE_2D)
+
+    glBegin(GL_QUADS)
+    glTexCoord2f(0, 0)
+    glVertex2f(0, 0)  # Bottom-left corner
+    glTexCoord2f(1, 0)
+    glVertex2f(width, 0)  # Bottom-right corner
+    glTexCoord2f(1, 1)
+    glVertex2f(width, height)  # Top-right corner
+    glTexCoord2f(0, 1)
+    glVertex2f(0, height)  # Top-left corner
+    glEnd()
+
+    # Disable the texture and blending
+    glDisable(GL_TEXTURE_2D)
+    glBindTexture(GL_TEXTURE_2D, 0)
+    # glDisable(GL_BLEND)
+
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+
+
+def create_texture_rgba(image_data, width, height):
+    texture_id = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, texture_id)
+
+    # Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+    # Upload the texture data with RGBA format
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        width,
+        height,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        image_data,
+    )
+
+    glBindTexture(GL_TEXTURE_2D, 0)  # Unbind the texture
+    return texture_id
+
+
 def create_texture(image_data, width, height):
     texture_id = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, texture_id)
@@ -281,6 +349,16 @@ def render_texture(texture_id, width, height, window_size):
     glMatrixMode(GL_PROJECTION)
     glPopMatrix()
     glMatrixMode(GL_MODELVIEW)
+
+
+# Create the Matplotlib plot and convert it to a raw image
+def create_matplotlib_texture_rgba(fig):
+    canvas = agg.FigureCanvasAgg(fig)
+    canvas.draw()
+
+    raw_data = canvas.get_renderer().buffer_rgba()
+    width, height = canvas.get_width_height()
+    return raw_data, int(width), int(height)
 
 
 # Create the Matplotlib plot and convert it to a raw image

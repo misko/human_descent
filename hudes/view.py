@@ -8,15 +8,18 @@ from hudes.opengl_func import (
     create_grid_points,
     create_grid_points_with_colors,
     create_matplotlib_texture,
+    create_matplotlib_texture_rgba,
     create_surface_grid_indices,
     create_surface_grid_points,
     create_texture,
+    create_texture_rgba,
     draw_arrow,
     draw_red_plane,
     draw_red_sphere,
     render_text,
     render_text_2d,
     render_texture,
+    render_texture_rgba,
     update_grid_cbo,
     update_grid_vbo,
 )
@@ -276,7 +279,15 @@ class OpenGLView:
             (1.0, 1.0, 0.0, self.alpha),  # Yellow
             (0.0, 1.0, 0.0, self.alpha),  # Green
             (1.0, 0.5, 0.0, self.alpha),  # Orange
+            (1.0, 0.0, 0.0, self.alpha),  # Red
+            (0.0, 0.0, 1.0, self.alpha),  # Blue
+            (0.5, 0.0, 1.0, self.alpha),  # Purple
+            (0.0, 0.5, 1.0, self.alpha),  # Sky Blue
+            (1.0, 0.0, 0.5, self.alpha),  # Pink
+            (0.5, 1.0, 0.0, self.alpha),  # Lime
+            (1.0, 0.75, 0.8, self.alpha),  # Light Pink
         )
+
         self.grid_dim_colors = ((*x[:-1], self.alpha_dim) for x in self.grid_colors)
 
         self.selected_grid = self.grids // 2
@@ -295,7 +306,10 @@ class OpenGLView:
         )
 
         # Calculate the camera distance based on total width (adjust scale factor as needed)
-        self.scale_factor = 1.0  # Adjust this value to control zoom level
+        if self.effective_grids == 1:
+            self.scale_factor = 3.0
+        else:
+            self.scale_factor = 1.0  # Adjust this value to control zoom level
 
         # Assuming the new create_grid_vbo function and height maps are set
         # to have 'grids' number of height maps of size 'grid_size x grid_size'
@@ -384,7 +398,7 @@ class OpenGLView:
 
         # init plt
         plt.style.use("dark_background")
-        self.fig = plt.figure(figsize=(12, 3))  # , facecolor="black")
+        self.fig = plt.figure(figsize=(12, 2), facecolor="none")
 
         self.fig.subplots_adjust(
             left=0.07, right=0.95, hspace=0.8, top=0.80, bottom=0.1, wspace=0.5  # 0.5
@@ -610,7 +624,8 @@ class OpenGLView:
         glRotatef(self.angleH, 0, 1, 0)
 
         # Translate to center the grids
-        glTranslatef(-self.total_width / 2.0 + self.grid_width / 2, 0.0, 0.0)
+        # -3 for now, moves it up
+        glTranslatef(-self.total_width / 2.0 + self.grid_width / 2, -2, 0.0)
 
         # Enable vertex arrays and color arrays
         glEnableClientState(GL_VERTEX_ARRAY)
@@ -669,7 +684,7 @@ class OpenGLView:
 
             # Draw the grid as a surface using triangles
 
-            # draw_red_sphere(0.0)
+            draw_red_sphere(0.0)
             # draw_red_plane(
             #     0.0,
             #     grid_size=self.grid_size,
@@ -683,13 +698,17 @@ class OpenGLView:
         glDisableClientState(GL_VERTEX_ARRAY)
         glDisableClientState(GL_COLOR_ARRAY)
 
-        self.draw_all_text()
-        # Render the texture from the Matplotlib figure in 2D
+        # self.draw_all_text()
+        # # Render the texture from the Matplotlib figure in 2D
         window_size = pg.display.get_surface().get_size()  # Get window size
 
-        raw_data, self.fig_width, self.fig_height = create_matplotlib_texture(self.fig)
-        self.texture_id = create_texture(raw_data, self.fig_width, self.fig_height)
-        render_texture(self.texture_id, self.fig_width, self.fig_height, window_size)
+        raw_data, self.fig_width, self.fig_height = create_matplotlib_texture_rgba(
+            self.fig
+        )
+        self.texture_id = create_texture_rgba(raw_data, self.fig_width, self.fig_height)
+        render_texture_rgba(
+            self.texture_id, self.fig_width, self.fig_height, window_size
+        )
 
         pg.display.flip()
         pg.time.wait(10)

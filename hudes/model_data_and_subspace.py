@@ -51,6 +51,23 @@ def indexed_loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
     return pred[torch.arange(label.shape[0]), label]
 
 
+def get_param_module(module):
+    if isinstance(module, torch.nn.Flatten):
+        return torch.nn.Flatten(start_dim=module.start_dim + 1)
+    if isinstance(module, torch.nn.LogSoftmax):
+        return torch.nn.LogSoftmax(dim=module.dim + 1)
+    if not hasattr(module, "parameters") or len(list(module.parameters())) == 0:
+        return module
+    if isinstance(module, torch.nn.Linear):
+        out_channels, in_channels = module.weight.shape
+        return param_nn.Linear(input_channels=in_channels, output_channels=out_channels)
+    raise ValueError(type(module))
+
+
+def param_nn_from_sequential(model):
+    return param_nn.Sequential([get_param_module(m) for m in model])
+
+
 def get_confusion_matrix(preds: torch.Tensor, labels: torch.Tensor):
     # (Pdb) preds.shape
     # torch.Size([512, 10])
@@ -171,9 +188,9 @@ class ModelDataAndSubspace:
         self.model_params.data.copy_(weights)
 
     @torch.no_grad
-    def val_model_inference_with_delta_weights(self, delta_weights: torch.Tensor):
+    def val_model_inference_with_delta_weights(self, weights: torch.Tensor):
         assert self.fused
-        self.set_parameters(self.saved_weights + delta_weights)
+        self.set_parameters(weights)
         full_val_loss = 0
         n = 0
         for batch_idx in range(self.val_data_batcher.len):
@@ -187,11 +204,11 @@ class ModelDataAndSubspace:
 
     @torch.no_grad
     def train_model_inference_with_delta_weights(
-        self, delta_weights: torch.Tensor, batch_idx: int
+        self, weights: torch.Tensor, batch_idx: int
     ) -> dict[str, torch.Tensor]:
         assert self.fused
         batch = self.get_batch(batch_idx)
-        self.set_parameters(self.saved_weights + delta_weights)
+        self.set_parameters(weights)
         model_output = self.model(batch["train"][0])
         train_loss = self.loss_fn(model_output, batch["train"][1]).mean().item()
         train_pred = self.model.probs(model_output)
@@ -199,28 +216,17 @@ class ModelDataAndSubspace:
             train_loss = -train_loss
 
         confusion_matrix = get_confusion_matrix(train_pred, batch["train"][1])
+        logging.info(
+            f"train loss: {train_loss} MO:{model_output.mean()}/{model_output.shape} weights {weights.mean().item()}"
+        )
         return {
             "train_loss": train_loss,
             "train_preds": train_pred[: self.return_n_preds].cpu(),
             "confusion_matrix": confusion_matrix.cpu(),
         }
 
-    def get_param_module(self, module):
-        if isinstance(module, torch.nn.Flatten):
-            return torch.nn.Flatten(start_dim=module.start_dim + 1)
-        if not hasattr(module, "parameters") or len(list(module.parameters())) == 0:
-            return module
-        if isinstance(module, torch.nn.Linear):
-            out_channels, in_channels = module.weight.shape
-            return param_nn.Linear(
-                input_channels=in_channels, output_channels=out_channels
-            )
-        raise ValueError(type(module))
-
     def init_param_model(self):
-        self.param_model = param_nn.Sequential(
-            [self.get_param_module(m) for m in self.model.net]
-        )
+        self.param_model = param_nn_from_sequential(self.model.net)
 
     # return model parameters for given ranges
     def dim_idxs_and_ranges_to_models_parms(
@@ -243,10 +249,18 @@ class ModelDataAndSubspace:
     def get_loss_grid(
         self, base_weights, batch_idx, dims_offset, grids, grid_size, step_size
     ):
-        logging.info("get_loss: start")
+        logging.info(f"get_loss: start base weights {base_weights.mean().item()}")
         assert grid_size % 2 == 1
         assert grid_size > 3
         assert grids > 0
+
+        logging.info("get_loss: get bach")
+        batch = self.get_batch(batch_idx)["train"]
+        logging.info("get_loss: get batch done")
+        data = batch[0].unsqueeze(0)
+        batch_size = data.shape[1]
+        label = batch[1]
+        r = (torch.arange(grid_size, device=self.device) - grid_size // 2) * step_size
 
         grid_losses = []
         for grid_idx in range(grids):
@@ -254,24 +268,20 @@ class ModelDataAndSubspace:
                 dims_offset + grid_idx * 2,
                 dims_offset + grid_idx * 2 + 1,
             ]  # which dims are doing this for
-            r = (
-                torch.arange(grid_size, device=self.device) - grid_size // 2
-            ) * step_size
+
             mp = self.dim_idxs_and_ranges_to_models_parms(
                 base_weights, dims, arange=r, brange=r
             )
+
+            # self.model.net[:2](batch[0])
+            # self.param_model.modules_list=self.param_model.modules_list[:2]
+            # base_model = mp[grid_size//2,grid_size//2].reshape(1,-1)
+            # (self.model.net[:1](batch[0])==self.param_model.forward(bm,data)[1]).all()
 
             logging.info(f"get_loss: mp done {mp.device} {mp.dtype}")
 
             mp_reshaped = mp.reshape(-1, self.num_params).contiguous()
             # batch = torch.rand(1, 512, 28, 28, device=device)
-            logging.info("get_loss: get bach")
-            batch = self.get_batch(batch_idx)["train"]
-            logging.info("get_loss: get batch done")
-            data = batch[0].unsqueeze(0)
-            batch_size = data.shape[1]
-            label = batch[1]
-
             logging.info(f"get_loss: fwd start , batch size {batch_size}")
             predictions = self.param_model.forward(mp_reshaped, data)[1].reshape(
                 *mp.shape[:2], batch_size, -1
@@ -283,9 +293,12 @@ class ModelDataAndSubspace:
                 label.reshape(1, 1, -1, 1).expand(*mp.shape[:2], batch_size, 1),
             ).mean(axis=[2, 3])
             logging.info("get_loss: gather done")
-            logging.info(
-                f"get_loss: {label.shape} {predictions.shape} {label.device} {predictions.device} {mp.device}"
-            )
+            # logging.info(
+            #     f"get_loss: {label.shape} {predictions.shape} {label.device} {predictions.device} {mp.device}"
+            # )
+            # logging.info(
+            #     f"grid {grid_idx} MO:{predictions[grid_size//2,grid_size//2].mean()} {predictions[grid_size//2,grid_size//2].shape}"
+            # )
 
             # loss_np = loss.detach().cpu().numpy()
             # breakpoint()
@@ -301,5 +314,5 @@ class ModelDataAndSubspace:
             # a = 1
         loss = torch.concatenate(grid_losses, dim=0).cpu()
         # breakpoint()
-        logging.info("get_loss: return loss")
+        logging.info(f"get_loss: return loss {loss[:, grid_size // 2, grid_size // 2]}")
         return loss

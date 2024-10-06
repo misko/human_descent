@@ -1,5 +1,6 @@
 import torch
 
+from hudes.model_data_and_subspace import param_nn_from_sequential
 from hudes.param_nn import Linear, Sequential
 
 
@@ -57,6 +58,36 @@ def test_mnist():
             torch.nn.LogSoftmax(dim=2),
         ]
     )
+
+    params = torch.hstack(
+        [p.clone().reshape(-1) for p in mnist_net.parameters()]
+    ).reshape(1, -1)
+    params = torch.vstack([params, params + 0.01, params])
+
+    batch = torch.rand(1, 7, mnist_width_height, mnist_width_height)
+
+    out = mnist_param_net.forward(params, batch)
+    _out = mnist_net(batch[0])
+    assert out[1][0].isclose(_out, atol=1e-5).all()
+    assert not out[1][1].isclose(_out, atol=1e-5).all()
+    assert out[1][2].isclose(_out, atol=1e-5).all()
+
+
+def test_mnist_multimodel():
+    mnist_width_height = 28
+    mnist_classes = 10
+    hidden = 32
+    mnist_net = torch.nn.Sequential(
+        torch.nn.Flatten(),
+        torch.nn.Linear(mnist_width_height * mnist_width_height, hidden),
+        torch.nn.ReLU(),
+        torch.nn.Linear(hidden, hidden),
+        torch.nn.ReLU(),
+        torch.nn.Linear(hidden, mnist_classes),
+        torch.nn.LogSoftmax(dim=1),
+    )
+
+    mnist_param_net = param_nn_from_sequential(mnist_net)
 
     params = torch.hstack(
         [p.clone().reshape(-1) for p in mnist_net.parameters()]
