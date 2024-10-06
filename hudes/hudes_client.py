@@ -144,6 +144,9 @@ class HudesClient:
     def receive_messages(self):
         # listen from server?
         received_message = False
+        received_train = False
+        received_batch = False
+        received_val = False
         while self.hudes_websocket_client.recv_ready():
             received_message = True
             # recv and process!
@@ -151,9 +154,10 @@ class HudesClient:
             msg = hudes_pb2.Control()
             msg.ParseFromString(raw_msg)
             if msg.type == hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS:
+                received_train = True
 
-                train_preds = pickle.loads(msg.train_loss_and_preds.preds)
-                confusion_matrix = pickle.loads(
+                self.train_preds = pickle.loads(msg.train_loss_and_preds.preds)
+                self.confusion_matrix = pickle.loads(
                     msg.train_loss_and_preds.confusion_matrix
                 )
 
@@ -161,35 +165,42 @@ class HudesClient:
                 self.train_steps.append(msg.request_idx)
                 # self.val_losses.append(msg.loss_and_preds.val_loss)
 
-                self.view.plot_train_and_val(
-                    self.train_losses,
-                    self.train_steps,
-                    self.val_losses,
-                    self.val_steps,
-                )
-                self.view.update_example_preds(train_preds=train_preds)
-                self.view.update_confusion_matrix(confusion_matrix)
             elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:
+                received_batch = True
                 self.train_data = pickle.loads(msg.batch_examples.train_data)
                 self.val_data = pickle.loads(msg.batch_examples.val_data)
                 self.train_labels = pickle.loads(msg.batch_examples.train_labels)
                 self.val_labels = pickle.loads(msg.batch_examples.val_labels)
-                self.view.update_examples(
-                    train_data=self.train_data,
-                    val_data=self.val_data,
-                )
+
             elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:
+                received_val = True
                 self.val_losses.append(msg.val_loss.val_loss)
                 self.val_steps.append(msg.request_idx)
 
+            # called if we only changed scale etc?
+            elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_RESULTS:
+                self.view.update_mesh_grids(pickle.loads(msg.mesh_grid_results))
+                # print("GOT MESH GRID", self.mesh_grid.shape)
+
+        if received_message:
+            if received_train:
                 self.view.plot_train_and_val(
                     self.train_losses,
                     self.train_steps,
                     self.val_losses,
                     self.val_steps,
                 )
-            # called if we only changed scale etc?
-            elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_RESULTS:
-                self.view.update_mesh_grids(pickle.loads(msg.mesh_grid_results))
-                # print("GOT MESH GRID", self.mesh_grid.shape)
+                self.view.update_example_preds(train_preds=self.train_preds)
+                self.view.update_confusion_matrix(self.confusion_matrix)
+            if received_batch:
+                self.view.update_examples(
+                    train_data=self.train_data,
+                )
+            if received_val:
+                self.view.plot_train_and_val(
+                    self.train_losses,
+                    self.train_steps,
+                    self.val_losses,
+                    self.val_steps,
+                )
         return received_message

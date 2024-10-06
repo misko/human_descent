@@ -182,7 +182,7 @@ class View:
         prop_cycle = plt.rcParams["axes.prop_cycle"]
         self.plt_colors = prop_cycle.by_key()["color"]
 
-    def update_examples(self, train_data: torch.Tensor, val_data: torch.Tensor):
+    def update_examples(self, train_data: torch.Tensor):
         self.axd["F"].cla()
         self.axd["F"].imshow(train_data[0])
         self.axd["F"].set_title("Ex. 1 img")
@@ -472,7 +472,7 @@ class OpenGLView:
         # ax.plot(x, y)
         # ax.set_title("Sine Wave")
 
-    def update_examples(self, train_data: torch.Tensor, val_data: torch.Tensor):
+    def update_examples(self, train_data: torch.Tensor):
         self.axd["F"].cla()
         self.axd["F"].imshow(train_data[0])
         self.axd["F"].set_title("Ex. 1 img")
