@@ -169,7 +169,7 @@ async def inference_runner_clients(mad, event, inference_q, stop):
                 client.active_inference = True
                 client.active_request_idx = client.request_idx
 
-                if client.mesh_grid_size > 0:
+                if client.mesh_grids > 0:
                     logging.info(f"inference_runner_clients: req mesh")
                     await inference_q.coro_put(
                         {

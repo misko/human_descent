@@ -1,5 +1,9 @@
+from functools import cache
+
+import matplotlib.backends.backend_agg as agg
+import matplotlib.pyplot as plt
 import numpy as np
-import pygame
+import pygame as pg
 import torch
 from OpenGL.GL import *
 from OpenGL.GLU import *  # Import GLU for perspective functions
@@ -179,6 +183,238 @@ def create_surface_grid_points(height_maps, spacing):
     return points.reshape(-1, 3).astype(np.float32)
 
 
+@cache
+def get_color_matrix(n, grid_size, grid_colors):
+    colors = np.zeros((n, grid_size, grid_size, 4), dtype=np.float32)  # RGBA colors
+    for i in range(n):
+        colors[i] = grid_colors[i]
+    return colors
+
+
+# Step 2: Convert Pygame surface to OpenGL texture
+def create_texture_from_surface(surf):
+    texture_id = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, texture_id)
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+    # Convert surface to string data and upload to OpenGL texture
+    texture_data = pg.image.tostring(surf, "RGB", 1)
+    width, height = surf.get_size()
+
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGB,
+        width,
+        height,
+        0,
+        GL_RGB,
+        GL_UNSIGNED_BYTE,
+        texture_data,
+    )
+
+    return texture_id, width, height
+
+
+def create_texture(image_data, width, height):
+    texture_id = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, texture_id)
+
+    # Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+    # Generate texture with proper format (GL_RGB)
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGB,
+        int(width),
+        int(height),
+        0,
+        GL_RGB,
+        GL_UNSIGNED_BYTE,
+        image_data,
+    )
+
+    glBindTexture(GL_TEXTURE_2D, 0)  # Unbind the texture
+    return texture_id
+
+
+def render_texture(texture_id, width, height, window_size):
+    # Save the current matrix mode
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+
+    # Use the window size for setting up the orthographic projection
+    glOrtho(0, window_size[0], window_size[1], 0, -1, 1)
+    glMatrixMode(GL_MODELVIEW)
+    glLoadIdentity()
+
+    # Enable 2D texture rendering
+    glEnable(GL_TEXTURE_2D)
+    glBindTexture(GL_TEXTURE_2D, texture_id)
+
+    # Draw the 2D texture quad at the top center of the screen
+    glBegin(GL_QUADS)
+
+    glTexCoord2f(0, 0)
+    glVertex2f(100, 100)  # Bottom-left corner
+
+    glTexCoord2f(1, 0)
+    glVertex2f(width + 100, 100)  # Bottom-right corner
+
+    glTexCoord2f(1, 1)
+    glVertex2f(width + 100, height + 100)  # Top-right corner
+
+    glTexCoord2f(0, 1)
+    glVertex2f(100, height + 100)  # Top-left corner
+
+    glEnd()
+
+    glDisable(GL_TEXTURE_2D)
+
+    # Restore previous matrix mode
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+
+
+# Create the Matplotlib plot and convert it to a raw image
+def create_matplotlib_texture(fig):
+    canvas = agg.FigureCanvasAgg(fig)
+    canvas.draw()
+
+    raw_data = canvas.get_renderer().tostring_rgb()
+    width, height = canvas.get_width_height()
+    return raw_data, int(width), int(height)
+
+
+def render_text_2d(text, font_size, screen_width, screen_height):
+    font = pg.font.SysFont("Arial", font_size)
+    text_surface = font.render(text, True, (255, 255, 255))  # White text
+    text_data = pg.image.tostring(text_surface, "RGBA", True)
+
+    # Get the dimensions of the text surface
+    text_width = text_surface.get_width()
+    text_height = text_surface.get_height()
+
+    # Calculate the position to center the text at the top
+    x_position = (screen_width - text_width) // 2
+    y_position = text_height
+
+    # Disable depth testing for text rendering
+    glDisable(GL_DEPTH_TEST)
+
+    # Switch to orthographic projection to render text
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    glOrtho(0, screen_width, screen_height, 0, -1, 1)  # Set orthographic projection
+
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+
+    # Set the raster position in 2D screen space
+    glRasterPos2f(x_position, y_position)
+
+    # Render the text as pixels
+    glDrawPixels(text_width, text_height, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
+
+    # Restore previous projection matrix
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+
+    # Re-enable depth testing
+    glEnable(GL_DEPTH_TEST)
+
+
+def render_text(text, font_size, screen_width, screen_height):
+    # Initialize the font system
+    font = pg.font.SysFont("Arial", font_size)
+
+    # Render the text to a surface
+    text_surface = font.render(text, True, (255, 255, 255))  # White text
+    text_data = pg.image.tostring(text_surface, "RGBA", True)
+
+    # Get the dimensions of the text surface
+    text_width = text_surface.get_width()
+    text_height = text_surface.get_height()
+
+    # Calculate the position to center the text at the top
+    x_position = (screen_width - text_width) // 2
+    y_position = screen_height - text_height  # Top of the screen
+    # Set up OpenGL to render text
+    glRasterPos2f(x_position / screen_width * 2 - 1, 1 - y_position / screen_height * 2)
+
+    # Draw the text as pixels
+    glDrawPixels(text_width, text_height, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
+
+
+def create_grid_points_with_colors(
+    height_maps, spacing, grid_colors, selected_grid, selected_alpha=0.6
+):
+    """
+    Creates grid points and colors for rendering multiple wireframe grids,
+    with heights determined by a set of height maps using NumPy operations.
+
+    :param height_maps: A 3D numpy array of shape (n, H, W) representing the heights
+                        (Z values) at each (h, w) grid point for each height map.
+    :param spacing: The distance between adjacent points in the grid.
+    :return: (points, colors) - The points and colors for all grids.
+    """
+    n, H, W = height_maps.shape  # Get the dimensions of the height maps
+
+    # Calculate X and Z coordinates for the grid (centered around 0)
+    offset_h = (H - 1) / 2.0
+    offset_w = (W - 1) / 2.0
+
+    x_coords = (np.arange(H) - offset_h) * spacing  # X coordinates for all rows
+    z_coords = (np.arange(W) - offset_w) * spacing  # Z coordinates for all columns
+
+    # Create a meshgrid of X and Z coordinates (Shape: (H, W) for both)
+    x_grid, z_grid = np.meshgrid(x_coords, z_coords, indexing="ij")  # Shape (H, W)
+
+    # Repeat x_grid and z_grid across the n height maps to match the shape (n, H, W)
+    x_grid = np.repeat(x_grid[np.newaxis, :, :], n, axis=0)  # Shape (n, H, W)
+    z_grid = np.repeat(z_grid[np.newaxis, :, :], n, axis=0)  # Shape (n, H, W)
+
+    # Combine X, Y (heights), and Z coordinates into a single (n, H, W, 3) array
+    points = np.stack([x_grid, height_maps, z_grid], axis=-1)  # Shape (n, H, W, 3)
+
+    # Normalize heights for color generation (assuming the height map has a wide range of values)
+    min_height = height_maps.min()
+    max_height = height_maps.max()
+    normalized_heights = (height_maps - min_height) / (max_height - min_height)
+
+    # Generate colors based on height (blue for low, red for high)
+    colors = get_color_matrix(n, H, grid_colors=grid_colors).copy()  # RGBA colors
+    # colors[..., 0] = normalized_heights  # Red channel (proportional to height)
+    # colors[..., 2] = (
+    #    1.0 - normalized_heights
+    # )  # Blue channel (inverse proportional to height)
+    # colors[..., 3] = 1.0  # Alpha channel
+    colors[..., 3] = -height_maps
+
+    colors[..., 3][colors[..., 3] >= 0] = 1.0 - selected_alpha
+    colors[..., :][colors[..., 3] >= 0] += 0.3
+    colors[..., 3][colors[..., 3] < 0] = 0.02
+
+    colors[selected_grid, ..., 3] += selected_alpha
+    # breakpoint()
+    # Flatten the points and colors arrays to shape (n * H * W, 3) and (n * H * W, 4)
+    points = points.reshape(-1, 3).astype(np.float32)
+    colors = colors.reshape(-1, 4).astype(np.float32)
+
+    return points, colors
+
+
 def create_surface_grid_indices(height_maps, spacing):
     """
     Creates indices for rendering multiple surface grids as triangle grids.
@@ -279,23 +515,6 @@ def draw_axes():
     glEnd()
 
 
-def render_text(text, position, color=(255, 255, 255)):
-    """
-    Render 2D text on the screen at the given position.
-    """
-    font = pygame.font.SysFont("Arial", 18)
-    text_surface = font.render(text, True, color)
-    text_data = pygame.image.tostring(text_surface, "RGBA", True)
-    glWindowPos2d(*position)
-    glDrawPixels(
-        text_surface.get_width(),
-        text_surface.get_height(),
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        text_data,
-    )
-
-
 def t20_get_loss(mad, batch, arange, brange, dims):
 
     mp = mad.dim_idxs_and_ranges_to_models_parms(dims, arange=arange, brange=brange)
@@ -330,3 +549,9 @@ def update_grid_vbo(vbo, points):
     """
     glBindBuffer(GL_ARRAY_BUFFER, vbo)
     glBufferSubData(GL_ARRAY_BUFFER, 0, points.nbytes, points)
+
+
+def update_grid_cbo(cbo, colors):
+    # Update the Color Buffer Object (CBO) with new colors
+    glBindBuffer(GL_ARRAY_BUFFER, cbo)
+    glBufferSubData(GL_ARRAY_BUFFER, 0, colors.nbytes, colors)

@@ -1,12 +1,7 @@
-import argparse
-import math
 import time
 from time import sleep
 
-import numpy as np
-import pygame
 import pygame as pg
-import torch
 from OpenGL.GL import *
 from OpenGL.GLU import *  # Import GLU for perspective functions
 from pygame.locals import *
@@ -104,25 +99,25 @@ To control each dimension use:
                     next_batch_message().SerializeToString()
                 )
 
-        if event.type == pygame.JOYBUTTONDOWN:
+        if event.type == pg.JOYBUTTONDOWN:
             print("Joystick button pressed.")
             if event.button == 0:
                 joystick = self.joysticks[event.instance_id]
                 if joystick.rumble(0, 0.7, 500):
                     print(f"Rumble effect played on joystick {event.instance_id}")
 
-        if event.type == pygame.JOYBUTTONUP:
+        if event.type == pg.JOYBUTTONUP:
             print("Joystick button released.")
 
         # Handle hotplugging
-        if event.type == pygame.JOYDEVICEADDED:
+        if event.type == pg.JOYDEVICEADDED:
             # This event will be generated when the program starts for every
             # joystick, filling up the list without needing to create them manually.
-            joy = pygame.joystick.Joystick(event.device_index)
+            joy = pg.joystick.Joystick(event.device_index)
             self.joysticks[joy.get_instance_id()] = joy
             print(f"Joystick {joy.get_instance_id()} connencted")
 
-        if event.type == pygame.JOYDEVICEREMOVED:
+        if event.type == pg.JOYDEVICEREMOVED:
             del self.joysticks[event.instance_id]
             print(f"Joystick {event.instance_id} disconnected")
 
@@ -138,14 +133,14 @@ To control each dimension use:
             for event in pg.event.get():
                 self.process_key_press(event)
                 # Handle mouse button events
-                if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.type == pg.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Left mouse button pressed
                         self.view.is_mouse_dragging = True
                         # print("DRAG")
-                        self.view.last_mouse_pos = pygame.mouse.get_pos()
+                        self.view.last_mouse_pos = pg.mouse.get_pos()
                         redraw = True
 
-                if event.type == pygame.MOUSEBUTTONUP:
+                if event.type == pg.MOUSEBUTTONUP:
                     if event.button == 1:  # Left mouse button released
                         self.view.is_mouse_dragging = False
                         redraw = True
@@ -172,6 +167,14 @@ To control each dimension use:
                     self.step_size_increase()
                     self.send_config()
 
+                if joystick.get_button(11) > 0.5:
+                    self.view.increase_zoom()
+                    redraw = True
+
+                if joystick.get_button(12) > 0.5:
+                    self.view.decrease_zoom()
+                    redraw = True
+
                 if joystick.get_button(2) > 0.5 and (ct - last_dims_press) > 1:
                     self.hudes_websocket_client.send_q.put(
                         next_dims_message().SerializeToString()
@@ -180,10 +183,12 @@ To control each dimension use:
 
                 if joystick.get_axis(4) > 0.5 and (ct - last_select_press) > 0.2:
                     self.view.decrement_selected_grid()
+                    self.view.update_points_and_colors()
                     redraw = True
                     last_select_press = ct
                 if joystick.get_axis(5) > 0.5 and (ct - last_select_press) > 0.2:
                     self.view.increment_selected_grid()
+                    self.view.update_points_and_colors()
                     redraw = True
                     last_select_press = ct
 
@@ -204,7 +209,6 @@ To control each dimension use:
                     )
 
                 radius, angle = B.as_polar()
-                # print("B", radius, angle, B)
                 if radius > 0.4:
 
                     adjustH = B[0] * 2

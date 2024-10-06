@@ -6,15 +6,23 @@ import matplotlib
 from hudes.opengl_func import (
     create_grid_indices,
     create_grid_points,
+    create_grid_points_with_colors,
+    create_matplotlib_texture,
     create_surface_grid_indices,
     create_surface_grid_points,
+    create_texture,
     draw_arrow,
     draw_red_plane,
     draw_red_sphere,
+    render_text,
+    render_text_2d,
+    render_texture,
+    update_grid_cbo,
     update_grid_vbo,
 )
 
 matplotlib.use("Agg")
+
 import time
 
 import matplotlib.backends.backend_agg as agg
@@ -69,29 +77,17 @@ def create_shader_program(vertex_source, fragment_source):
 # Vertex and fragment shader source code (compatible with OpenGL 2.1)
 vertex_shader_src = """
 #version 120
-
 attribute vec3 vertexPosition;  // Position of each vertex (x, y, z)
-varying vec4 vertexColor;  // Output color to the fragment shader
 
 void main() {
-    gl_Position = vec4(vertexPosition, 1.0);  // Pass the vertex position to the pipeline
-
-    // Color based on height (y value)
-    if (vertexPosition.y < 0.0) {
-        vertexColor = vec4(1.0, 0.0, 0.0, 1.0);  // Red for negative heights
-    } else {
-        vertexColor = vec4(0.0, 1.0, 1.0, 1.0);  // Cyan for non-negative heights
-    }
+    gl_Position = vec4(vertexPosition, 1.0);  // Set the vertex position
 }
 """
 
 fragment_shader_src = """
 #version 120
-
-varying vec4 vertexColor;  // Input color from the vertex shader
-
 void main() {
-    gl_FragColor = vertexColor;  // Simply pass the vertex color to the fragment
+    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);  // Set all fragments to red
 }
 """
 
@@ -134,7 +130,7 @@ class View:
     def __init__(self):
 
         pg.init()
-        self.window_size = (1400, 1000)
+        self.window_size = (1200, 800)
         self.window = pg.display.set_mode(self.window_size)
         self.fig = plt.figure(
             figsize=(12, 8),
@@ -152,7 +148,6 @@ class View:
                 EEJKLI
                 """
         )
-        # self.fig.tight_layout()
 
         self.screen = pg.display.get_surface()
 
@@ -259,11 +254,15 @@ def norm_deg(x):
     return (x + 180) % 360 - 180
 
 
-class OpenGLView:
+class OpenGLView(View):
     def __init__(self, grid_size, grids):
 
         pg.init()
-        display = (800, 600)
+        pg.font.init()
+        # display = (800, 600)
+
+        self.window_size = (1200, 800)
+
         self.grids = grids
         self.effective_grids = grids  # 1 if grids > 1 else grids
         self.spacing = 0.1
@@ -271,14 +270,14 @@ class OpenGLView:
 
         self.alpha = 0.7
         self.alpha_dim = 0.2
-        self.colors = [
+        self.grid_colors = (
             (0.0, 1.0, 1.0, self.alpha),  # Cyan
             (1.0, 0.0, 1.0, self.alpha),  # Magenta
             (1.0, 1.0, 0.0, self.alpha),  # Yellow
             (0.0, 1.0, 0.0, self.alpha),  # Green
             (1.0, 0.5, 0.0, self.alpha),  # Orange
-        ]
-        self.dim_colors = [(*x[:-1], self.alpha_dim) for x in self.colors]
+        )
+        self.grid_dim_colors = ((*x[:-1], self.alpha_dim) for x in self.grid_colors)
 
         self.selected_grid = self.grids // 2
 
@@ -297,26 +296,23 @@ class OpenGLView:
 
         # Calculate the camera distance based on total width (adjust scale factor as needed)
         self.scale_factor = 1.0  # Adjust this value to control zoom level
-        self.camera_distance = self.total_width * self.scale_factor
 
-        pg.display.set_mode(display, DOUBLEBUF | OPENGL)
         # Assuming the new create_grid_vbo function and height maps are set
         # to have 'grids' number of height maps of size 'grid_size x grid_size'
 
+        pg.display.set_mode(self.window_size, DOUBLEBUF | OPENGL)
+
         # Set up the viewport, projection matrix, and modelview matrix
-        glViewport(0, 0, display[0], display[1])
+        glViewport(0, 0, self.window_size[0], self.window_size[1])
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(45, display[0] / display[1], 0.1, 50.0)  # Set up perspective
+        gluPerspective(
+            45, self.window_size[0] / self.window_size[1], 0.1, 50.0
+        )  # Set up perspective
 
         # Switch to model view for object rendering
         glMatrixMode(GL_MODELVIEW)
         glEnable(GL_DEPTH_TEST)
-
-        # Create shader program
-        self.shader_program = create_shader_program(
-            vertex_shader_src, fragment_shader_src
-        )
 
         # Enable blending for transparency
         glEnable(GL_BLEND)
@@ -335,28 +331,42 @@ class OpenGLView:
             )
         else:
             # Create and bind the VBO and EBO for multiple height maps
-            self.points = create_grid_points(
-                np.zeros((self.effective_grids, grid_size, grid_size)), self.spacing
+            # Create and bind Vertex Buffer Object (VBO)
+            self.points, self.colors = create_grid_points_with_colors(
+                np.zeros((self.effective_grids, grid_size, grid_size)),
+                self.spacing,
+                self.grid_colors,
+                selected_grid=self.selected_grid,
             )
+
             self.indices = create_grid_indices(
                 np.zeros((self.effective_grids, grid_size, grid_size)), self.spacing
             )
 
-        # Create and bind Vertex Buffer Object (VBO)
+        # Create and bind VBO for vertices
         self.vbo = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferData(GL_ARRAY_BUFFER, self.points.nbytes, self.points, GL_STATIC_DRAW)
 
-        # Create and bind Element Buffer Object (EBO)
+        # Create and bind CBO (Color Buffer Object) for colors
+        self.cbo = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.cbo)
+        glBufferData(GL_ARRAY_BUFFER, self.colors.nbytes, self.colors, GL_STATIC_DRAW)
+
+        # Create and bind Element Buffer Object (EBO) for indices
         self.ebo = glGenBuffers(1)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.ebo)
         glBufferData(
             GL_ELEMENT_ARRAY_BUFFER, self.indices.nbytes, self.indices, GL_STATIC_DRAW
         )
 
-        # Enable vertex attribute 0 (positions)
+        # # Enable vertex attribute 0 (positions)
+        # glEnableClientState(GL_VERTEX_ARRAY)
+        # glVertexPointer(3, GL_FLOAT, 0, None)
+
+        # Enable vertex arrays and color arrays
         glEnableClientState(GL_VERTEX_ARRAY)
-        glVertexPointer(3, GL_FLOAT, 0, None)
+        glEnableClientState(GL_COLOR_ARRAY)
 
         # Mouse control variables
         self.is_mouse_dragging = False
@@ -372,38 +382,38 @@ class OpenGLView:
         self.origin_loss = 0.0
         self.target = (0.0, 0.0, 0.0)
 
-    def update_examples(self, train_data: torch.Tensor, val_data: torch.Tensor):
-        pass
+        # init plt
+        self.fig = plt.figure(
+            figsize=(12, 8),
+        )
 
-    def update_top(self, best_score):
-        pass
+        self.fig.subplots_adjust(
+            left=0.07, right=0.95, hspace=0.8, top=0.92, bottom=0.07, wspace=0.5  # 0.5
+        )
+        self.axd = self.fig.subplot_mosaic(
+            #    AAAAAA
+            """
+                BBCCDD
+                BBCCDD
+                EEFGHI
+                EEJKLI
+                """
+        )
 
-    def update_step_size(
-        self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
-    ):
-        pass
+        self.screen = pg.display.get_surface()
 
-    def update_confusion_matrix(self, confusion_matrix: torch.Tensor):
-        pass
+        # # Step 2: Create the Matplotlib figure
+        self.fig, ax = plt.subplots(figsize=(4, 3), facecolor="white")
+        x = np.linspace(0, 10, 100)
+        y = np.sin(x)
+        ax.plot(x, y)
+        ax.set_title("Sine Wave")
 
-    def update_example_preds(self, train_preds: List[float]):
-        pass
-
-    def plot_train_and_val(
-        self,
-        train_losses: List[float],
-        train_steps: List[int],
-        val_losses: List[float],
-        val_steps: List[int],
-    ):
-        pass
+        raw_data, self.fig_width, self.fig_height = create_matplotlib_texture(self.fig)
+        self.texture_id = create_texture(raw_data, self.fig_width, self.fig_height)
 
     def update_mesh_grids(self, mesh_grids):
-        # breakpoint()
-        # breakpoint()
-        # print(mesh_grid)
         self.raw_mesh_grids = mesh_grids
-        normalized_grids = []
 
         # if self.grids > 1:
         #     normalized_grids.append(norm_mesh(mesh_grids.sum(axis=0)).unsqueeze(0))
@@ -455,19 +465,34 @@ class OpenGLView:
         #     self.target = (0, self.origin_loss, 0)  # Default to center if out of bounds
 
         # self.target = (target_x, target_y, target_z)  # Target grid point
+        self.update_points_and_colors()
 
+    def update_points_and_colors(self):
         if self.use_surface:
             new_points = create_surface_grid_points(self.normalized_grids, self.spacing)
         else:
-            new_points = create_grid_points(self.normalized_grids, self.spacing)
-
+            # new_points_old = create_grid_points(self.normalized_grids, self.spacing)
+            new_points, new_colors = create_grid_points_with_colors(
+                self.normalized_grids,
+                self.spacing,
+                self.grid_colors,
+                selected_grid=self.selected_grid,
+            )
+        # breakpoint()
         update_grid_vbo(self.vbo, new_points)
+        update_grid_cbo(self.cbo, new_colors)
 
     def get_angles(self):
         return self.angleH, self.angleV
 
     def get_selected_grid(self):
         return self.selected_grid
+
+    def increase_zoom(self):
+        self.scale_factor = max(0.7, self.scale_factor - 0.05)
+
+    def decrease_zoom(self):
+        self.scale_factor = min(5.0, self.scale_factor + 0.05)
 
     def increment_selected_grid(self):
         self.selected_grid = (self.selected_grid + 1) % self.effective_grids
@@ -480,15 +505,21 @@ class OpenGLView:
         self.angleV += angle_V
         self.angleV = norm_deg(self.angleV)  # % 360
         self.angleH = norm_deg(self.angleH)  # % 360
-        print(self.angleH, self.angleV)
         self.angleV = np.sign(self.angleV) * min(np.abs(self.angleV), self.max_angleV)
 
     def reset_angle(self):
         self.angleH = 0
         self.angleV = self.default_angleV
 
+    def draw_all_text(self):
+
+        render_text_2d(
+            "Human Descent: MNIST", 36, self.window_size[0], self.window_size[1]
+        )
+
     def draw(self):
 
+        # glClearColor(1.0, 1.0, 1.0, 1.0)  # Set the clear color to white
         # Handle mouse motion for rotation
         if self.is_mouse_dragging:
             mouse_pos = pg.mouse.get_pos()
@@ -506,37 +537,33 @@ class OpenGLView:
         # Rendering Loop
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
-        # Define the spacing between grids (this is separate from point spacing in the grid)
 
-        # Position the camera based on the calculated distance
+        self.camera_distance = self.total_width * self.scale_factor
         glTranslatef(0, 0.0, -self.camera_distance)
 
         # Apply rotations
-        # glRotatef(20, 1.0, 0.0, 0.0)
-        # glRotatef(self.rotation_x, 1, 0, 0)  # Rotate around the X-axis
-        # glRotatef(self.rotation_y, 0, 1, 0)  # Rotate around the Y-axis
-        # glRotatef(self.angleH, 0, 1, 0)  # Rotate to visualize the grid
-        # glRotatef(self.angleV, 1, 0, 0)  # Rotate to visualize the grid
-
-        # Set color for semi-transparent grids
+        glRotatef(self.angleV, 1, 0, 0)
+        glRotatef(self.angleH, 0, 1, 0)
 
         # Translate to center the grids
         glTranslatef(-self.total_width / 2.0 + self.grid_width / 2, 0.0, 0.0)
 
+        # Enable vertex arrays and color arrays
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_COLOR_ARRAY)
+
+        # Bind the vertex buffer
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+        glVertexPointer(3, GL_FLOAT, 0, ctypes.c_void_p(0))
+
+        # Bind the color buffer
+        glBindBuffer(GL_ARRAY_BUFFER, self.cbo)
+        glColorPointer(4, GL_FLOAT, 0, ctypes.c_void_p(0))
         # Draw each grid individually by offsetting the points
         for k in range(self.effective_grids):
 
             # Save the current matrix state
             glPushMatrix()
-
-            if k == self.selected_grid:
-                glColor4f(
-                    *self.colors[k % len(self.colors)]
-                )  # Semi-transparent white color
-            else:
-                glColor4f(
-                    *self.dim_colors[k % len(self.colors)]
-                )  # Semi-transparent white color
 
             # Translate the grid by 'grid_spacing' along the X-axis, accounting for grid width
             glTranslatef(k * (self.grid_width + self.grid_spacing), 0.0, 0.0)
@@ -544,14 +571,25 @@ class OpenGLView:
             glRotatef(self.angleV, 1, 0, 0)  # Rotate to visualize the grid
             glRotatef(self.angleH, 0, 1, 0)  # Rotate to visualize the grid
             # Calculate the offset for the current grid's points in the VBO
-            offset = (
+
+            # Calculate the offset for the current grid's points and color data
+            vertex_offset = (
                 k * self.grid_size * self.grid_size * 3 * 4
-            )  # Multiply by 4 to account for float32 size
+            )  # For 3 floats per vertex
+            color_offset = (
+                k * self.grid_size * self.grid_size * 4 * 4
+            )  # For 4 floats (RGBA) per color
 
-            offset = k * self.grid_size * self.grid_size * 3 * 4
+            # Bind the vertex buffer and specify the offset for the current grid
+            glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+            glVertexPointer(3, GL_FLOAT, 0, ctypes.c_void_p(vertex_offset))
 
-            # Set up the vertex pointer for the current grid's points
-            glVertexPointer(3, GL_FLOAT, 0, ctypes.c_void_p(offset))
+            # Bind the color buffer and specify the offset for the current grid
+            glBindBuffer(GL_ARRAY_BUFFER, self.cbo)
+            glColorPointer(4, GL_FLOAT, 0, ctypes.c_void_p(color_offset))
+
+            # Bind the VBO containing the vertex data
+            glBindBuffer(GL_ARRAY_BUFFER, self.ebo)
 
             if self.use_surface:
                 glDrawElements(
@@ -564,46 +602,27 @@ class OpenGLView:
                 glDrawElements(
                     GL_LINES, len(self.indices), GL_UNSIGNED_INT, ctypes.c_void_p(0)
                 )
-            # Use the shader program
-            # glUseProgram(self.shader_program)
-            # Draw the grid using the indices and the point offset
 
             # Draw the grid as a surface using triangles
 
-            draw_red_sphere(0.0)
-            draw_red_plane(
-                0.0,
-                grid_size=self.grid_size,
-                spacing=self.spacing,
-            )
+            # draw_red_sphere(0.0)
+            # draw_red_plane(
+            #     0.0,
+            #     grid_size=self.grid_size,
+            #     spacing=self.spacing,
+            # )
 
             # Restore the previous matrix state
             glPopMatrix()
 
-        # Draw the faint red plane
-        # draw_red_sphere(self.origin_loss)
-        # draw_arrow((0, self.origin_loss, 0), self.target)
+        # Disable vertex and color arrays
+        glDisableClientState(GL_VERTEX_ARRAY)
+        glDisableClientState(GL_COLOR_ARRAY)
 
-        # Draw the coordinate axes
-        # draw_axes()
-
-        # # Render the axis labels
-        # glMatrixMode(GL_PROJECTION)
-        # glPushMatrix()
-        # glLoadIdentity()
-        # gluOrtho2D(0, display[0], 0, display[1])
-        # glMatrixMode(GL_MODELVIEW)
-        # glPushMatrix()
-        # glLoadIdentity()
-
-        # # Render X and Y axis labels
-        # render_text("X", (750, 300), color=(0, 0, 255))  # Label for X axis
-        # render_text("Y", (400, 550), color=(0, 0, 255))  # Label for Y axis
-
-        # glPopMatrix()
-        # glMatrixMode(GL_PROJECTION)
-        # glPopMatrix()
-        # glMatrixMode(GL_MODELVIEW)
+        self.draw_all_text()
+        # Render the texture from the Matplotlib figure in 2D
+        window_size = pg.display.get_surface().get_size()  # Get window size
+        render_texture(self.texture_id, self.fig_width, self.fig_height, window_size)
 
         pg.display.flip()
         pg.time.wait(10)
