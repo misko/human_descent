@@ -7,7 +7,7 @@ from OpenGL.GLU import *  # Import GLU for perspective functions
 from pygame.locals import *
 from pygame.math import Vector2
 
-from hudes.hudes_client import HudesClient
+from hudes.keyboard_client import KeyboardClient
 from hudes.websocket_client import next_batch_message, next_dims_message
 
 """
@@ -15,88 +15,14 @@ I used chatGPT a lot for this, I have no idea how to use openGL
 """
 
 
-class KeyboardClientGL(HudesClient):
+class KeyboardClientGL(KeyboardClient):
     def init_input(self):
-
-        self.paired_keys = [
-            ("w", "s"),
-            ("e", "d"),
-            ("r", "f"),
-            ("u", "j"),
-            ("i", "k"),
-            ("o", "l"),
-        ]
-        self.n = len(self.paired_keys)
-
-        self.key_to_param_and_sign = {}
-        for idx in range(self.n):
-            u, d = self.paired_keys[idx]
-            self.key_to_param_and_sign[u] = (idx, 1)
-            self.key_to_param_and_sign[d] = (idx, -1)
+        super().init_input()  # setup keyboard
 
         self.joysticks = {}
 
-    def usage_str(self) -> str:
-        return (
-            f"""
-Keyboard controller usage:
-
-Hold (q) to quit
-Use [ , ] to decrease/increase step size respectively
-Tap _space_ to get a new random projection
-Enter/Return , get a new training batch
-
-This keybord controller configuration controlls a random {self.n} 
-dimensional subspace of target model
-
-To control each dimension use:
-"""
-            + "\n".join(
-                [
-                    f"dim{idx} : {self.paired_keys[idx][0]} +, {self.paired_keys[idx][1]} -"
-                    for idx in range(self.n)
-                ]
-            )
-            + "\nGOOD LUCK!\n"
-        )
-
     def process_key_press(self, event):
-        if event.type == pg.TEXTINPUT:  # event.type == pg.KEYDOWN or
-            key = event.text
-
-            if key == "q":
-                self.quit_count += 1
-                print("Keep holding to quit!")
-                if self.quit_count > 4:
-                    print("Quiting")
-                    self.hudes_websocket_client.running = False
-                return
-            self.quit_count = 0
-
-            if key in self.key_to_param_and_sign:
-                dim, sign = self.key_to_param_and_sign[key]
-
-                self.send_dims_and_steps({dim: self.step_size * sign})
-                # lowrank_idx, sign = self.key_to_param_and_sign[key]
-                # self.lowrank_state[lowrank_idx] += self.step_size * sign
-                # TODO need to batch here before sending
-                # send needs to be independent of this
-            elif key == "[":
-                self.step_size_decrease()
-                self.send_config()
-            elif key == "]":
-                self.step_size_increase()
-                self.send_config()
-            elif key == " ":
-                print("getting new set of vectors")
-                self.hudes_websocket_client.send_q.put(
-                    next_dims_message().SerializeToString()
-                )
-        elif event.type == pg.KEYDOWN:
-            if event.key == pg.K_RETURN:
-                self.hudes_websocket_client.send_q.put(
-                    next_batch_message().SerializeToString()
-                )
+        redraw = super().process_key_press(event)  # use the keyboard interface
 
         if event.type == pg.JOYBUTTONDOWN:
             if event.button == 2:
@@ -126,27 +52,29 @@ To control each dimension use:
             del self.joysticks[event.instance_id]
             print(f"Joystick {event.instance_id} disconnected")
 
+        # Handle mouse button events
+        if event.type == pg.MOUSEBUTTONDOWN:
+            if event.button == 1:  # Left mouse button pressed
+                self.view.is_mouse_dragging = True
+                self.view.last_mouse_pos = pg.mouse.get_pos()
+                redraw = True
+
+        if event.type == pg.MOUSEBUTTONUP:
+            if event.button == 1:  # Left mouse button released
+                self.view.is_mouse_dragging = False
+                redraw = True
+        return redraw
+
     def run_loop(self):
+        self.before_first_loop()
         i = 0
         last_select_press = 0
         while self.hudes_websocket_client.running:
             # check and send local interactions(?)
             redraw = False
             for event in pg.event.get():
-                self.process_key_press(event)
-                # Handle mouse button events
-                if event.type == pg.MOUSEBUTTONDOWN:
-                    if event.button == 1:  # Left mouse button pressed
-                        self.view.is_mouse_dragging = True
-                        self.view.last_mouse_pos = pg.mouse.get_pos()
-                        redraw = True
+                redraw |= self.process_key_press(event)
 
-                if event.type == pg.MOUSEBUTTONUP:
-                    if event.button == 1:  # Left mouse button released
-                        self.view.is_mouse_dragging = False
-                        redraw = True
-
-            angle_adjust = 0
             ct = time.time()
             for joystick in self.joysticks.values():
                 # axes = joystick.get_numaxes()

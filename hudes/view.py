@@ -2,6 +2,7 @@ import math
 from typing import List
 
 import matplotlib
+import pygame.midi
 
 from hudes.opengl_func import (
     create_grid_indices,
@@ -129,10 +130,34 @@ def identify_axes(ax_dict, fontsize=48):
     return pg.display.get_surface()
 
 
+def _print_device_info():
+    for i in range(pygame.midi.get_count()):
+        r = pygame.midi.get_device_info(i)
+        (interf, name, input, output, opened) = r
+
+        in_out = ""
+        if input:
+            in_out = "(input)"
+        if output:
+            in_out = "(output)"
+
+        print(
+            "%2i: interface :%s:, name :%s:, opened :%s:  %s"
+            % (i, interf, name, opened, in_out)
+        )
+
+
 class View:
     def __init__(self):
 
         pg.init()
+
+        pg.midi.init()
+        _print_device_info()
+        self.midi_input_id = pygame.midi.get_default_input_id()
+        print(f"using input_id :{self.midi_input_id}:")
+        self.midi_input = pygame.midi.Input(self.midi_input_id)
+
         self.window_size = (1200, 800)
         self.window = pg.display.set_mode(self.window_size)
         self.fig = plt.figure(

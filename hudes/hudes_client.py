@@ -15,7 +15,6 @@ from hudes.websocket_client import (
 class HudesClient:
     def __init__(
         self,
-        view,
         step_size_resolution=-0.05,
         inital_step_size_idx=10,
         seed=0,
@@ -39,25 +38,13 @@ class HudesClient:
 
         self.init_input()
 
-        self.view = view  # View()
-
         self.max_log_step_size = 10
         self.min_log_step_size = -10
+        self.inital_step_size_idx = inital_step_size_idx
         self.step_size_resolution = step_size_resolution
 
-        self.set_step_size_idx(inital_step_size_idx)
-
-        self.send_config()
-
-        self.view.update_step_size(
-            self.log_step_size, self.max_log_step_size, self.min_log_step_size
-        )
-        self.view.plot_train_and_val(
-            self.train_losses,
-            self.train_steps,
-            self.val_losses,
-            self.val_steps,
-        )
+    def attach_view(self, view):
+        self.view = view
 
     def send_config(self):
         self.hudes_websocket_client.send_config(
@@ -98,9 +85,27 @@ class HudesClient:
         )
         self.request_idx += 1
 
+    def before_first_loop(self):
+        self.set_step_size_idx(self.inital_step_size_idx)
+        self.send_config()
+        self.view.update_step_size(
+            self.log_step_size, self.max_log_step_size, self.min_log_step_size
+        )
+        self.view.plot_train_and_val(
+            self.train_losses,
+            self.train_steps,
+            self.val_losses,
+            self.val_steps,
+        )
+
+    def before_pg_event(self):
+        pass
+
     def run_loop(self):
+        self.before_first_loop()
         while self.hudes_websocket_client.running:
             # check and send local interactions(?)
+            self.before_pg_event()
             redraw = False
             for event in pg.event.get():
                 redraw |= self.process_key_press(event)

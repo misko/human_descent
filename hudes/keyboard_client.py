@@ -66,12 +66,7 @@ To control each dimension use:
 
             if key in self.key_to_param_and_sign:
                 dim, sign = self.key_to_param_and_sign[key]
-
                 self.send_dims_and_steps({dim: self.step_size * sign})
-                # lowrank_idx, sign = self.key_to_param_and_sign[key]
-                # self.lowrank_state[lowrank_idx] += self.step_size * sign
-                # TODO need to batch here before sending
-                # send needs to be independent of this
             elif key == "[":
                 self.step_size_decrease()
                 return True
@@ -84,12 +79,6 @@ To control each dimension use:
                     next_dims_message().SerializeToString()
                 )
                 return False
-            # elif key == "x":
-            #     self.hudes_websocket_client.send_q.put(
-            #         mesh_grid_config_message(
-            #             dimA=0, dimB=1, grid_size=9, step_size=0.01
-            #         ).SerializeToString()
-            #     )
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_RETURN:
                 print("Getting new batch")
