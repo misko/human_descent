@@ -14,17 +14,16 @@ version = "0.0.1"
 dependencies = [
  "pytest",
  "numpy>=1.25",
- "matplotlib",
+ "matplotlib==3.9.2",
  "pyyaml",
  "torch>=2.2",
  "torchvision",
  "websockets",
  "pytest-asyncio",
  "protobuf>=5.28",
- "pygame",
- "akai-pro-py@git+https://github.com/secretowo/apc-mini-py",
+ "pygame==2.6",
  "aioprocessing",
- "PyOpenGL",
+ "PyOpenGL==3.1.7",
  "pytest-timeout"
 ]
 requires-python = ">=3.10"
