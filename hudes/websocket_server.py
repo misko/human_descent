@@ -157,7 +157,10 @@ async def inference_runner_clients(mad, event, inference_q, stop):
                             client.batch_idx, mad
                         ).SerializeToString()
                     )
-                except websockets.exceptions.ConnectionClosedOK:
+                except (
+                    websockets.exceptions.ConnectionClosedOK,
+                    websockets.exceptions.ConnectionClosedError,
+                ) as e:
                     pass
                 client.sent_batch = client.batch_idx
                 client.force_update = True

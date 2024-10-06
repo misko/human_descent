@@ -20,7 +20,7 @@ dependencies = [
  "torchvision",
  "websockets",
  "pytest-asyncio",
- "protobuf",
+ "protobuf>=5.28",
  "pygame",
  "akai-pro-py@git+https://github.com/secretowo/apc-mini-py",
  "aioprocessing",

@@ -2,6 +2,7 @@ import math
 import pickle
 from time import sleep
 
+import numpy as np
 import pygame as pg
 
 from hudes import hudes_pb2
@@ -9,6 +10,8 @@ from hudes.view import View
 from hudes.websocket_client import (
     HudesWebsocketClient,
     dims_and_steps_to_control_message,
+    next_batch_message,
+    next_dims_message,
 )
 
 
@@ -43,6 +46,21 @@ class HudesClient:
         self.inital_step_size_idx = inital_step_size_idx
         self.step_size_resolution = step_size_resolution
 
+    def get_next_batch(self):
+        self.hudes_websocket_client.send_q.put(next_batch_message().SerializeToString())
+
+    def get_next_dims(self):
+        self.hudes_websocket_client.send_q.put(next_dims_message().SerializeToString())
+        self.zero_dims_and_steps_on_current_dims()
+        self.dims_and_steps_updated()
+
+    def zero_dims_and_steps_on_current_dims(self):
+        self.dims_and_steps_on_current_dims = np.zeros(self.n)
+
+    def set_n(self, n):
+        self.n = n
+        self.zero_dims_and_steps_on_current_dims()
+
     def attach_view(self, view):
         self.view = view
 
@@ -54,6 +72,9 @@ class HudesClient:
             mesh_grids=self.mesh_grids,
             mesh_grid_size=self.mesh_grid_size,
         )
+
+    def dims_and_steps_updated(self):
+        self.view.update_dims_since_last_update(self.dims_and_steps_on_current_dims)
 
     def step_size_increase(self):
         self.set_step_size_idx(self.step_size_idx + 1)
@@ -83,6 +104,9 @@ class HudesClient:
                 request_idx=self.request_idx,
             ).SerializeToString()
         )
+        for dim, step in dims_and_steps.items():
+            self.dims_and_steps_on_current_dims[dim] += step
+        self.dims_and_steps_updated()
         self.request_idx += 1
 
     def before_first_loop(self):
@@ -97,6 +121,7 @@ class HudesClient:
             self.val_losses,
             self.val_steps,
         )
+        self.dims_and_steps_updated()
 
     def before_pg_event(self):
         pass

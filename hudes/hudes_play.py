@@ -1,5 +1,7 @@
 import argparse
 
+import pygame.midi
+
 from hudes.akai_client import AkaiClient
 from hudes.keyboard_client import KeyboardClient
 from hudes.keyboard_client_openGL import KeyboardClientGL
@@ -34,7 +36,7 @@ def main():
         view = View()
     elif args.input == "xtouch":
         controller = XTouchClient(seed=args.seed)
-        view = View()
+        view = View(use_midi=True)
     else:
         raise ValueError
     controller.attach_view(view)

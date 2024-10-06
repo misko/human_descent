@@ -8,7 +8,6 @@ from pygame.locals import *
 from pygame.math import Vector2
 
 from hudes.keyboard_client import KeyboardClient
-from hudes.websocket_client import next_batch_message, next_dims_message
 
 """
 I used chatGPT a lot for this, I have no idea how to use openGL
@@ -26,16 +25,12 @@ class KeyboardClientGL(KeyboardClient):
 
         if event.type == pg.JOYBUTTONDOWN:
             if event.button == 2:
-                self.hudes_websocket_client.send_q.put(
-                    next_dims_message().SerializeToString()
-                )
+                self.get_next_dims()
 
             if event.button == 0:
                 joystick = self.joysticks[event.instance_id]
                 joystick.rumble(0, 0.7, 500)
-                self.hudes_websocket_client.send_q.put(
-                    next_batch_message().SerializeToString()
-                )
+                self.get_next_batch()
 
         if event.type == pg.JOYBUTTONUP:
             print("Joystick button released.")

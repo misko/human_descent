@@ -148,15 +148,16 @@ def _print_device_info():
 
 
 class View:
-    def __init__(self):
+    def __init__(self, use_midi=False):
 
         pg.init()
 
         pg.midi.init()
-        _print_device_info()
-        self.midi_input_id = pygame.midi.get_default_input_id()
-        print(f"using input_id :{self.midi_input_id}:")
-        self.midi_input = pygame.midi.Input(self.midi_input_id)
+
+        if use_midi:
+            self.midi_input_id = pygame.midi.get_default_input_id()
+            print(f"using input_id :{self.midi_input_id}:")
+            self.midi_input = pygame.midi.Input(self.midi_input_id)
 
         self.window_size = (1200, 800)
         self.window = pg.display.set_mode(self.window_size)
@@ -170,14 +171,16 @@ class View:
         self.axd = self.fig.subplot_mosaic(
             #    AAAAAA
             """
-                BBCCDD
-                BBCCDD
-                EEFGHI
-                EEJKLI
+                BBDDII
+                BBDDOO
+                EEFGHM
+                EEJKLN
                 """
         )
 
         self.screen = pg.display.get_surface()
+        prop_cycle = plt.rcParams["axes.prop_cycle"]
+        self.plt_colors = prop_cycle.by_key()["color"]
 
     def update_examples(self, train_data: torch.Tensor, val_data: torch.Tensor):
         self.axd["F"].cla()
@@ -191,6 +194,10 @@ class View:
         self.axd["H"].cla()
         self.axd["H"].imshow(train_data[2])
         self.axd["H"].set_title("Ex. 3 img")
+
+        self.axd["M"].cla()
+        self.axd["M"].imshow(train_data[3])
+        self.axd["M"].set_title("Ex. 4 img")
 
         # self.axd["I"].cla()
         # self.axd["I"].imshow(train_data[3])
@@ -206,10 +213,10 @@ class View:
         self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
     ):
         self.axd["I"].cla()
-        self.axd["I"].bar([0], log_step_size)
-        self.axd["I"].set_ylim(min_log_step_size, max_log_step_size)
+        self.axd["I"].barh([0], log_step_size)
+        self.axd["I"].set_xlim(min_log_step_size, max_log_step_size)
         self.axd["I"].set_title("log(Step size)")
-        self.axd["I"].set_xticks([])
+        self.axd["I"].set_yticks([])
 
     def update_confusion_matrix(self, confusion_matrix: torch.Tensor):
         self.axd["E"].cla()
@@ -219,6 +226,22 @@ class View:
         self.axd["E"].set_ylabel("Ground truth")
         self.axd["E"].set_xlabel("Prediction")
         self.axd["E"].set_title("Confusion matrix")
+
+    def update_dims_since_last_update(self, dims_and_steps_on_current_dims):
+        self.axd["O"].cla()
+        colors = [
+            self.plt_colors[idx % len(self.plt_colors)]
+            for idx in range(dims_and_steps_on_current_dims.shape[0])
+        ]
+        self.axd["O"].bar(
+            range(dims_and_steps_on_current_dims.shape[0]),
+            dims_and_steps_on_current_dims,
+            color=colors,
+        )
+        self.axd["O"].set_xlabel("dimension #")
+        self.axd["O"].set_ylabel("cumulative step")
+        self.axd["O"].set_title("Dims and Steps")
+        self.axd["O"].set_yticks([])
 
     def update_example_preds(self, train_preds: List[float]):
         self.axd["J"].cla()
@@ -232,6 +255,10 @@ class View:
         self.axd["L"].cla()
         self.axd["L"].bar(torch.arange(10), train_preds[2])
         self.axd["L"].set_title("Ex. 3 pr(y)")
+
+        self.axd["N"].cla()
+        self.axd["N"].bar(torch.arange(10), train_preds[3])
+        self.axd["N"].set_title("Ex. 4 pr(y)")
 
         # self.axd["M"].cla()
         # self.axd["M"].bar(torch.arange(10), train_preds[3])
@@ -256,11 +283,11 @@ class View:
         self.axd["B"].set_xlabel("Step")
         self.axd["B"].set_ylabel("Loss")
 
-        self.axd["C"].cla()
-        self.axd["C"].plot(train_steps[n // 2 :], train_losses[n // 2 :], label="train")
-        self.axd["C"].set_title("Loss [half time]")
-        self.axd["C"].set_xlabel("Step")
-        self.axd["C"].set_yticks([])
+        # self.axd["C"].cla()
+        # self.axd["C"].plot(train_steps[n // 2 :], train_losses[n // 2 :], label="train")
+        # self.axd["C"].set_title("Loss [half time]")
+        # self.axd["C"].set_xlabel("Step")
+        # self.axd["C"].set_yticks([])
 
         self.axd["D"].cla()
         self.axd["D"].plot(train_steps[-8:], train_losses[-8:], label="train")
@@ -488,6 +515,9 @@ class OpenGLView:
         self.axd["K"].cla()
         self.axd["K"].bar(torch.arange(10), train_preds[1])
         self.axd["K"].set_title("Ex. 2 pr(y)")
+
+    def update_dims_since_last_update(self, dims_and_steps):
+        pass
 
     def plot_train_and_val(
         self,

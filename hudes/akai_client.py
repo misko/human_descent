@@ -4,12 +4,11 @@ import torch
 from akai_pro_py import controllers
 
 from hudes.hudes_client import HudesClient
-from hudes.websocket_client import next_batch_message, next_dims_message
 
 
 class AkaiClient(HudesClient):
     def init_input(self):
-        self.n = 32
+        self.set_n(32)
 
         self.first_boot = True
 
@@ -52,14 +51,10 @@ AKAI controller usage:
         if isinstance(event, controllers.MIDIMix.BlankButton) and event.state:
             if event.button_id == 1:
                 print("getting new set of vectors")
-                self.hudes_websocket_client.send_q.put(
-                    next_dims_message().SerializeToString()
-                )
+                self.get_next_dims()
             elif event.button_id == 0:
                 print("Getting new batch")
-                self.hudes_websocket_client.send_q.put(
-                    next_batch_message().SerializeToString()
-                )
+                self.get_next_batch()
 
         if board_state_vector_initial.shape[0] == 32:
             diff = board_state_vector_current - board_state_vector_initial

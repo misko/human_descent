@@ -5,7 +5,6 @@ from time import sleep
 import pygame as pg
 
 from hudes.hudes_client import HudesClient
-from hudes.websocket_client import next_batch_message, next_dims_message
 
 
 class KeyboardClient(HudesClient):
@@ -19,7 +18,7 @@ class KeyboardClient(HudesClient):
             ("i", "k"),
             ("o", "l"),
         ]
-        self.n = len(self.paired_keys)
+        self.set_n(len(self.paired_keys))
 
         self.key_to_param_and_sign = {}
         for idx in range(self.n):
@@ -67,6 +66,7 @@ To control each dimension use:
             if key in self.key_to_param_and_sign:
                 dim, sign = self.key_to_param_and_sign[key]
                 self.send_dims_and_steps({dim: self.step_size * sign})
+                return True
             elif key == "[":
                 self.step_size_decrease()
                 return True
@@ -75,15 +75,11 @@ To control each dimension use:
                 return True
             elif key == " ":
                 print("getting new set of vectors")
-                self.hudes_websocket_client.send_q.put(
-                    next_dims_message().SerializeToString()
-                )
+                self.get_next_dims()
                 return False
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_RETURN:
                 print("Getting new batch")
-                self.hudes_websocket_client.send_q.put(
-                    next_batch_message().SerializeToString()
-                )
+                self.get_next_batch()
                 return False
         return False
