@@ -254,7 +254,7 @@ def norm_deg(x):
     return (x + 180) % 360 - 180
 
 
-class OpenGLView(View):
+class OpenGLView:
     def __init__(self, grid_size, grids):
 
         pg.init()
@@ -383,34 +383,98 @@ class OpenGLView(View):
         self.target = (0.0, 0.0, 0.0)
 
         # init plt
-        self.fig = plt.figure(
-            figsize=(12, 8),
-        )
+        plt.style.use("dark_background")
+        self.fig = plt.figure(figsize=(12, 3))  # , facecolor="black")
 
         self.fig.subplots_adjust(
-            left=0.07, right=0.95, hspace=0.8, top=0.92, bottom=0.07, wspace=0.5  # 0.5
+            left=0.07, right=0.95, hspace=0.8, top=0.80, bottom=0.1, wspace=0.5  # 0.5
         )
         self.axd = self.fig.subplot_mosaic(
             #    AAAAAA
             """
-                BBCCDD
-                BBCCDD
-                EEFGHI
-                EEJKLI
+                BBDDEEFG
+                BBDDEEJK
                 """
         )
 
-        self.screen = pg.display.get_surface()
+        # self.screen = pg.display.get_surface()
 
-        # # Step 2: Create the Matplotlib figure
-        self.fig, ax = plt.subplots(figsize=(4, 3), facecolor="white")
-        x = np.linspace(0, 10, 100)
-        y = np.sin(x)
-        ax.plot(x, y)
-        ax.set_title("Sine Wave")
+        # # # Step 2: Create the Matplotlib figure
+        # self.fig, ax = plt.subplots(figsize=(4, 3), facecolor="white")
+        # x = np.linspace(0, 10, 100)
+        # y = np.sin(x)
+        # ax.plot(x, y)
+        # ax.set_title("Sine Wave")
 
-        raw_data, self.fig_width, self.fig_height = create_matplotlib_texture(self.fig)
-        self.texture_id = create_texture(raw_data, self.fig_width, self.fig_height)
+    def update_examples(self, train_data: torch.Tensor, val_data: torch.Tensor):
+        self.axd["F"].cla()
+        self.axd["F"].imshow(train_data[0])
+        self.axd["F"].set_title("Ex. 1 img")
+
+        self.axd["G"].cla()
+        self.axd["G"].imshow(train_data[1])
+        self.axd["G"].set_title("Ex. 2 img")
+
+    def update_top(self, best_score):
+        if best_score is None:
+            self.fig.suptitle("Human Descent: MNIST      Top-score: ?")
+        else:
+            self.fig.suptitle(f"Human Descent: MNIST      Top-score: {best_score:.5e}")
+        # self.fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    def update_step_size(
+        self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
+    ):
+        # self.axd["I"].cla()
+        # self.axd["I"].bar([0], log_step_size)
+        # self.axd["I"].set_ylim(min_log_step_size, max_log_step_size)
+        # self.axd["I"].set_title("log(Step size)")
+        # self.axd["I"].set_xticks([])
+        pass
+
+    def update_confusion_matrix(self, confusion_matrix: torch.Tensor):
+        self.axd["E"].cla()
+        self.axd["E"].imshow(confusion_matrix)
+        self.axd["E"].set_yticks(range(10))
+        self.axd["E"].set_xticks(range(10))
+        self.axd["E"].set_ylabel("Ground truth")
+        self.axd["E"].set_xlabel("Prediction")
+        self.axd["E"].set_title("Confusion matrix")
+
+    def update_example_preds(self, train_preds: List[float]):
+        self.axd["J"].cla()
+        self.axd["J"].bar(torch.arange(10), train_preds[0])
+        self.axd["J"].set_title("Ex. 1 pr(y)")
+
+        self.axd["K"].cla()
+        self.axd["K"].bar(torch.arange(10), train_preds[1])
+        self.axd["K"].set_title("Ex. 2 pr(y)")
+
+    def plot_train_and_val(
+        self,
+        train_losses: List[float],
+        train_steps: List[int],
+        val_losses: List[float],
+        val_steps: List[int],
+    ):
+        best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
+        self.update_top(best_score)
+
+        n = len(train_losses)
+        # x = torch.arange(n)
+        self.axd["B"].cla()
+        self.axd["B"].plot(train_steps, train_losses, label="train")
+        self.axd["B"].plot(val_steps, val_losses, label="val")
+        self.axd["B"].legend(loc="upper right")
+        self.axd["B"].set_title("Loss")
+        self.axd["B"].set_xlabel("Step")
+        self.axd["B"].set_ylabel("Loss")
+
+        self.axd["D"].cla()
+        self.axd["D"].plot(train_steps[-8:], train_losses[-8:], label="train")
+        self.axd["D"].set_title("Loss [last 8steps]")
+        self.axd["D"].set_yticks([])
+        self.axd["D"].set_xlabel("Step")
 
     def update_mesh_grids(self, mesh_grids):
         self.raw_mesh_grids = mesh_grids
@@ -622,6 +686,9 @@ class OpenGLView(View):
         self.draw_all_text()
         # Render the texture from the Matplotlib figure in 2D
         window_size = pg.display.get_surface().get_size()  # Get window size
+
+        raw_data, self.fig_width, self.fig_height = create_matplotlib_texture(self.fig)
+        self.texture_id = create_texture(raw_data, self.fig_width, self.fig_height)
         render_texture(self.texture_id, self.fig_width, self.fig_height, window_size)
 
         pg.display.flip()
