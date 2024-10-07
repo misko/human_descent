@@ -1,8 +1,6 @@
 import argparse
 
-import pygame.midi
-
-from hudes.akai_client import AkaiClient
+# from hudes.akai_client import AkaiClient
 from hudes.keyboard_client import KeyboardClient
 from hudes.keyboard_client_openGL import KeyboardClientGL
 from hudes.view import OpenGLView, View
@@ -31,9 +29,9 @@ def main():
             mesh_grid_size=args.grid_size,
         )
         view = OpenGLView(grid_size=args.grid_size, grids=args.grids)
-    elif args.input == "akai":
-        controller = AkaiClient(seed=args.seed)
-        view = View()
+    # elif args.input == "akai":
+    #     controller = AkaiClient(seed=args.seed)
+    #     view = View()
     elif args.input == "xtouch":
         controller = XTouchClient(seed=args.seed)
         view = View(use_midi=True)
