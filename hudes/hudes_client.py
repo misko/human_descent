@@ -1,3 +1,4 @@
+import logging
 import math
 import pickle
 from time import sleep
@@ -135,11 +136,18 @@ class HudesClient:
             for event in pg.event.get():
                 redraw |= self.process_key_press(event)
 
+            logging.debug("hudes_client: receive messages")
             redraw |= self.receive_messages()
+            logging.debug("hudes_client: receive messages done")
             if redraw:
+                logging.debug("hudes_client: redraw")
                 self.view.draw()
+                logging.debug("hudes_client: redraw done")
             else:
+
+                logging.debug("hudes_client: sleep")
                 sleep(0.01)
+                logging.debug("hudes_client: sleep up")
 
     def receive_messages(self):
         # listen from server?
@@ -148,12 +156,14 @@ class HudesClient:
         received_batch = False
         received_val = False
         while self.hudes_websocket_client.recv_ready():
+            logging.debug("hudes_client: recieve message")
             received_message = True
             # recv and process!
             raw_msg = self.hudes_websocket_client.recv_msg()
             msg = hudes_pb2.Control()
             msg.ParseFromString(raw_msg)
             if msg.type == hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS:
+                logging.debug("hudes_client: recieve message : loss and preds")
                 received_train = True
 
                 self.train_preds = pickle.loads(msg.train_loss_and_preds.preds)
@@ -163,19 +173,24 @@ class HudesClient:
 
                 self.train_losses.append(msg.train_loss_and_preds.train_loss)
                 self.train_steps.append(msg.request_idx)
+                logging.debug("hudes_client: recieve message : loss and preds : done")
                 # self.val_losses.append(msg.loss_and_preds.val_loss)
 
             elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:
+                logging.debug("hudes_client: recieve message : examples")
                 received_batch = True
                 self.train_data = pickle.loads(msg.batch_examples.train_data)
                 self.val_data = pickle.loads(msg.batch_examples.val_data)
                 self.train_labels = pickle.loads(msg.batch_examples.train_labels)
                 self.val_labels = pickle.loads(msg.batch_examples.val_labels)
+                logging.debug("hudes_client: recieve message : done")
 
             elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:
+                logging.debug("hudes_client: recieve message : val loss")
                 received_val = True
                 self.val_losses.append(msg.val_loss.val_loss)
                 self.val_steps.append(msg.request_idx)
+                logging.debug("hudes_client: recieve message : val loss : done")
 
             # called if we only changed scale etc?
             elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_RESULTS:
@@ -184,6 +199,7 @@ class HudesClient:
 
         if received_message:
             if received_train:
+                logging.debug("hudes_client: recieve message : render train")
                 self.view.plot_train_and_val(
                     self.train_losses,
                     self.train_steps,
@@ -192,15 +208,20 @@ class HudesClient:
                 )
                 self.view.update_example_preds(train_preds=self.train_preds)
                 self.view.update_confusion_matrix(self.confusion_matrix)
+                logging.debug("hudes_client: recieve message : render train done")
             if received_batch:
+                logging.debug("hudes_client: recieve message : render batch")
                 self.view.update_examples(
                     train_data=self.train_data,
                 )
+                logging.debug("hudes_client: recieve message : render batch done")
             if received_val:
+                logging.debug("hudes_client: recieve message : render val")
                 self.view.plot_train_and_val(
                     self.train_losses,
                     self.train_steps,
                     self.val_losses,
                     self.val_steps,
                 )
+                logging.debug("hudes_client: recieve message : render val done")
         return received_message
