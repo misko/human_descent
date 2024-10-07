@@ -394,6 +394,7 @@ async def run_server(stop, client_runner_q):
 
 
 async def run_wrapper(args):
+    mp.set_start_method("spawn")
     client_runner_q = mp.Queue()
     executor = ThreadPoolExecutor(max_workers=12)
     loop = asyncio.get_running_loop()
