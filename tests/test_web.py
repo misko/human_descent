@@ -1,9 +1,10 @@
 import asyncio
+import logging
 from functools import partial
 
-import aioprocessing
 import pytest
 import pytest_asyncio
+import torch.multiprocessing as mp
 import websockets
 
 from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
@@ -20,19 +21,21 @@ async def echo(websocket):
 @pytest_asyncio.fixture
 async def run_server_thread():
     mad = mnist_model_data_and_subpace(model=MNISTFFNN(), loss_fn=indexed_loss)
-    event = aioprocessing.AioEvent()
+    client_runner_q = mp.Queue()
     stop = asyncio.get_running_loop().create_future()
     inference_task = asyncio.create_task(
-        inference_runner(mad, stop=stop, run_in="thread", event=event)
+        inference_runner(
+            mad, stop=stop, run_in="thread", client_runner_q=client_runner_q
+        )
     )
 
     async with websockets.serve(
-        partial(process_client, event=event), "localhost", 8765
+        partial(process_client, client_runner_q=client_runner_q), "localhost", 8765
     ):
         yield
 
     stop.set_result(True)
-    event.set()
+    client_runner_q.put(True)
 
     await inference_task
 
@@ -45,12 +48,14 @@ async def run_server_process():
         loss_fn=indexed_loss,
     )
     stop = asyncio.get_running_loop().create_future()
-    event = aioprocessing.AioEvent()
+    client_runner_q = mp.Queue()
     inference_task = asyncio.create_task(
-        inference_runner(mad, stop=stop, run_in="process", event=event)
+        inference_runner(
+            mad, stop=stop, run_in="process", client_runner_q=client_runner_q
+        )
     )
     async with websockets.serve(
-        partial(process_client, event=event), "localhost", 8765
+        partial(process_client, client_runner_q=client_runner_q), "localhost", 8765
     ):
         yield
     stop.set_result(True)

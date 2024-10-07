@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import time
 from functools import cache
 from multiprocessing import Queue
@@ -167,13 +168,12 @@ class HudesWebsocketClient:
 async def send_dims(n: int = 10):
     async with connect("ws://localhost:8765") as websocket:
         for _ in range(n):
-
             msg = hudes_pb2.Control(
                 type=hudes_pb2.Control.CONTROL_DIMS,
                 # dims_and_steps=[hudes_pb2.DimAndStep(dim=1, step=0.01)],
             )
             # msg = {"type": "control", "dims": {1: 0.1, 2: 0.3}}
-            print(msg.SerializeToString())
+            logging.info(msg.SerializeToString())
             await websocket.send(msg.SerializeToString())
             await asyncio.sleep(0.01)
 
