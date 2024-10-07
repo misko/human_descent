@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import logging
+import os
 import pickle
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -25,11 +26,6 @@ from hudes.model_data_and_subspace import ModelDataAndSubspace, indexed_loss
 client_idx = 0
 active_clients = {}
 
-logging.basicConfig(
-    format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
-    level=logging.INFO,
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 
 # TODO
 # move to protobuf https://protobuf.dev/getting-started/pythontutorial/
@@ -418,6 +414,11 @@ async def run_wrapper(args):
 
 if __name__ == "__main__":
 
+    logging.basicConfig(
+        format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
+        level=os.environ.get("LOGLEVEL", "INFO").upper(),
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     parser = argparse.ArgumentParser(description="Hudes: Server")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--dtype", type=str, default="float")

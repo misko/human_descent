@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 import time
 from functools import cache
 from multiprocessing import Queue
@@ -180,4 +181,9 @@ async def send_dims(n: int = 10):
 
 if __name__ == "__main__":
 
+    logging.basicConfig(
+        format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
+        level=os.environ.get("LOGLEVEL", "INFO").upper(),
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     asyncio.run(send_dims())
