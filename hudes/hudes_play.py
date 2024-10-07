@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 # from hudes.akai_client import AkaiClient
 from hudes.keyboard_client import KeyboardClient
@@ -42,4 +43,9 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
+        level=os.environ.get("LOGLEVEL", "INFO").upper(),
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     main()
