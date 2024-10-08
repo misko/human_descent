@@ -349,7 +349,7 @@ class View:
         if "cairo" in plt_backend.lower():
 
             # self.renderer.gc.ctx = fake_ctx()
-            # self.canvas.draw()
+            self.canvas.draw()
             self.draw_or_restore()
             surf = pygame.image.frombuffer(
                 self.surface.get_data(), self.window_size, "RGBA"
