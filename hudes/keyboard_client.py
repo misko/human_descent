@@ -66,7 +66,7 @@ To control each dimension use:
             if key in self.key_to_param_and_sign:
                 dim, sign = self.key_to_param_and_sign[key]
                 self.send_dims_and_steps({dim: self.step_size * sign})
-                return False
+                return True
             elif key == "[":
                 self.step_size_decrease()
                 return True
