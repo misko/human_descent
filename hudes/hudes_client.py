@@ -136,17 +136,17 @@ class HudesClient:
             for event in pg.event.get():
                 redraw |= self.process_key_press(event)
 
-            logging.debug("hudes_client: receive messages")
+            # logging.debug("hudes_client: receive messages")
             redraw |= self.receive_messages()
-            logging.debug("hudes_client: receive messages done")
+            # logging.debug("hudes_client: receive messages done")
             if redraw:
                 logging.debug("hudes_client: redraw")
                 self.view.draw()
                 logging.debug("hudes_client: redraw done")
             else:
-                logging.debug("hudes_client: sleep")
+                # logging.debug("hudes_client: sleep")
                 sleep(0.01)
-                logging.debug("hudes_client: sleep up")
+                # logging.debug("hudes_client: sleep up")
 
     def receive_messages(self):
         # listen from server?
@@ -155,7 +155,7 @@ class HudesClient:
         received_batch = False
         received_val = False
         while self.hudes_websocket_client.recv_ready():
-            logging.debug("hudes_client: recieve message")
+            # logging.debug("hudes_client: recieve message")
             received_message = True
             # recv and process!
             raw_msg = self.hudes_websocket_client.recv_msg()
