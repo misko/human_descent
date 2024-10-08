@@ -330,6 +330,8 @@ class View:
                 self.fig.canvas.restore_region(ax.cache)
 
     def draw(self):
+
+        logging.debug("hudes_client: redraw")
         if True:  # backend.lower()=='agg':
             # self.canvas.draw()
             # self.canvas.update()
@@ -355,6 +357,8 @@ class View:
         # else:
 
         pg.display.flip()  # draws whole screen vs update that draws a parts
+
+        logging.debug("hudes_client: redraw done")
 
 
 def norm_deg(x):

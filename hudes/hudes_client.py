@@ -143,9 +143,7 @@ class HudesClient:
             redraw |= self.receive_messages()
             # logging.debug("hudes_client: receive messages done")
             if redraw:
-                logging.debug("hudes_client: redraw")
                 self.view.draw()
-                logging.debug("hudes_client: redraw done")
             else:
                 # logging.debug("hudes_client: sleep")
                 sleep(0.01)
