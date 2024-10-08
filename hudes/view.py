@@ -347,23 +347,25 @@ class View:
 
             # self.renderer.gc.ctx = fake_ctx()
             # self.canvas.draw()
-            # self.draw_or_restore()
-            # surf = pygame.image.frombuffer(
-            #     self.surface.get_data(), self.window_size, "RGBA"
-            # )
-            # self.screen.blit(surf, (0, 0))
+            if True:
+                self.draw_or_restore()
+                surf = pygame.image.frombuffer(
+                    self.surface.get_data(), self.window_size, "RGBA"
+                )
+                self.screen.blit(surf, (0, 0))
             # self.draw_or_restore()
             # self.renderer = self.canvas._renderer
 
             # self.draw_or_restore()
-            self.canvas.draw()
-            surf = pg.image.frombuffer(
-                # self.renderer.tostring_rgb(),
-                self.canvas._get_printed_image_surface().get_data(),
-                self.window_size,
-                "RGBA",
-            )
-            self.screen.blit(surf, (0, 0))
+            if False:
+                self.canvas.draw()
+                surf = pg.image.frombuffer(
+                    # self.renderer.tostring_rgb(),
+                    self.canvas._get_printed_image_surface().get_data(),
+                    self.window_size,
+                    "RGBA",
+                )
+                self.screen.blit(surf, (0, 0))
         else:  # backend.lower()=='agg':
             # self.canvas.draw()
             # self.canvas.update()
