@@ -169,6 +169,7 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                 client.force_update = True
 
             if client.force_update or len(client.next_step) > 0:
+
                 current_step = client.next_step
                 client.next_step = {}
 
@@ -176,9 +177,10 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                 client.active_request_idx = client.request_idx
 
                 if client.mesh_grids > 0:
-                    logging.debug(f"inference_runner_clients: req mesh")
-                    await asyncio.to_thread(
-                        inference_q.put,
+                    logging.debug(
+                        f"inference_runner_clients: req mesh {client.force_update}"
+                    )
+                    inference_q.put(
                         {
                             "mode": "mesh",
                             "current_step": current_step,
@@ -191,9 +193,10 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                         },
                     )
                 else:
-                    logging.debug(f"inference_runner_clients: req train")
-                    await asyncio.to_thread(
-                        inference_q.put,
+                    logging.debug(
+                        f"inference_runner_clients: req train {client.force_update}"
+                    )
+                    inference_q.put(
                         {
                             "mode": "train",
                             "current_step": current_step,
