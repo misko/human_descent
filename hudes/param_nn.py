@@ -24,6 +24,7 @@ class Linear:
         self.bias_params = self.output_channels
         self.params = self.weight_params + self.bias_params
 
+    # @torch.compile
     def forward(self, models_params, x):
         # model_params ~ (models, params)
         _weights = models_params[:, : self.weight_params].reshape(
