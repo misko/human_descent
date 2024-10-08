@@ -327,7 +327,7 @@ class View:
         self.axd["D"].redraw = True
 
     def draw_or_restore(self):
-        for _ax, ax in self.axd.items():
+        for _, ax in self.axd.items():
             if ax.redraw:
                 ax.draw(self.renderer)
                 ax.cache = self.fig.canvas.copy_from_bbox(
@@ -338,9 +338,6 @@ class View:
                 self.fig.canvas.restore_region(ax.cache)
 
     def draw(self):
-        class fake_ctx:
-            def save(self):
-                pass
 
         logging.debug("hudes_client: redraw")
         # cairo
@@ -349,22 +346,23 @@ class View:
         if "cairo" in plt_backend.lower():
 
             # self.renderer.gc.ctx = fake_ctx()
-            self.canvas.draw()
-            self.draw_or_restore()
-            surf = pygame.image.frombuffer(
-                self.surface.get_data(), self.window_size, "RGBA"
-            )
+            # self.canvas.draw()
+            # self.draw_or_restore()
+            # surf = pygame.image.frombuffer(
+            #     self.surface.get_data(), self.window_size, "RGBA"
+            # )
             # self.screen.blit(surf, (0, 0))
             # self.draw_or_restore()
             # self.renderer = self.canvas._renderer
 
             # self.draw_or_restore()
-            # surf = pg.image.frombuffer(
-            #     # self.renderer.tostring_rgb(),
-            #     self.canvas._get_printed_image_surface().get_data(),
-            #     self.window_size,
-            #     "RGBA",
-            # )
+            self.canvas.draw()
+            surf = pg.image.frombuffer(
+                # self.renderer.tostring_rgb(),
+                self.canvas._get_printed_image_surface().get_data(),
+                self.window_size,
+                "RGBA",
+            )
             self.screen.blit(surf, (0, 0))
         else:  # backend.lower()=='agg':
             # self.canvas.draw()
