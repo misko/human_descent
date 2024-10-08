@@ -21,7 +21,6 @@ def main():
     if args.input == "keyboard":
         controller = KeyboardClient(seed=args.seed)
         view = View()
-        controller.attach_view(View())
     elif args.input == "keyboardGL":
         controller = KeyboardClientGL(
             seed=args.seed,

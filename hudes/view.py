@@ -1,8 +1,16 @@
+import logging
 import math
 from typing import List
 
 import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pygame as pg
 import pygame.midi
+import torch
+from OpenGL.GL import *
+from OpenGL.GLU import *  # Import GLU for perspective functions
+from pygame.locals import *
 
 from hudes.opengl_func import (
     create_grid_indices,
@@ -18,16 +26,24 @@ from hudes.opengl_func import (
     update_grid_vbo,
 )
 
-matplotlib.use("Agg")
+# backend = "Agg"
+# backend='cairo'
+# matplotlib.use(backend)
 
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pygame as pg
-import torch
-from OpenGL.GL import *
-from OpenGL.GLU import *  # Import GLU for perspective functions
-from pygame.locals import *
+def surface_to_npim(surface):
+    """Transforms a Cairo surface into a numpy array."""
+    im = +np.frombuffer(surface.get_data(), np.uint8)
+    H, W = surface.get_height(), surface.get_width()
+    im.shape = (H, W, 4)  # for RGBA
+    return im[:, :, :3]
+
+
+def svg_to_npim(svg_bytestring, dpi):
+    """Renders a svg bytestring as a RGB image in a numpy array"""
+    tree = cairosvg.parser.Tree(bytestring=svg_bytestring)
+    surf = cairosvg.surface.PNGSurface(tree, None, dpi).cairo
+    return surface_to_npim(surf)
 
 
 # Shader creation helper functions
@@ -150,11 +166,24 @@ class View:
             print(f"using input_id :{self.midi_input_id}:")
             self.midi_input = pygame.midi.Input(self.midi_input_id)
 
+        dpi = 200  # plt.rcParams["figure.dpi"]
+        logging.info(f"Matplotlib backend: {plt.get_backend()}")
+
         self.window_size = (1200, 800)
-        self.window = pg.display.set_mode(self.window_size)
         self.fig = plt.figure(
-            figsize=(12, 8),
+            figsize=(self.window_size[0] / dpi, self.window_size[1] / dpi),
         )
+
+        if self.fig.dpi != dpi:
+            logging.warning(
+                f"DPI flag not respected by matplotlib backend ({plt.get_backend()})! Should be {dpi} but is {self.fig.dpi} "
+            )
+            self.window_size = (
+                int(self.fig.get_figwidth() * self.fig.dpi),
+                int(self.fig.get_figheight() * self.fig.dpi),
+            )
+
+        self.window = pg.display.set_mode(self.window_size)
 
         # self.canvas = agg.FigureCanvasAgg(self.fig)
         self.canvas = self.fig.canvas
@@ -290,10 +319,16 @@ class View:
         self.axd["D"].set_xlabel("Step")
 
     def draw(self):
+        if True:  # backend.lower()=='agg':
+            self.canvas.draw()
+            surf = pg.image.frombytes(
+                self.renderer.tostring_rgb(),
+                self.window_size,
+                "RGB",
+            )
+            self.screen.blit(surf, (0, 0))
+        # else:
 
-        self.canvas.draw()
-        surf = pg.image.frombytes(self.renderer.tostring_rgb(), self.window_size, "RGB")
-        self.screen.blit(surf, (0, 0))
         pg.display.flip()  # draws whole screen vs update that draws a parts
 
 
