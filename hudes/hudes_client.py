@@ -136,6 +136,9 @@ class HudesClient:
             for event in pg.event.get():
                 redraw |= self.process_key_press(event)
 
+            self.view.draw()
+            self.view.draw()
+
             # logging.debug("hudes_client: receive messages")
             redraw |= self.receive_messages()
             # logging.debug("hudes_client: receive messages done")
