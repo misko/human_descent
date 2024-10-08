@@ -326,6 +326,7 @@ class View:
                 ax.cache = self.fig.canvas.copy_from_bbox(
                     ax.get_tightbbox(self.renderer)  # TODO cache bbox?
                 )
+                ax.redraw = False
             else:
                 self.fig.canvas.restore_region(ax.cache)
 
@@ -336,9 +337,7 @@ class View:
             # self.canvas.draw()
             # self.canvas.update()
             self.renderer.clear()
-            logging.debug("hudes_client: redrawA")
             self.draw_or_restore()
-            logging.debug("hudes_client: redrawB")
             # if self.redraw_train_and_val:
             #     self.axd["B"].draw(self.renderer)
             #     self.axd["B"].cache = self.fig.canvas.copy_from_bbox(
@@ -355,7 +354,6 @@ class View:
                 self.window_size,
                 "RGB",
             )
-            logging.debug("hudes_client: redrawC")
             self.screen.blit(surf, (0, 0))
         # else:
 
