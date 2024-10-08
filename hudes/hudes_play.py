@@ -15,14 +15,18 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--grid-size", type=int, default=41)
     parser.add_argument("--grids", type=int, default=2)
+    parser.add_argument("--addr", type=str, default="localhost")
+    parser.add_argument("--port", type=int, default=8765)
 
     args = parser.parse_args()
 
     if args.input == "keyboard":
-        controller = KeyboardClient(seed=args.seed)
+        controller = KeyboardClient(addr=args.addr, port=args.port, seed=args.seed)
         view = View()
     elif args.input == "keyboardGL":
         controller = KeyboardClientGL(
+            addr=args.addr,
+            port=args.port,
             seed=args.seed,
             step_size_resolution=-0.005,
             inital_step_size_idx=100,
@@ -34,7 +38,7 @@ def main():
     #     controller = AkaiClient(seed=args.seed)
     #     view = View()
     elif args.input == "xtouch":
-        controller = XTouchClient(seed=args.seed)
+        controller = XTouchClient(addr=args.addr, port=args.port, seed=args.seed)
         view = View(use_midi=True)
     else:
         raise ValueError

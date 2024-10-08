@@ -19,6 +19,8 @@ from hudes.websocket_client import (
 class HudesClient:
     def __init__(
         self,
+        addr,
+        port,
         step_size_resolution=-0.05,
         inital_step_size_idx=10,
         seed=0,
@@ -30,7 +32,7 @@ class HudesClient:
         self.quit_count = 0
         self.seed = seed
 
-        self.hudes_websocket_client = HudesWebsocketClient("ws://localhost:8765")
+        self.hudes_websocket_client = HudesWebsocketClient(f"ws://{addr}:{port}")
 
         self.request_idx = 0
 
