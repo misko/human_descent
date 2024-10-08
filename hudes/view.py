@@ -2,6 +2,7 @@ import logging
 import math
 from typing import List
 
+import cairo
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -190,6 +191,12 @@ class View:
         # self.canvas = agg.FigureCanvasAgg(self.fig)
         self.canvas = self.fig.canvas
         self.renderer = self.canvas.get_renderer()
+        if "cairo" in plt_backend.lower():
+            self.surface = cairo.ImageSurface(
+                cairo.FORMAT_ARGB32, self.window_size[0], self.window_size[1]
+            )
+            ctx = cairo.Context(self.surface)  # pg.display.get_surface())
+            self.renderer.set_context(ctx)
         self.fig.subplots_adjust(
             left=0.07, right=0.95, hspace=0.8, top=0.92, bottom=0.07, wspace=0.5  # 0.5
         )
@@ -331,19 +338,33 @@ class View:
                 self.fig.canvas.restore_region(ax.cache)
 
     def draw(self):
+        class fake_ctx:
+            def save(self):
+                pass
 
         logging.debug("hudes_client: redraw")
         # cairo
         # np.frombuffer(self.canvas._get_printed_image_surface().get_data(),np.uint8)
         # https://www.pygame.org/wiki/CairoPygame
         if "cairo" in plt_backend.lower():
-            self.canvas.draw()
-            surf = pg.image.frombuffer(
-                # self.renderer.tostring_rgb(),
-                self.canvas._get_printed_image_surface().get_data(),
-                self.window_size,
-                "RGBA",
+
+            # self.renderer.gc.ctx = fake_ctx()
+            # self.canvas.draw()
+            self.draw_or_restore()
+            surf = pygame.image.frombuffer(
+                self.surface.get_data(), self.window_size, "RGBA"
             )
+            # self.screen.blit(surf, (0, 0))
+            # self.draw_or_restore()
+            # self.renderer = self.canvas._renderer
+
+            # self.draw_or_restore()
+            # surf = pg.image.frombuffer(
+            #     # self.renderer.tostring_rgb(),
+            #     self.canvas._get_printed_image_surface().get_data(),
+            #     self.window_size,
+            #     "RGBA",
+            # )
             self.screen.blit(surf, (0, 0))
         else:  # backend.lower()=='agg':
             # self.canvas.draw()
