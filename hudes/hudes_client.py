@@ -1,6 +1,7 @@
 import logging
 import math
 import pickle
+import time
 from time import sleep
 
 import numpy as np
@@ -107,6 +108,7 @@ class HudesClient:
                 request_idx=self.request_idx,
             ).SerializeToString()
         )
+        time.sleep(0.01)
         for dim, step in dims_and_steps.items():
             self.dims_and_steps_on_current_dims[dim] += step
         self.dims_and_steps_updated()

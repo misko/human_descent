@@ -311,7 +311,6 @@ class View:
         # self.axd["C"].set_xlabel("Step")
         # self.axd["C"].set_yticks([])
 
-        self.axd["D"].clear()
         self.axd["D"].cla()
         self.axd["D"].plot(train_steps[-8:], train_losses[-8:], label="train")
         self.axd["D"].set_title("Loss [last 8steps]")
