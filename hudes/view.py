@@ -26,9 +26,10 @@ from hudes.opengl_func import (
     update_grid_vbo,
 )
 
-backend = "Agg"
-# backend='cairo'
-matplotlib.use(backend)
+# backend = "Agg"
+# backend = "cairo"
+# matplotlib.use(backend)
+plt_backend = matplotlib.get_backend()
 
 
 def surface_to_npim(surface):
@@ -173,7 +174,7 @@ class View:
         # self.fig = plt.figure(
         #     figsize=(self.window_size[0] / dpi, self.window_size[1] / dpi), dpi=dpi
         # )
-        self.fig = plt.figure(figsize=(12, 8))
+        self.fig = plt.figure(figsize=(12, 8), facecolor="white")
 
         # if self.fig.dpi != dpi:
         #     logging.warning(
@@ -332,9 +333,22 @@ class View:
     def draw(self):
 
         logging.debug("hudes_client: redraw")
-        if True:  # backend.lower()=='agg':
+        # cairo
+        # np.frombuffer(self.canvas._get_printed_image_surface().get_data(),np.uint8)
+        # https://www.pygame.org/wiki/CairoPygame
+        if "cairo" in plt_backend.lower():
+            self.canvas.draw()
+            surf = pg.image.frombuffer(
+                # self.renderer.tostring_rgb(),
+                self.canvas._get_printed_image_surface().get_data(),
+                self.window_size,
+                "RGBA",
+            )
+            self.screen.blit(surf, (0, 0))
+        else:  # backend.lower()=='agg':
             # self.canvas.draw()
             # self.canvas.update()
+            # breakpoint()
             self.renderer.clear()
             self.draw_or_restore()
             # if self.redraw_train_and_val:
@@ -348,11 +362,17 @@ class View:
             # else:
             #     self.fig.canvas.restore_region(self.axd["B"].cache)
             #     self.fig.canvas.restore_region(self.axd["D"].cache)
+            # TODO TRY FORM BUFFER AND USE THE TOSTRING BUFFER!!!
             surf = pg.image.frombytes(
                 self.renderer.tostring_rgb(),
                 self.window_size,
                 "RGB",
             )
+            # surf = pg.image.frombuffer(
+            #     self.renderer.buffer_rgba(),
+            #     self.window_size,
+            #     "RGBA",
+            # )
             self.screen.blit(surf, (0, 0))
         # else:
 
