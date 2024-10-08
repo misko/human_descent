@@ -387,7 +387,7 @@ async def process_client(websocket, client_runner_q):
 
 async def run_server(stop, client_runner_q):
     async with serve(
-        partial(process_client, client_runner_q=client_runner_q), "localhost", 8765
+        partial(process_client, client_runner_q=client_runner_q), None, 8765
     ):
         await stop
 
