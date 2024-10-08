@@ -144,7 +144,6 @@ class HudesClient:
                 self.view.draw()
                 logging.debug("hudes_client: redraw done")
             else:
-
                 logging.debug("hudes_client: sleep")
                 sleep(0.01)
                 logging.debug("hudes_client: sleep up")

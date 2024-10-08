@@ -6,20 +6,13 @@ import pygame.midi
 
 from hudes.opengl_func import (
     create_grid_indices,
-    create_grid_points,
     create_grid_points_with_colors,
-    create_matplotlib_texture,
     create_matplotlib_texture_rgba,
     create_surface_grid_indices,
     create_surface_grid_points,
-    create_texture,
     create_texture_rgba,
-    draw_arrow,
-    draw_red_plane,
     draw_red_sphere,
-    render_text,
     render_text_2d,
-    render_texture,
     render_texture_rgba,
     update_grid_cbo,
     update_grid_vbo,
@@ -27,9 +20,7 @@ from hudes.opengl_func import (
 
 matplotlib.use("Agg")
 
-import time
 
-import matplotlib.backends.backend_agg as agg
 import matplotlib.pyplot as plt
 import numpy as np
 import pygame as pg
@@ -165,6 +156,9 @@ class View:
             figsize=(12, 8),
         )
 
+        # self.canvas = agg.FigureCanvasAgg(self.fig)
+        self.canvas = self.fig.canvas
+        self.renderer = self.canvas.get_renderer()
         self.fig.subplots_adjust(
             left=0.07, right=0.95, hspace=0.8, top=0.92, bottom=0.07, wspace=0.5  # 0.5
         )
@@ -296,11 +290,9 @@ class View:
         self.axd["D"].set_xlabel("Step")
 
     def draw(self):
-        canvas = agg.FigureCanvasAgg(self.fig)
-        canvas.draw()
-        surf = pg.image.frombytes(
-            canvas.get_renderer().tostring_rgb(), self.window_size, "RGB"
-        )
+
+        self.canvas.draw()
+        surf = pg.image.frombytes(self.renderer.tostring_rgb(), self.window_size, "RGB")
         self.screen.blit(surf, (0, 0))
         pg.display.flip()  # draws whole screen vs update that draws a parts
 
@@ -451,7 +443,6 @@ class OpenGLView:
         # init plt
         plt.style.use("dark_background")
         self.fig = plt.figure(figsize=(12, 2), facecolor="none")
-
         self.fig.subplots_adjust(
             left=0.07, right=0.95, hspace=0.8, top=0.80, bottom=0.1, wspace=0.5  # 0.5
         )
