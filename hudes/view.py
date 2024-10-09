@@ -32,6 +32,10 @@ from hudes.opengl_func import (
 # matplotlib.use(backend)
 plt_backend = matplotlib.get_backend()
 
+import matplotlib.style as mplstyle
+
+mplstyle.use("fast")
+
 
 def surface_to_npim(surface):
     """Transforms a Cairo surface into a numpy array."""

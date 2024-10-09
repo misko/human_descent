@@ -34,9 +34,13 @@ active_clients = {}
 
 # TODO cache?
 def prepare_batch_example_message(
-    batch_idx: int, mad: ModelDataAndSubspace, n: int = 4
+    batch_size: int,
+    batch_idx: int,
+    dtype: torch.dtype,
+    mad: ModelDataAndSubspace,
+    n: int = 4,
 ):
-    batch = mad.get_batch(batch_idx)
+    batch = mad.get_batch(batch_size=batch_size, batch_idx=batch_idx, dtype=dtype)
     return hudes_pb2.Control(
         type=hudes_pb2.Control.CONTROL_BATCH_EXAMPLES,
         batch_examples=hudes_pb2.BatchExamples(
@@ -78,14 +82,19 @@ def listen_and_run(
             client_id = v["client_id"]
 
             res = {}
-            logging.debug(f"listen_and_run: got {v['mode']} {v['batch_idx']}")
+            logging.debug(f"listen_and_run: got {v['mode']}")
             if v["mode"] in ("train", "mesh"):
                 if client_id not in client_weights:
-                    client_weights[client_id] = mad.saved_weights.clone()
-                client_weights[client_id] += mad.delta_from_dims(v["current_step"])
+                    client_weights[client_id] = mad.saved_weights[v["dtype"]].clone()
+                client_weights[client_id] += mad.delta_from_dims(
+                    v["current_step"], dtype=v["dtype"]
+                )
 
                 res["train"] = mad.train_model_inference_with_delta_weights(
-                    client_weights[client_id], v["batch_idx"]
+                    client_weights[client_id].to(v["dtype"]),
+                    batch_size=v["batch_size"],
+                    batch_idx=v["batch_idx"],
+                    dtype=v["dtype"],
                 )
             if v["mode"] == "val":
                 res["val"] = mad.val_model_inference_with_delta_weights(
@@ -93,12 +102,14 @@ def listen_and_run(
                 )
             if v["mode"] == "mesh":
                 res["mesh"] = mad.get_loss_grid(
-                    base_weights=client_weights[client_id],
+                    base_weights=client_weights[client_id].to(v["dtype"]),
                     grid_size=v["grid_size"],
                     step_size=v["step_size"] / 2,
                     grids=v["grids"],
                     dims_offset=v["dims_offset"],
                     batch_idx=v["batch_idx"],
+                    batch_size=v["batch_size"],
+                    dtype=v["dtype"],
                 )
             if v["mode"] not in ("train", "mesh", "val"):
                 raise ValueError
@@ -125,7 +136,8 @@ class Client:
     dims_offset: int = 0
     dims_at_a_time: int = 0
     seed: int = 0
-    dtype: str = "float32"
+    dtype: torch.dtype = torch.float32
+    batch_size: int = 32
 
 
 async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
@@ -157,7 +169,10 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                     logging.debug(f"inference_runner_clients: send batch msg")
                     await client.websocket.send(
                         prepare_batch_example_message(
-                            client.batch_idx, mad
+                            batch_size=client.batch_size,
+                            batch_idx=client.batch_idx,
+                            dtype=client.dtype,
+                            mad=mad,
                         ).SerializeToString()
                     )
                 except (
@@ -189,6 +204,8 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                             "grids": client.mesh_grids,
                             "dims_offset": client.dims_offset,
                             "batch_idx": client.batch_idx,
+                            "batch_size": client.batch_size,
+                            "dtype": client.dtype,
                             "client_id": client_id,
                         },
                     )
@@ -202,6 +219,8 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                             "current_step": current_step,
                             "client_id": client_id,
                             "batch_idx": client.batch_idx,
+                            "batch_size": client.batch_size,
+                            "dtype": client.dtype,
                         },
                     )
                 client.force_update = False
@@ -215,6 +234,7 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                         "mode": "val",
                         "client_id": client_id,
                         "batch_idx": client.batch_idx,
+                        "dtype": client.dtype,
                     },
                 )
 
@@ -369,6 +389,8 @@ async def process_client(websocket, client_runner_q):
             client.mesh_grids = msg.config.mesh_grids
             client.mesh_step_size = msg.config.mesh_step_size
             client.force_update = True
+            client.batch_size = msg.config.batch_size
+            client.dtype = getattr(torch, msg.config.dtype)
 
             # send back batch examples
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
@@ -403,8 +425,6 @@ async def run_wrapper(args):
         model=MNISTFFNN(),
         loss_fn=indexed_loss,
         device=args.device,
-        dtype=getattr(torch, args.dtype),
-        train_batch_size=args.train_batch_size,
     )
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(
@@ -424,9 +444,7 @@ if __name__ == "__main__":
     )
     parser = argparse.ArgumentParser(description="Hudes: Server")
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--dtype", type=str, default="float")
     parser.add_argument("--run-in", type=str, default="process")
-    parser.add_argument("--train-batch-size", type=int, default=512)
 
     args = parser.parse_args()
     asyncio.run(run_wrapper(args))

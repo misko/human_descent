@@ -13,6 +13,8 @@ message Config {
   required int32 mesh_grid_size = 3;
   required float mesh_step_size = 4;
   required int32 mesh_grids = 5;
+  required int32 batch_size = 6;
+  required string dtype = 7;
 }
 
 

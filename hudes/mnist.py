@@ -112,10 +112,7 @@ def mnist_model_data_and_subpace(
     model: nn.Module,
     seed: int = 0,
     store: str = "./",
-    train_batch_size: int = 512,
-    val_batch_size: int = 1024,
     device="cpu",
-    dtype=torch.float32,
     loss_fn=indexed_loss,
 ):
     transform = transforms.Compose(
@@ -132,7 +129,6 @@ def mnist_model_data_and_subpace(
             train=True,
             transform=transform,
         ),
-        train_batch_size,
         seed=seed,
     )
     val_data_batcher = DatasetBatcher(
@@ -142,7 +138,6 @@ def mnist_model_data_and_subpace(
             train=False,
             transform=transform,
         ),
-        val_batch_size,
         seed=seed,
     )
     return ModelDataAndSubspace(
@@ -152,5 +147,4 @@ def mnist_model_data_and_subpace(
         loss_fn=indexed_loss,
         minimize=False,
         device=device,
-        dtype=dtype,
     )

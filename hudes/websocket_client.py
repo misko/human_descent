@@ -89,7 +89,14 @@ class HudesWebsocketClient:
         self.thread.start()
 
     def send_config(
-        self, dims_at_a_time, seed, mesh_grid_size, mesh_step_size, mesh_grids
+        self,
+        dims_at_a_time,
+        seed,
+        mesh_grid_size,
+        mesh_step_size,
+        mesh_grids,
+        batch_size,
+        dtype,
     ):
         self.send_q.put(
             hudes_pb2.Control(
@@ -100,6 +107,8 @@ class HudesWebsocketClient:
                     mesh_grid_size=mesh_grid_size,
                     mesh_step_size=mesh_step_size,
                     mesh_grids=mesh_grids,
+                    batch_size=batch_size,
+                    dtype=dtype,
                 ),
             ).SerializeToString()
         )

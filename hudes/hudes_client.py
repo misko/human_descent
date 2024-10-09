@@ -50,6 +50,9 @@ class HudesClient:
         self.inital_step_size_idx = inital_step_size_idx
         self.step_size_resolution = step_size_resolution
 
+        self.batch_size = 128
+        self.dtype = "float16"
+
     def get_next_batch(self):
         self.hudes_websocket_client.send_q.put(next_batch_message().SerializeToString())
 
@@ -75,6 +78,8 @@ class HudesClient:
             mesh_step_size=self.step_size,
             mesh_grids=self.mesh_grids,
             mesh_grid_size=self.mesh_grid_size,
+            batch_size=self.batch_size,
+            dtype=self.dtype,
         )
 
     def dims_and_steps_updated(self):
