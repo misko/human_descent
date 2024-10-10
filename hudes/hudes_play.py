@@ -17,11 +17,17 @@ def main():
     parser.add_argument("--grids", type=int, default=2)
     parser.add_argument("--addr", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--controller", type=str, default="wireless_osx")
 
     args = parser.parse_args()
 
     if args.input == "keyboard":
-        controller = KeyboardClient(addr=args.addr, port=args.port, seed=args.seed)
+        controller = KeyboardClient(
+            addr=args.addr,
+            port=args.port,
+            seed=args.seed,
+            joystick_controller_key=args.controller,
+        )
         view = View()
     elif args.input == "keyboardGL":
         controller = KeyboardClientGL(
@@ -32,13 +38,19 @@ def main():
             inital_step_size_idx=100,
             mesh_grids=args.grids,
             mesh_grid_size=args.grid_size,
+            joystick_controller_key=args.controller,
         )
         view = OpenGLView(grid_size=args.grid_size, grids=args.grids)
     # elif args.input == "akai":
     #     controller = AkaiClient(seed=args.seed)
     #     view = View()
     elif args.input == "xtouch":
-        controller = XTouchClient(addr=args.addr, port=args.port, seed=args.seed)
+        controller = XTouchClient(
+            addr=args.addr,
+            port=args.port,
+            seed=args.seed,
+            joystick_controller_key=args.controller,
+        )
         view = View(use_midi=True)
     else:
         raise ValueError

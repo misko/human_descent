@@ -27,7 +27,10 @@ class HudesClient:
         seed=0,
         mesh_grids=0,
         mesh_grid_size=31,
+        joystick_controller_key=None,
     ):
+        self.joystick_controller_key = joystick_controller_key
+
         self.mesh_grids = mesh_grids
         self.mesh_grid_size = mesh_grid_size
         self.quit_count = 0

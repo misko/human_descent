@@ -1,4 +1,5 @@
 import time
+from dataclasses import dataclass
 from time import sleep
 
 import pygame as pg
@@ -14,28 +15,82 @@ I used chatGPT a lot for this, I have no idea how to use openGL
 """
 
 
+@dataclass
+class JoyStickController:
+    left_trig_axis: int
+    right_trig_axis: int
+    left_js_down_axis: int
+    left_js_right_axis: int
+    right_js_down_axis: int
+    right_js_right_axis: int
+    right_js_press_button: int
+
+    button_y: int
+    button_b: int
+    button_x: int
+    button_a: int
+    button_left: int
+    button_right: int
+
+
+controllers = {
+    "wireless_osx": JoyStickController(
+        left_trig_axis=4,
+        right_trig_axis=5,
+        left_js_down_axis=1,
+        left_js_right_axis=0,
+        right_js_down_axis=3,
+        right_js_right_axis=2,
+        button_y=2,
+        button_b=0,
+        button_x=3,
+        button_a=1,
+        button_left=9,
+        button_right=10,
+        right_js_press_button=8,
+    ),
+    "wireless_rpi": JoyStickController(
+        left_trig_axis=2,
+        right_trig_axis=5,
+        left_js_down_axis=1,
+        left_js_right_axis=0,
+        right_js_down_axis=4,
+        right_js_right_axis=3,
+        button_y=3,
+        button_b=1,
+        button_x=2,
+        button_a=0,
+        button_left=4,
+        button_right=5,
+        right_js_press_button=10,
+    ),
+}
+
+
 class KeyboardClientGL(KeyboardClient):
     def init_input(self):
         super().init_input()  # setup keyboard
-
         self.joysticks = {}
+        self.joystick_controller: JoyStickController = controllers[
+            self.joystick_controller_key
+        ]
 
     def process_key_press(self, event):
         redraw = super().process_key_press(event)  # use the keyboard interface
 
         if event.type == pg.JOYBUTTONDOWN:
-            if event.button == 2:
+            if event.button == self.joystick_controller.button_y:
                 self.get_next_dims()
 
-            if event.button == 0:
+            if event.button == self.joystick_controller.button_b:
                 joystick = self.joysticks[event.instance_id]
                 joystick.rumble(0, 0.7, 500)
                 self.get_next_batch()
 
-            if event.button == 1:
+            if event.button == self.joystick_controller.button_a:
                 self.toggle_dtype()
 
-            if event.button == 3:
+            if event.button == self.joystick_controller.button_x:
                 self.toggle_batch_size()
 
         if event.type == pg.JOYBUTTONUP:
@@ -84,15 +139,18 @@ class KeyboardClientGL(KeyboardClient):
                 #     axis = joystick.get_axis(i)
                 #     print(f"Axis {i} value: {axis:>6.3f}")
 
-                if joystick.get_button(8) > 0.5:
+                if (
+                    joystick.get_button(self.joystick_controller.right_js_press_button)
+                    > 0.5
+                ):
                     self.view.reset_angle()
                     redraw = True
 
-                if joystick.get_button(9) > 0.5:
+                if joystick.get_button(self.joystick_controller.button_left) > 0.5:
                     self.step_size_decrease(2)
                     self.send_config()
 
-                if joystick.get_button(10) > 0.5:
+                if joystick.get_button(self.joystick_controller.button_right) > 0.5:
                     self.step_size_increase(2)
                     self.send_config()
 
@@ -104,21 +162,31 @@ class KeyboardClientGL(KeyboardClient):
                 #     self.view.decrease_zoom()
                 #     redraw = True
 
-                if joystick.get_axis(4) > 0.5 and (ct - last_select_press) > 0.2:
+                if (
+                    joystick.get_axis(self.joystick_controller.left_trig_axis) > 0.5
+                    and (ct - last_select_press) > 0.2
+                ):
                     self.view.decrement_selected_grid()
                     self.view.update_points_and_colors()
                     redraw = True
                     last_select_press = ct
-                if joystick.get_axis(5) > 0.5 and (ct - last_select_press) > 0.2:
+                if (
+                    joystick.get_axis(self.joystick_controller.right_trig_axis) > 0.5
+                    and (ct - last_select_press) > 0.2
+                ):
                     self.view.increment_selected_grid()
                     self.view.update_points_and_colors()
                     redraw = True
                     last_select_press = ct
 
-                A = Vector2(joystick.get_axis(0), joystick.get_axis(1)).rotate(
-                    self.view.get_angles()[0]
+                A = Vector2(
+                    joystick.get_axis(self.joystick_controller.left_js_right_axis),
+                    joystick.get_axis(self.joystick_controller.left_js_down_axis),
+                ).rotate(self.view.get_angles()[0])
+                B = Vector2(
+                    joystick.get_axis(self.joystick_controller.right_js_right_axis),
+                    joystick.get_axis(self.joystick_controller.right_js_down_axis),
                 )
-                B = Vector2(joystick.get_axis(2), joystick.get_axis(3))
 
                 radius, angle = A.as_polar()
                 if radius > 0.3:
