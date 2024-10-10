@@ -27,7 +27,7 @@ class DatasetBatcher:
     # TODO optionally cache this!
     @cache
     def get_batch(self, batch_size, batch_idx):
-        logging.debug(f"get_batch size: {batch_size} idx: {batch_idx}")
+        logging.debug(f"get_batch size: {self} {batch_size} idx: {batch_idx}")
         batch_idx = batch_idx % self.get_len(batch_size=batch_size)
         start_idx = batch_idx * batch_size
         end_idx = min(len(self.ds), start_idx + batch_size)
@@ -107,8 +107,7 @@ class ModelDataAndSubspace:
         self.device = device
         self._model = model  # .to(self.device)
         self.num_params = sum([p.numel() for p in self._model.parameters()])
-        self.train_data_batcher = train_data_batcher
-        self.val_data_batcher = val_data_batcher
+        self.batchers = {"train": train_data_batcher, "val": val_data_batcher}
         self.minimize = minimize
 
         self.fused = False  # Cant fuse before forking
@@ -177,18 +176,13 @@ class ModelDataAndSubspace:
 
     # todo cache this?
     @cache
-    def get_batch(self, batch_size: int, batch_idx: int, dtype):
-        r = {}
-        for name, batcher in (
-            ("train", self.train_data_batcher),
-            ("val", self.val_data_batcher),
-        ):
-            batch = batcher.get_batch(batch_size, batch_idx)
-            r[name] = (
-                batch["data"].to(device=self.device, dtype=dtype),
-                batch["label"].to(device=self.device),
-            )
-        return r
+    def get_batch(self, batch_size: int, batch_idx: int, dtype, train_or_val: str):
+        assert train_or_val in self.batchers
+        batch = self.batchers[train_or_val].get_batch(batch_size, batch_idx)
+        return (
+            batch["data"].to(device=self.device, dtype=dtype),
+            batch["label"].to(device=self.device),
+        )
 
     # TODO could optimize with one large chunk of shared memory? and slice it?
     @cache
@@ -211,13 +205,16 @@ class ModelDataAndSubspace:
         self.set_parameters(weights, dtype)
         full_val_loss = 0
         n = 0
-        for batch_idx in range(self.val_data_batcher.get_len(self.val_batch_size)):
+        for batch_idx in range(self.batchers["val"].get_len(self.val_batch_size)):
             batch = self.get_batch(
-                batch_size=self.val_batch_size, batch_idx=batch_idx, dtype=dtype
+                batch_size=self.val_batch_size,
+                batch_idx=batch_idx,
+                dtype=dtype,
+                train_or_val="val",
             )
-            model_output = self.models[dtype](batch["val"][0])
-            full_val_loss += self.loss_fn(model_output, batch["val"][1]).sum().item()
-            n += batch["val"][1].shape[0]
+            model_output = self.models[dtype](batch[0])
+            full_val_loss += self.loss_fn(model_output, batch[1]).sum().item()
+            n += batch[1].shape[0]
         if not self.minimize:
             full_val_loss = -full_val_loss
         return {"val_loss": full_val_loss / n}
@@ -227,15 +224,15 @@ class ModelDataAndSubspace:
         self, weights: torch.Tensor, batch_size: int, batch_idx: int, dtype
     ) -> dict[str, torch.Tensor]:
         assert self.fused
-        batch = self.get_batch(batch_size, batch_idx, dtype=dtype)
+        batch = self.get_batch(batch_size, batch_idx, dtype=dtype, train_or_val="train")
         self.set_parameters(weights, dtype)
-        model_output = self.models[dtype](batch["train"][0])
-        train_loss = self.loss_fn(model_output, batch["train"][1]).mean().item()
+        model_output = self.models[dtype](batch[0])
+        train_loss = self.loss_fn(model_output, batch[1]).mean().item()
         train_pred = self.models[dtype].probs(model_output)
         if not self.minimize:
             train_loss = -train_loss
 
-        confusion_matrix = get_confusion_matrix(train_pred, batch["train"][1])
+        confusion_matrix = get_confusion_matrix(train_pred, batch[1])
         logging.info(
             f"train loss: {train_loss} MO:{model_output.mean()}/{model_output.shape} weights {weights.mean().item()} {dtype}"
         )
@@ -289,9 +286,12 @@ class ModelDataAndSubspace:
         assert grids > 0
 
         logging.info("get_loss: get bach")
-        batch = self.get_batch(batch_size=batch_size, batch_idx=batch_idx, dtype=dtype)[
-            "train"
-        ]
+        batch = self.get_batch(
+            batch_size=batch_size,
+            batch_idx=batch_idx,
+            dtype=dtype,
+            train_or_val="train",
+        )
         logging.info("get_loss: get batch done")
         data = batch[0].unsqueeze(0)
         batch_size = data.shape[1]

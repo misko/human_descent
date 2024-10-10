@@ -156,6 +156,7 @@ class HudesClient:
             self.val_steps,
         )
         self.dims_and_steps_updated()
+        self.get_next_batch()
 
     def before_pg_event(self):
         pass
@@ -210,9 +211,9 @@ class HudesClient:
                 logging.debug("hudes_client: recieve message : examples")
                 received_batch = True
                 self.train_data = pickle.loads(msg.batch_examples.train_data)
-                self.val_data = pickle.loads(msg.batch_examples.val_data)
+                # self.val_data = pickle.loads(msg.batch_examples.val_data)
                 self.train_labels = pickle.loads(msg.batch_examples.train_labels)
-                self.val_labels = pickle.loads(msg.batch_examples.val_labels)
+                # self.val_labels = pickle.loads(msg.batch_examples.val_labels)
                 logging.debug("hudes_client: recieve message : done")
 
             elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:

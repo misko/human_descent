@@ -40,16 +40,18 @@ def prepare_batch_example_message(
     mad: ModelDataAndSubspace,
     n: int = 4,
 ):
-    batch = mad.get_batch(batch_size=batch_size, batch_idx=batch_idx, dtype=dtype)
+    batch = mad.get_batch(
+        batch_size=batch_size, batch_idx=batch_idx, dtype=dtype, train_or_val="train"
+    )
     return hudes_pb2.Control(
         type=hudes_pb2.Control.CONTROL_BATCH_EXAMPLES,
         batch_examples=hudes_pb2.BatchExamples(
             type=hudes_pb2.BatchExamples.Type.IMG_BW,
             n=n,
-            train_data=pickle.dumps(batch["train"][0][:n].tolist()),
-            val_data=pickle.dumps(batch["val"][0][:n].tolist()),
-            train_labels=pickle.dumps(batch["train"][1][:n].tolist()),
-            val_labels=pickle.dumps(batch["val"][1][:n].tolist()),
+            train_data=pickle.dumps(batch[0][:n].tolist()),
+            # val_data=pickle.dumps(batch["val"][0][:n].tolist()),
+            train_labels=pickle.dumps(batch[1][:n].tolist()),
+            # val_labels=pickle.dumps(batch["val"][1][:n].tolist()),
             batch_idx=batch_idx,
         ),
     )
@@ -237,6 +239,7 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                         "dtype": client.dtype,
                     },
                 )
+                client.request_full_val = False
 
 
 async def inference_result_sender(results_q, stop):
@@ -284,7 +287,6 @@ async def inference_result_sender(results_q, stop):
                     ).SerializeToString()
                 )
                 logging.debug(f"inference_result_sender: sent val to client : done")
-                client.request_full_val = False
             if train_or_val == "mesh":
                 logging.debug(f"inference_result_sender: sent mesh to client")
                 await client.websocket.send(

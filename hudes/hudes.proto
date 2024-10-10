@@ -34,9 +34,9 @@ message BatchExamples {
   required Type type = 1;
   required int32 n = 2;
   required bytes train_data = 3;
-  required bytes val_data = 4;
+  optional bytes val_data = 4;
   required bytes train_labels = 5;
-  required bytes val_labels = 6;
+  optional bytes val_labels = 6;
   required int32 batch_idx = 7;
 }
 
