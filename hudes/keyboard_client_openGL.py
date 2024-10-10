@@ -96,13 +96,13 @@ class KeyboardClientGL(KeyboardClient):
                     self.step_size_increase(2)
                     self.send_config()
 
-                if joystick.get_button(11) > 0.5:
-                    self.view.increase_zoom()
-                    redraw = True
+                # if joystick.get_button(11) > 0.5:
+                #     self.view.increase_zoom()
+                #     redraw = True
 
-                if joystick.get_button(12) > 0.5:
-                    self.view.decrease_zoom()
-                    redraw = True
+                # if joystick.get_button(12) > 0.5:
+                #     self.view.decrease_zoom()
+                #     redraw = True
 
                 if joystick.get_axis(4) > 0.5 and (ct - last_select_press) > 0.2:
                     self.view.decrement_selected_grid()
