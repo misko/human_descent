@@ -85,9 +85,9 @@ def listen_and_run(
             logging.debug(f"listen_and_run: got {v['mode']}")
             if v["mode"] in ("train", "mesh"):
                 if client_id not in client_weights:
-                    client_weights[client_id] = mad.saved_weights[v["dtype"]].clone()
+                    client_weights[client_id] = mad.saved_weights[torch.float32].clone()
                 client_weights[client_id] += mad.delta_from_dims(
-                    v["current_step"], dtype=v["dtype"]
+                    v["current_step"], dtype=torch.float32
                 )
 
                 res["train"] = mad.train_model_inference_with_delta_weights(
@@ -98,7 +98,7 @@ def listen_and_run(
                 )
             if v["mode"] == "val":
                 res["val"] = mad.val_model_inference_with_delta_weights(
-                    client_weights[client_id]
+                    client_weights[client_id], dtype=v["dtype"]
                 )
             if v["mode"] == "mesh":
                 res["mesh"] = mad.get_loss_grid(

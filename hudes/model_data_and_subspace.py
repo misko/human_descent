@@ -156,12 +156,12 @@ class ModelDataAndSubspace:
                 *self.model_params[dtype].shape,
                 generator=g,
                 device=self.device,
-                dtype=dtype,
+                dtype=torch.float32,
             )
             - 0.5,
             p=2,
             dim=1,
-        )
+        ).to(dtype)
 
     # dims is a dictionary {dim:step_size}
     @torch.no_grad

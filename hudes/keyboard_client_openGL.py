@@ -32,6 +32,12 @@ class KeyboardClientGL(KeyboardClient):
                 joystick.rumble(0, 0.7, 500)
                 self.get_next_batch()
 
+            if event.button == 1:
+                self.toggle_dtype()
+
+            if event.button == 3:
+                self.toggle_batch_size()
+
         if event.type == pg.JOYBUTTONUP:
             print("Joystick button released.")
 
@@ -83,11 +89,11 @@ class KeyboardClientGL(KeyboardClient):
                     redraw = True
 
                 if joystick.get_button(9) > 0.5:
-                    self.step_size_decrease()
+                    self.step_size_decrease(2)
                     self.send_config()
 
                 if joystick.get_button(10) > 0.5:
-                    self.step_size_increase()
+                    self.step_size_increase(2)
                     self.send_config()
 
                 if joystick.get_button(11) > 0.5:
@@ -120,8 +126,8 @@ class KeyboardClientGL(KeyboardClient):
                     # math.atan2(A[0], A[1])
                     self.send_dims_and_steps(
                         {
-                            1 + selected_grid * 2: A[1] * self.step_size * 0.1,
-                            0 + selected_grid * 2: A[0] * self.step_size * 0.1,
+                            1 + selected_grid * 2: A[1] * self.step_size * 0.25,
+                            0 + selected_grid * 2: A[0] * self.step_size * 0.25,
                         }
                     )
 

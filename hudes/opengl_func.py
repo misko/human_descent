@@ -382,7 +382,7 @@ def render_text_2d(text, font_size, screen_width, screen_height):
 
     # Calculate the position to center the text at the top
     x_position = (screen_width - text_width) // 2
-    y_position = text_height
+    y_position = screen_height - text_height
 
     # Disable depth testing for text rendering
     glDisable(GL_DEPTH_TEST)

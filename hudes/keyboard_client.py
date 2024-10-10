@@ -68,10 +68,10 @@ To control each dimension use:
                 self.send_dims_and_steps({dim: self.step_size * sign})
                 return False  # we are going to get a response shortly that updates
             elif key == "[":
-                self.step_size_decrease()
+                self.step_size_increase()
                 return True
             elif key == "]":
-                self.step_size_increase()
+                self.step_size_decrease()
                 return True
             elif key == " ":
                 print("getting new set of vectors")

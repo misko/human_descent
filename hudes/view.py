@@ -227,72 +227,114 @@ class View:
         self.redraw_top = True
         self.redraw_train_and_val = True
 
+        self.confusion_matrix_init = False
+        self.example_im_show_init = False
+        self.example_imshow_init = False
+        self.dims_chart_init = False
+        self.init_step_size_plot = False
+
+        self.best_score = None
+
+        self.font = pygame.font.SysFont("Comic Sans MS", 30)
+        self.update_top(-math.inf)
         for _ax in self.axd:
             self.axd[_ax].redraw = True
 
     def update_examples(self, train_data: torch.Tensor):
-        for idx, _ax in enumerate(("F", "G", "H", "M")):
-            ax = self.axd[_ax]
-            ax.cla()
-            ax.imshow(train_data[idx])
-            ax.set_title(f"Ex. {idx} img")
-            ax.redraw = True
+        if not self.example_im_show_init:
+            for idx, _ax in enumerate(("F", "G", "H", "M")):
+                ax = self.axd[_ax]
+                ax.cla()
+                ax.im = ax.imshow(train_data[idx])
+                ax.set_title(f"Ex. {idx} img")
+                ax.redraw = True
+            self.example_im_show_init = True
+        else:
+            for idx, _ax in enumerate(("F", "G", "H", "M")):
+                ax = self.axd[_ax]
+                ax.im.set_data(train_data[idx])
+                ax.redraw = True
 
         # self.axd["I"].cla()
         # self.axd["I"].imshow(train_data[3])
 
-    def update_top(self, best_score):
-        if best_score is None:
-            self.fig.suptitle("Human Descent: MNIST      Top-score: ?")
-        else:
-            self.fig.suptitle(f"Human Descent: MNIST      Top-score: {best_score:.5e}")
-        self.redraw_top = True
-        # self.fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    def update_top(self, maybe_new_best_score):
+        if self.best_score is None or maybe_new_best_score > self.best_score:
+            self.best_score = maybe_new_best_score
+            render_str = f"Human Descent: MNIST      Top-score: {self.best_score:.5e}"
+            self.top_title_rendered = self.font.render(render_str, False, (0, 0, 0))
 
     def update_step_size(
         self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
     ):
-        self.axd["I"].cla()
-        self.axd["I"].barh([0], log_step_size)
-        self.axd["I"].set_xlim(min_log_step_size, max_log_step_size)
-        self.axd["I"].set_title("log(Step size)")
-        self.axd["I"].set_yticks([])
+        if not self.init_step_size_plot:
+            self.axd["I"].cla()
+            self.axd["I"].bars = self.axd["I"].barh([0], log_step_size)
+            self.axd["I"].set_xlim(min_log_step_size, max_log_step_size)
+            self.axd["I"].set_title("log(Step size)")
+            self.axd["I"].set_yticks([])
+            self.init_step_size_plot = True
+        else:
+            self.axd["I"].bars[0].set_width(log_step_size)
         self.axd["I"].redraw = True
 
     def update_confusion_matrix(self, confusion_matrix: torch.Tensor):
-        self.axd["E"].cla()
-        self.axd["E"].imshow(confusion_matrix)
-        self.axd["E"].set_yticks(range(10))
-        self.axd["E"].set_xticks(range(10))
-        self.axd["E"].set_ylabel("Ground truth")
-        self.axd["E"].set_xlabel("Prediction")
-        self.axd["E"].set_title("Confusion matrix")
+        if not self.confusion_matrix_init:
+            self.axd["E"].cla()
+            self.axd["E"].im = self.axd["E"].imshow(confusion_matrix)
+            self.axd["E"].set_yticks(range(10))
+            self.axd["E"].set_xticks(range(10))
+            self.axd["E"].set_ylabel("Ground truth")
+            self.axd["E"].set_xlabel("Prediction")
+            self.axd["E"].set_title("Confusion matrix")
+            self.confusion_matrix_init = True
+        else:
+            self.axd["E"].im.set_data(confusion_matrix)
         self.axd["E"].redraw = True
 
     def update_dims_since_last_update(self, dims_and_steps_on_current_dims):
-        self.axd["O"].cla()
-        colors = [
-            self.plt_colors[idx % len(self.plt_colors)]
-            for idx in range(dims_and_steps_on_current_dims.shape[0])
-        ]
-        self.axd["O"].bar(
-            range(dims_and_steps_on_current_dims.shape[0]),
-            dims_and_steps_on_current_dims,
-            color=colors,
-        )
-        self.axd["O"].set_xlabel("dimension #")
-        self.axd["O"].set_ylabel("cumulative step")
-        self.axd["O"].set_title("Dims and Steps")
-        self.axd["O"].set_yticks([])
+        if not self.dims_chart_init:
+            self.axd["O"].cla()
+            colors = [
+                self.plt_colors[idx % len(self.plt_colors)]
+                for idx in range(dims_and_steps_on_current_dims.shape[0])
+            ]
+            self.axd["O"].bars = self.axd["O"].bar(
+                range(dims_and_steps_on_current_dims.shape[0]),
+                dims_and_steps_on_current_dims,
+                color=colors,
+            )
+            self.axd["O"].set_xlabel("dimension #")
+            self.axd["O"].set_ylabel("cumulative step")
+            self.axd["O"].set_title("Dims and Steps")
+            self.axd["O"].set_yticks([])
+            self.dims_chart_init = True
+        else:
+            max_mag = np.abs(dims_and_steps_on_current_dims).max()
+            self.axd["O"].set_ylim([-max_mag, max_mag])
+            for bar, new_height in zip(
+                self.axd["O"].bars, dims_and_steps_on_current_dims
+            ):
+                bar.set_height(new_height)
         self.axd["O"].redraw = True
 
     def update_example_preds(self, train_preds: List[float]):
-        for idx, _ax in enumerate(("J", "K", "L", "N")):
-            ax = self.axd[_ax]
-            ax.cla()
-            ax.bar(torch.arange(10), train_preds[idx])
-            ax.set_title(f"Ex. {idx} pr(y)")
-            ax.redraw = True
+        if not self.example_imshow_init:
+            for idx, _ax in enumerate(("J", "K", "L", "N")):
+                ax = self.axd[_ax]
+                ax.cla()
+                ax.bars = ax.bar(torch.arange(10), train_preds[idx])
+                ax.set_xlim([0, 9])
+                ax.set_ylim([0, 1.0])
+                ax.set_title(f"Ex. {idx} pr(y)")
+                ax.redraw = True
+            self.example_imshow_init = True
+        else:
+            for idx, _ax in enumerate(("J", "K", "L", "N")):
+                ax = self.axd[_ax]
+                for bar, new_height in zip(ax.bars, train_preds[idx]):
+                    bar.set_height(new_height)
+                ax.redraw = True
 
     def plot_train_and_val(
         self,
@@ -301,10 +343,8 @@ class View:
         val_losses: List[float],
         val_steps: List[int],
     ):
-        new_best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
-        if new_best_score < self.best_score:
-            self.best_score = new_best_score
-            self.update_top(self.best_score)
+        maybe_new_best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
+        self.update_top(maybe_new_best_score=maybe_new_best_score)
 
         n = len(train_losses)
         # x = torch.arange(n)
@@ -353,10 +393,13 @@ class View:
             # self.canvas.draw()
             if True:
                 self.draw_or_restore()
+
+                # self.update_top(self.best_score)
                 surf = pygame.image.frombuffer(
                     self.surface.get_data(), self.window_size, "RGBA"
                 )
                 self.screen.blit(surf, (0, 0))
+                self.screen.blit(self.top_title_rendered, (0, 0))
             # self.draw_or_restore()
             # self.renderer = self.canvas._renderer
 
@@ -376,6 +419,8 @@ class View:
             # breakpoint()
             self.renderer.clear()
             self.draw_or_restore()
+
+            # self.update_top(self.best_score)
             # if self.redraw_train_and_val:
             #     self.axd["B"].draw(self.renderer)
             #     self.axd["B"].cache = self.fig.canvas.copy_from_bbox(
@@ -399,8 +444,9 @@ class View:
             #     "RGBA",
             # )
             self.screen.blit(surf, (0, 0))
+            self.screen.blit(self.top_title_rendered, (0, 0))
         # else:
-
+        # self.draw_text()
         pg.display.flip()  # draws whole screen vs update that draws a parts
 
         logging.debug("hudes_client: redraw done")
@@ -543,7 +589,7 @@ class OpenGLView:
 
         self.running = True
         self.default_angleV = 20
-        self.max_angleV = 40
+        self.max_angleV = 25
         self.angleH = 0.0
         self.angleV = self.default_angleV
         self.origin_loss = 0.0
@@ -562,6 +608,9 @@ class OpenGLView:
                 BBDDEEJK
                 """
         )
+
+        self.dtype = "?"
+        self.batch_size = "?"
 
         # self.screen = pg.display.get_surface()
 
@@ -734,11 +783,12 @@ class OpenGLView:
         self.selected_grid = (self.selected_grid - 1) % self.effective_grids
 
     def adjust_angles(self, angle_H, angle_V):
-        self.angleH += angle_H
-        self.angleV += angle_V
+        self.angleH += 2 * angle_H
+        self.angleV += 2 * angle_V
         self.angleV = norm_deg(self.angleV)  # % 360
         self.angleH = norm_deg(self.angleH)  # % 360
         self.angleV = np.sign(self.angleV) * min(np.abs(self.angleV), self.max_angleV)
+        # print(self.angleH, self.angleV)
 
     def reset_angle(self):
         self.angleH = 0
@@ -746,8 +796,12 @@ class OpenGLView:
 
     def draw_all_text(self):
 
+        # render_text_2d("Batch size:", 36, self.window_size[0], self.window_size[1])
         render_text_2d(
-            "Human Descent: MNIST", 36, self.window_size[0], self.window_size[1]
+            f"batch-size: {self.batch_size}, dtype: {self.dtype}",
+            20,
+            self.window_size[0],
+            self.window_size[1],
         )
 
     def draw(self):
@@ -853,7 +907,7 @@ class OpenGLView:
         glDisableClientState(GL_VERTEX_ARRAY)
         glDisableClientState(GL_COLOR_ARRAY)
 
-        # self.draw_all_text()
+        self.draw_all_text()
         # # Render the texture from the Matplotlib figure in 2D
         window_size = pg.display.get_surface().get_size()  # Get window size
 

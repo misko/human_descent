@@ -51,7 +51,12 @@ class HudesClient:
         self.step_size_resolution = step_size_resolution
 
         self.batch_size = 128
-        self.dtype = "float16"
+
+        self.dtype_idx = -1
+        self.dtypes = ("float16", "float32")
+
+        self.batch_size_idx = 3 - 1
+        self.batch_sizes = [2, 8, 32, 128, 512]
 
     def get_next_batch(self):
         self.hudes_websocket_client.send_q.put(next_batch_message().SerializeToString())
@@ -70,6 +75,22 @@ class HudesClient:
 
     def attach_view(self, view):
         self.view = view
+        self.toggle_dtype(init=True)
+        self.toggle_batch_size(init=True)
+
+    def toggle_dtype(self, init=False):
+        self.dtype_idx = (self.dtype_idx + 1) % len(self.dtypes)
+        self.dtype = self.dtypes[self.dtype_idx]
+        self.view.dtype = self.dtype
+        if not init:
+            self.send_config()
+
+    def toggle_batch_size(self, init=False):
+        self.batch_size_idx = (self.batch_size_idx + 1) % len(self.batch_sizes)
+        self.batch_size = self.batch_sizes[self.batch_size_idx]
+        self.view.batch_size = self.batch_size
+        if not init:
+            self.send_config()
 
     def send_config(self):
         self.hudes_websocket_client.send_config(
@@ -85,11 +106,11 @@ class HudesClient:
     def dims_and_steps_updated(self):
         self.view.update_dims_since_last_update(self.dims_and_steps_on_current_dims)
 
-    def step_size_increase(self):
-        self.set_step_size_idx(self.step_size_idx + 1)
+    def step_size_increase(self, mag: int = 1):
+        self.set_step_size_idx(self.step_size_idx + 1 * mag)
 
-    def step_size_decrease(self):
-        self.set_step_size_idx(self.step_size_idx - 1)
+    def step_size_decrease(self, mag: int = 1):
+        self.set_step_size_idx(self.step_size_idx - 1 * mag)
 
     def set_step_size_idx(self, idx):
         self.step_size_idx = idx
