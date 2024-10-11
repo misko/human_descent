@@ -492,17 +492,17 @@ class OpenGLView:
         self.selected_grid = self.grids // 2
 
         self.grid_spacing = (
-            0.0  # Adjust this value for more or less space between grids
+            1.0  # Adjust this value for more or less space between grids
         )
         self.grid_width = (
             self.grid_size * self.spacing
         )  # Actual width of each grid, taking point spacing into account
 
+        self.selected_grid_multiplier = 2
         # Calculate total width of all grids with spacing between them
         self.total_width = (
-            self.effective_grids * self.grid_width
-            + (self.effective_grids - 1) * self.grid_spacing
-        )
+            self.effective_grids + self.selected_grid_multiplier
+        ) * self.grid_width + (self.effective_grids - 1) * self.grid_spacing
 
         # Calculate the camera distance based on total width (adjust scale factor as needed)
         if self.effective_grids == 1:
@@ -760,6 +760,13 @@ class OpenGLView:
                 self.grid_colors,
                 selected_grid=self.selected_grid,
             )
+        # print(new_points.shape)
+        print(new_points.shape[0] / self.grid_size)
+        start_idx = self.selected_grid * self.grid_size * self.grid_size
+
+        new_points[
+            start_idx : start_idx + self.grid_size * self.grid_size, [0, 2]
+        ] *= self.selected_grid_multiplier
         # breakpoint()
         update_grid_vbo(self.vbo, new_points)
         update_grid_cbo(self.cbo, new_colors)
@@ -829,12 +836,12 @@ class OpenGLView:
         glTranslatef(0, 0.0, -self.camera_distance)
 
         # Apply rotations
-        glRotatef(self.angleV, 1, 0, 0)
-        glRotatef(self.angleH, 0, 1, 0)
+        # glRotatef(self.angleV, 1, 0, 0)
+        # glRotatef(self.angleH, 0, 1, 0)
 
         # Translate to center the grids
         # -3 for now, moves it up
-        glTranslatef(-self.total_width / 2.0 + self.grid_width / 2, -2, 0.0)
+        glTranslatef(-self.total_width / 2.0 + self.grid_width / 2, -3, 0.0)
 
         # Enable vertex arrays and color arrays
         glEnableClientState(GL_VERTEX_ARRAY)
@@ -854,18 +861,31 @@ class OpenGLView:
             glPushMatrix()
 
             # Translate the grid by 'grid_spacing' along the X-axis, accounting for grid width
-            glTranslatef(k * (self.grid_width + self.grid_spacing), 0.0, 0.0)
+            offset = 0
+            if k > self.selected_grid:
+                offset = self.grid_width * self.selected_grid_multiplier
+            elif k == self.selected_grid:
+                offset = self.grid_width * self.selected_grid_multiplier / 2
+
+            glTranslatef(
+                k * (self.grid_width + self.grid_spacing) + offset,
+                0.0 if k == self.selected_grid else -2,
+                0.0,
+            )
 
             glRotatef(self.angleV, 1, 0, 0)  # Rotate to visualize the grid
             glRotatef(self.angleH, 0, 1, 0)  # Rotate to visualize the grid
             # Calculate the offset for the current grid's points in the VBO
 
             # Calculate the offset for the current grid's points and color data
+            grid_idx_at_position_k = (
+                k  # (k - self.selected_grid) % self.effective_grids
+            )
             vertex_offset = (
-                k * self.grid_size * self.grid_size * 3 * 4
+                grid_idx_at_position_k * self.grid_size * self.grid_size * 3 * 4
             )  # For 3 floats per vertex
             color_offset = (
-                k * self.grid_size * self.grid_size * 4 * 4
+                grid_idx_at_position_k * self.grid_size * self.grid_size * 4 * 4
             )  # For 4 floats (RGBA) per color
 
             # Bind the vertex buffer and specify the offset for the current grid

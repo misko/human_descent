@@ -73,6 +73,7 @@ class HudesClient:
         self.dims_and_steps_on_current_dims = np.zeros(self.n)
 
     def set_n(self, n):
+        logging.debug(f"hudes_client: set_n {n}")
         self.n = n
         self.zero_dims_and_steps_on_current_dims()
 
