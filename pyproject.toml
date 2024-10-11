@@ -22,7 +22,6 @@ dependencies = [
  "pytest-asyncio",
  "protobuf>=5.28",
  "pygame==2.6",
- "aioprocessing==2.0.1",
  "PyOpenGL==3.1.7",
  "pytest-timeout"
 ]
