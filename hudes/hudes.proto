@@ -51,6 +51,7 @@ message Control {
     CONTROL_NEXT_DIMS = 102;
     CONTROL_CONFIG = 103;
     CONTROL_MESHGRID_RESULTS= 104;
+    CONTROL_SGD_STEP = 105;
     CONTROL_QUIT = 901;
   }
   required Type type = 1;
@@ -64,5 +65,7 @@ message Control {
   optional int32 request_idx = 204;
   optional BatchExamples batch_examples = 205;
   optional bytes mesh_grid_results = 207;
+  optional int32 sgd_steps = 208;
+  optional int32 total_sgd_steps = 209;
 
 }

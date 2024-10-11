@@ -16,9 +16,18 @@ from hudes import hudes_pb2
 
 
 @cache
-def next_batch_message():
+def sgd_step_message(steps, request_idx):
     return hudes_pb2.Control(
-        type=hudes_pb2.Control.CONTROL_NEXT_BATCH,
+        type=hudes_pb2.Control.CONTROL_SGD_STEP,
+        sgd_steps=steps,
+        request_idx=request_idx,
+    )
+
+
+@cache
+def next_batch_message(request_idx):
+    return hudes_pb2.Control(
+        type=hudes_pb2.Control.CONTROL_NEXT_BATCH, request_idx=request_idx
     )
 
 

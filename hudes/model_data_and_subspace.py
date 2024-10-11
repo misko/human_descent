@@ -237,6 +237,29 @@ class ModelDataAndSubspace:
             "confusion_matrix": confusion_matrix.cpu(),
         }
 
+    def sgd_step(self, model_weights, n_steps, dtype, batch_size, batch_idx):
+        # set the model parameters
+        self.set_parameters(model_weights, dtype)
+        # figure out if we need to make a new optimizer
+        model = self.models[dtype]
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.05)
+        for _ in range(n_steps):
+            batch = self.get_batch(
+                batch_size, batch_idx, dtype=dtype, train_or_val="train"
+            )
+            model_output = model(batch[0])
+            loss = -self.loss_fn(model_output, batch[1]).mean()
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        model_weights.data.copy_(self.model_params[dtype])
+        return (
+            self.train_model_inference_with_delta_weights(
+                model_weights, batch_size, batch_idx, dtype
+            ),
+            model_weights,
+        )
+
     def init_param_model(self):
         self.param_models = {
             torch.float32: param_nn_from_sequential(self.models[torch.float32].net),
@@ -273,21 +296,16 @@ class ModelDataAndSubspace:
         batch_size,
         dtype,
     ):
-        logging.info(
-            f"get_loss: start base weights {base_weights.mean().item()} {dtype}"
-        )
         assert grid_size % 2 == 1
         assert grid_size > 3
         assert grids > 0
 
-        logging.info("get_loss: get bach")
         batch = self.get_batch(
             batch_size=batch_size,
             batch_idx=batch_idx,
             dtype=dtype,
             train_or_val="train",
         )
-        logging.info("get_loss: get batch done")
         data = batch[0].unsqueeze(0)
         batch_size = data.shape[1]
         label = batch[1]
@@ -304,22 +322,17 @@ class ModelDataAndSubspace:
                 base_weights, dims, arange=r, brange=r, dtype=dtype
             )
 
-            logging.info(f"get_loss: mp done {mp.device} {mp.dtype}")
-
             mp_reshaped = mp.reshape(-1, self.num_params).contiguous()
-            logging.info(f"get_loss: fwd start , batch size {batch_size}")
             predictions = (
                 self.param_models[dtype]
                 .forward(mp_reshaped, data)[1]
                 .reshape(*mp.shape[:2], batch_size, -1)
             )
-            logging.info("get_loss: done fwd")
             loss = torch.gather(
                 predictions,
                 3,
                 label.reshape(1, 1, -1, 1).expand(*mp.shape[:2], batch_size, 1),
             ).mean(axis=[2, 3])
-            logging.info("get_loss: gather done")
             loss = -loss
             grid_losses.append(loss.unsqueeze(0))
         loss = torch.concatenate(grid_losses, dim=0).cpu()

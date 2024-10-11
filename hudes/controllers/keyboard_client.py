@@ -22,6 +22,9 @@ class KeyboardClient(HudesClient):
             self.key_to_param_and_sign[u] = (idx, 1)
             self.key_to_param_and_sign[d] = (idx, -1)
 
+        self.set_batch_size(512)
+        self.set_dtype("float32")
+
     def usage_str(self) -> str:
         return (
             f"""
@@ -72,6 +75,15 @@ To control each dimension use:
             elif key == " ":
                 print("getting new set of vectors")
                 self.get_next_dims()
+                return False
+            elif key == "/":
+                self.get_sgd()
+                return False
+            elif key == "'":
+                self.toggle_dtype()
+                return False
+            elif key == ";":
+                self.toggle_batch_size()
                 return False
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_RETURN:

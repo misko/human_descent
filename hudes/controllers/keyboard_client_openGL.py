@@ -75,6 +75,8 @@ class KeyboardClientGL(KeyboardClient):
             self.joystick_controller_key
         ]
 
+        self.set_batch_size(32)
+        self.set_dtype("float16")
         self.set_n(self.mesh_grids * 2)
 
     def process_key_press(self, event):
@@ -144,11 +146,9 @@ class KeyboardClientGL(KeyboardClient):
 
                 if joystick.get_button(self.joystick_controller.button_left) > 0.5:
                     self.step_size_decrease(2)
-                    self.send_config()
 
                 if joystick.get_button(self.joystick_controller.button_right) > 0.5:
                     self.step_size_increase(2)
-                    self.send_config()
 
                 if (
                     joystick.get_axis(self.joystick_controller.left_trig_axis) > 0.5

@@ -13,6 +13,7 @@ from hudes.websocket_client import (
     dims_and_steps_to_control_message,
     next_batch_message,
     next_dims_message,
+    sgd_step_message,
 )
 
 
@@ -45,8 +46,6 @@ class HudesClient:
         self.val_steps = []
         self.val_losses = []
 
-        self.init_input()
-
         self.max_log_step_size = 10
         self.min_log_step_size = -10
         self.inital_step_size_idx = inital_step_size_idx
@@ -59,9 +58,21 @@ class HudesClient:
 
         self.batch_size_idx = 3 - 1
         self.batch_sizes = [2, 8, 32, 128, 512]
+        self.view = None
+        self.init_input()
+
+    def get_sgd(self):
+        self.hudes_websocket_client.send_q.put(
+            sgd_step_message(1, request_idx=self.request_idx).SerializeToString()
+        )
+        self.request_idx += 1
+        print("SGD REQ IDX", self.request_idx)
 
     def get_next_batch(self):
-        self.hudes_websocket_client.send_q.put(next_batch_message().SerializeToString())
+        self.hudes_websocket_client.send_q.put(
+            next_batch_message(request_idx=self.request_idx).SerializeToString()
+        )
+        self.request_idx += 1
 
     def get_next_dims(self):
         self.hudes_websocket_client.send_q.put(next_dims_message().SerializeToString())
@@ -79,22 +90,32 @@ class HudesClient:
 
     def attach_view(self, view):
         self.view = view
-        self.toggle_dtype(init=True)
-        self.toggle_batch_size(init=True)
+        self.set_batch_size(self.batch_size)
+        self.set_dtype(self.dtype)
 
-    def toggle_dtype(self, init=False):
+    def set_dtype(self, dtype):
+        self.dtype_idx = self.dtypes.index(dtype)
+        self.dtype = dtype
+        if self.view is not None:
+            self.view.dtype = dtype
+
+    def set_batch_size(self, batch_size):
+        self.batch_size_idx = self.batch_sizes.index(batch_size)
+        self.batch_size = batch_size
+        if self.view is not None:
+            self.view.batch_size = batch_size
+
+    def toggle_dtype(self):
         self.dtype_idx = (self.dtype_idx + 1) % len(self.dtypes)
         self.dtype = self.dtypes[self.dtype_idx]
         self.view.dtype = self.dtype
-        if not init:
-            self.send_config()
+        self.send_config()
 
-    def toggle_batch_size(self, init=False):
+    def toggle_batch_size(self):
         self.batch_size_idx = (self.batch_size_idx + 1) % len(self.batch_sizes)
         self.batch_size = self.batch_sizes[self.batch_size_idx]
         self.view.batch_size = self.batch_size
-        if not init:
-            self.send_config()
+        self.send_config()
 
     def send_config(self):
         self.hudes_websocket_client.send_config(
@@ -112,9 +133,11 @@ class HudesClient:
 
     def step_size_increase(self, mag: int = 1):
         self.set_step_size_idx(self.step_size_idx + 1 * mag)
+        self.send_config()
 
     def step_size_decrease(self, mag: int = 1):
         self.set_step_size_idx(self.step_size_idx - 1 * mag)
+        self.send_config()
 
     def set_step_size_idx(self, idx):
         self.step_size_idx = idx
@@ -195,8 +218,9 @@ class HudesClient:
                     msg.train_loss_and_preds.confusion_matrix
                 )
 
-                self.train_losses.append(msg.train_loss_and_preds.train_loss)
-                self.train_steps.append(msg.request_idx)
+                if len(self.train_steps) == 0 or self.train_steps[-1] < msg.request_idx:
+                    self.train_losses.append(msg.train_loss_and_preds.train_loss)
+                    self.train_steps.append(msg.request_idx)
                 logging.debug("hudes_client: recieve message : loss and preds : done")
 
             elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:

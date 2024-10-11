@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import copy
 import logging
 import os
 import pickle
@@ -78,49 +79,69 @@ def listen_and_run(
             return
         else:
             # prepare weights
-            client_id = v["client_id"]
+            mode, client = v
+            # client_id = v["client_id"]
 
             res = {}
-            logging.debug(f"listen_and_run: got {v['mode']}")
-            if v["mode"] in ("train", "mesh"):
-                if client_id not in client_weights:
-                    client_weights[client_id] = mad.saved_weights[torch.float32].clone()
-                client_weights[client_id] += mad.delta_from_dims(
-                    v["current_step"], dtype=torch.float32
+            logging.debug(f"listen_and_run: got {mode}")
+            if mode in ("train", "mesh"):
+                if client.client_id not in client_weights:
+                    client_weights[client.client_id] = mad.saved_weights[
+                        torch.float32
+                    ].clone()
+                client_weights[client.client_id] += mad.delta_from_dims(
+                    client.current_step, dtype=torch.float32
+                )
+                logging.debug(
+                    f"listen_and_run: client checksum {client_weights[client.client_id].abs().mean()}"
                 )
 
                 res["train"] = mad.train_model_inference_with_delta_weights(
-                    client_weights[client_id].to(v["dtype"]),
-                    batch_size=v["batch_size"],
-                    batch_idx=v["batch_idx"],
-                    dtype=v["dtype"],
+                    client_weights[client.client_id].to(client.dtype),
+                    batch_size=client.batch_size,
+                    batch_idx=client.batch_idx,
+                    dtype=client.dtype,
                 )
-            if v["mode"] == "val":
+            if mode == "val":
                 res["val"] = mad.val_model_inference_with_delta_weights(
-                    client_weights[client_id], dtype=v["dtype"]
+                    client_weights[client.client_id], dtype=client.dtype
                 )
-            if v["mode"] == "mesh":
+            if mode == "mesh":
                 res["mesh"] = mad.get_loss_grid(
-                    base_weights=client_weights[client_id].to(v["dtype"]),
-                    grid_size=v["grid_size"],
-                    step_size=v["step_size"] / 2,
-                    grids=v["grids"],
-                    dims_offset=v["dims_offset"],
-                    batch_idx=v["batch_idx"],
-                    batch_size=v["batch_size"],
-                    dtype=v["dtype"],
+                    base_weights=client_weights[client.client_id].to(client.dtype),
+                    grid_size=client.mesh_grid_size,
+                    step_size=client.mesh_step_size / 2,
+                    grids=client.mesh_grids,
+                    dims_offset=client.dims_offset,
+                    batch_idx=client.batch_idx,
+                    batch_size=client.batch_size,
+                    dtype=client.dtype,
                 )
-            if v["mode"] not in ("train", "mesh", "val"):
+            if mode == "sgd":
+                res["train"], model_weights = mad.sgd_step(
+                    client_weights[client.client_id].to(client.dtype),
+                    batch_size=client.batch_size,
+                    batch_idx=client.batch_idx,
+                    dtype=client.dtype,
+                    n_steps=client.sgd,
+                )
+                if client.dtype != torch.float32:
+                    client_weights[client.client_id].data.copy_(
+                        model_weights.to(torch.float32)
+                    )
+            if mode not in ("train", "mesh", "val", "sgd"):
                 raise ValueError
 
-            logging.debug(f"listen_and_run: return {v['mode']}")
-            out_q.put((client_id, v["mode"], res))
+            logging.debug(f"listen_and_run: return {mode}")
+            out_q.put((client.client_id, mode, res))
 
 
 @dataclass
 class Client:
+    client_id: int
     last_seen: float = 0.0
     next_step: dict = field(default_factory=lambda: dict())
+    current_step: dict = None
     batch_idx: int = 0
     websocket: None = None
     request_idx: int = 0
@@ -137,6 +158,17 @@ class Client:
     seed: int = 0
     dtype: torch.dtype = torch.float32
     batch_size: int = 32
+    sgd: int = 0
+    total_sgd_steps: int = 0
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if "websocket" in state:
+            del state["websocket"]  # cant pickle this? who doesnt like pickles?
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
 
 async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
@@ -162,6 +194,7 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
             if client.active_inference:
                 continue
 
+            client.active_request_idx = client.request_idx
             # TODO should be some kind of select not poll()
             if client.sent_batch != client.batch_idx:
                 try:
@@ -182,59 +215,35 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                 client.sent_batch = client.batch_idx
                 client.force_update = True
 
+            if client.sgd > 0 and not client.active_inference:
+                client.active_inference = True
+                inference_q.put(("sgd", copy.copy(client)))
+                client.sgd = 0
+
             if client.force_update or len(client.next_step) > 0:
 
-                current_step = client.next_step
+                client.current_step = client.next_step
                 client.next_step = {}
 
                 client.active_inference = True
-                client.active_request_idx = client.request_idx
 
                 if client.mesh_grids > 0:
                     logging.debug(
                         f"inference_runner_clients: req mesh {client.force_update}"
                     )
-                    inference_q.put(
-                        {
-                            "mode": "mesh",
-                            "current_step": current_step,
-                            "grid_size": client.mesh_grid_size,
-                            "step_size": client.mesh_step_size,
-                            "grids": client.mesh_grids,
-                            "dims_offset": client.dims_offset,
-                            "batch_idx": client.batch_idx,
-                            "batch_size": client.batch_size,
-                            "dtype": client.dtype,
-                            "client_id": client_id,
-                        },
-                    )
+                    inference_q.put(("mesh", copy.copy(client)))
                 else:
                     logging.debug(
                         f"inference_runner_clients: req train {client.force_update}"
                     )
-                    inference_q.put(
-                        {
-                            "mode": "train",
-                            "current_step": current_step,
-                            "client_id": client_id,
-                            "batch_idx": client.batch_idx,
-                            "batch_size": client.batch_size,
-                            "dtype": client.dtype,
-                        },
-                    )
+                    inference_q.put(("train", copy.copy(client)))
                 client.force_update = False
 
             if client.request_full_val:
                 # send weight vector for inference
                 logging.debug(f"inference_runner_clients: req inference")
-                await asyncio.to_thread(
-                    inference_q.put,
-                    {
-                        "mode": "val",
-                        "client_id": client_id,
-                        "batch_idx": client.batch_idx,
-                        "dtype": client.dtype,
-                    },
+                inference_q.put(
+                    ("val", copy.copy(client)),
                 )
                 client.request_full_val = False
 
@@ -253,7 +262,7 @@ async def inference_result_sender(results_q, stop):
         client = active_clients[client_id]
 
         try:
-            if train_or_val in ("train", "mesh"):
+            if train_or_val in ("train", "mesh", "sgd"):
                 # TODO need to be ok with getting errors here
                 logging.debug(f"inference_result_sender: sent train to client")
                 await client.websocket.send(
@@ -269,6 +278,7 @@ async def inference_result_sender(results_q, stop):
                             ),
                         ),
                         request_idx=client.active_request_idx,
+                        total_sgd_steps=client.total_sgd_steps,
                     ).SerializeToString()
                 )
                 logging.debug(f"inference_result_sender: sent train to client : done")
@@ -293,7 +303,7 @@ async def inference_result_sender(results_q, stop):
                     ).SerializeToString()
                 )
                 logging.debug(f"inference_result_sender: sent mesh to client : done")
-            if train_or_val not in ("train", "val", "mesh"):
+            if train_or_val not in ("train", "val", "mesh", "sgd"):
                 raise ValueError
         except (
             websockets.exceptions.ConnectionClosedOK,
@@ -347,6 +357,7 @@ async def process_client(websocket, client_runner_q):
     current_client = client_idx
     client_idx += 1
     client = Client(
+        client_id=current_client,
         last_seen=time.time(),
         next_step={},
         batch_idx=0,
@@ -369,11 +380,12 @@ async def process_client(websocket, client_runner_q):
                     client.next_step[dim] += dim_and_step.step
                 else:
                     client.next_step[dim] = dim_and_step.step
-            client.request_idx += 1
+            client.request_idx = msg.request_idx
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_BATCH:
             logging.debug(f"process_client: {client_idx} : next batch")
             client.batch_idx += 1
             client.request_full_val = True
+            client.request_idx = msg.request_idx
 
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_DIMS:
             logging.debug(f"process_client: {client_idx} : next dims")
@@ -386,13 +398,24 @@ async def process_client(websocket, client_runner_q):
             client.mesh_grid_size = msg.config.mesh_grid_size
             client.mesh_grids = msg.config.mesh_grids
             client.mesh_step_size = msg.config.mesh_step_size
-            client.force_update = True
             client.batch_size = msg.config.batch_size
             client.dtype = getattr(torch, msg.config.dtype)
 
+            if client.mesh_grids > 0:  # if we have grids, step size changes mesh
+                client.force_update = True
+
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
             logging.debug(f"process_client: {client_idx} : quit")
+            client_runner_q.put(True)
             break
+
+        elif msg.type == hudes_pb2.Control.CONTROL_SGD_STEP:
+            client.sgd += msg.sgd_steps
+            client.total_sgd_steps += msg.sgd_steps
+            client.request_idx = msg.request_idx
+
+            if client.mesh_grids > 0:  # if we have grids, step size changes mesh
+                client.force_update = True
 
         else:
             logging.warning("received invalid type from client")
