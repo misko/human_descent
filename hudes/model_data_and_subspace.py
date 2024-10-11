@@ -168,9 +168,7 @@ class ModelDataAndSubspace:
     def delta_from_dims(self, dims: dict[int, float], dtype: torch.dtype):
         if len(dims) > 0:
             return torch.cat(
-                [
-                    self.get_dim_vec(d, dtype=dtype) * v for d, v in dims.items()
-                ]  # , device=self.device
+                [self.get_dim_vec(d, dtype=dtype) * v for d, v in dims.items()]
             ).sum(axis=0)
         else:
             return self.blank_weight_vec()
@@ -188,16 +186,11 @@ class ModelDataAndSubspace:
     # TODO could optimize with one large chunk of shared memory? and slice it?
     @cache
     def blank_weight_vec(self):
-        wv = torch.zeros(*self.model_params[torch.float32].shape, device=self.device)
-        # wv.share_memory_()
-        return wv
+        return torch.zeros(*self.model_params[torch.float32].shape, device=self.device)
 
     @torch.no_grad
     def set_parameters(self, weights: torch.Tensor, dtype):
         assert self.fused
-        # self.model_params.copy_(weights) # segfaults?
-        # self.model_params *= 0
-        # self.model_params += weights
         self.model_params[dtype].data.copy_(weights)
 
     @torch.no_grad

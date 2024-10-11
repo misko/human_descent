@@ -8,7 +8,6 @@ import torch.multiprocessing as mp
 import websockets
 
 from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
-from hudes.model_data_and_subspace import indexed_loss
 from hudes.websocket_client import send_dims
 from hudes.websocket_server import inference_runner, process_client
 
@@ -20,7 +19,7 @@ async def echo(websocket):
 
 @pytest_asyncio.fixture
 async def run_server_thread():
-    mad = mnist_model_data_and_subpace(model=MNISTFFNN(), loss_fn=indexed_loss)
+    mad = mnist_model_data_and_subpace(model=MNISTFFNN())
     client_runner_q = mp.Queue()
     stop = asyncio.get_running_loop().create_future()
     inference_task = asyncio.create_task(
@@ -45,7 +44,6 @@ async def run_server_process():
 
     mad = mnist_model_data_and_subpace(
         model=MNISTFFNN(),
-        loss_fn=indexed_loss,
     )
     stop = asyncio.get_running_loop().create_future()
     client_runner_q = mp.Queue()
