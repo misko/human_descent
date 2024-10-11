@@ -2,12 +2,11 @@ import copy
 import logging
 import math
 from functools import cache
-from multiprocessing import Queue
 
 import torch
 from torch import nn
 
-import hudes.param_nn as param_nn
+from hudes.model_first import model_first_nn
 
 MAX_DIMS = 2**16
 
@@ -69,12 +68,14 @@ def get_param_module(module):
         return module
     if isinstance(module, torch.nn.Linear):
         out_channels, in_channels = module.weight.shape
-        return param_nn.Linear(input_channels=in_channels, output_channels=out_channels)
+        return model_first_nn.Linear(
+            input_channels=in_channels, output_channels=out_channels
+        )
     raise ValueError(type(module))
 
 
 def param_nn_from_sequential(model):
-    return param_nn.Sequential([get_param_module(m) for m in model])
+    return model_first_nn.Sequential([get_param_module(m) for m in model])
 
 
 @torch.jit.script

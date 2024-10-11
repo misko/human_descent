@@ -9,9 +9,6 @@ from OpenGL.GL import *
 from OpenGL.GLU import *  # Import GLU for perspective functions
 from pygame.locals import *
 
-from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
-from hudes.model_data_and_subspace import indexed_loss
-
 """
 I used chatGPT a lot for this, I have no idea how to use openGL
 """
@@ -519,19 +516,6 @@ def create_surface_grid_indices(height_maps, spacing):
     return np.array(indices, dtype=np.uint32)
 
 
-def t20_get_mad(device):
-    mad = mnist_model_data_and_subpace(
-        model=MNISTFFNN(),
-        loss_fn=indexed_loss,
-        device=device,
-    )
-    mad.move_to_device()
-    mad.fuse()
-    mad.init_param_model()
-
-    return mad
-
-
 def draw_red_plane(plane_z, grid_size, spacing):
     """
     Draws a faint red plane at a specified Z height.
@@ -581,33 +565,6 @@ def draw_axes():
     glVertex3f(0, 0, -10)
     glVertex3f(0, 0, 10)
     glEnd()
-
-
-def t20_get_loss(mad, batch, arange, brange, dims):
-
-    mp = mad.dim_idxs_and_ranges_to_models_parms(dims, arange=arange, brange=brange)
-
-    mp_reshaped = mp.reshape(-1, 26506)
-    data = batch[0].unsqueeze(0)
-    batch_size = data.shape[1]
-    label = batch[1]
-
-    predictions = mad.param_model.forward(mp_reshaped, data)[1].reshape(
-        *mp.shape[:2], batch_size, -1
-    )
-    loss = torch.gather(
-        predictions,
-        3,
-        label.reshape(1, 1, -1, 1).expand(*mp.shape[:2], batch_size, 1),
-    ).mean(axis=[2, 3])
-
-    loss_np = loss.detach().cpu().numpy()
-    loss_np -= loss_np.mean()
-    loss_np /= loss_np.std()
-
-    # invert loss_np
-    loss_np = -loss_np
-    return loss_np
 
 
 def update_grid_vbo(vbo, points):

@@ -8,7 +8,7 @@ from OpenGL.GLU import *  # Import GLU for perspective functions
 from pygame.locals import *
 from pygame.math import Vector2
 
-from hudes.keyboard_client import KeyboardClient
+from hudes.controllers.keyboard_client import KeyboardClient
 
 """
 I used chatGPT a lot for this, I have no idea how to use openGL

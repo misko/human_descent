@@ -2,10 +2,10 @@ import argparse
 import logging
 import os
 
-from hudes.keyboard_client import KeyboardClient
-from hudes.keyboard_client_openGL import KeyboardClientGL
+from hudes.controllers.keyboard_client import KeyboardClient
+from hudes.controllers.keyboard_client_openGL import KeyboardClientGL
+from hudes.controllers.xtouch_client import XTouchClient
 from hudes.view import OpenGLView, View
-from hudes.xtouch_client import XTouchClient
 
 
 def main():

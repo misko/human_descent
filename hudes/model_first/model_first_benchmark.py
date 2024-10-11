@@ -3,8 +3,8 @@ import time
 
 import torch
 
-from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
 from hudes.model_data_and_subspace import indexed_loss
+from hudes.models_and_datasets.mnist import MNISTFFNN, mnist_model_data_and_subpace
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hudes: Keyboardclient")

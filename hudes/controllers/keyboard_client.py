@@ -1,7 +1,3 @@
-import argparse
-import math
-from time import sleep
-
 import pygame as pg
 
 from hudes.hudes_client import HudesClient

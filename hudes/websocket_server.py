@@ -20,8 +20,8 @@ import websockets
 from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
-from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
-from hudes.model_data_and_subspace import ModelDataAndSubspace, indexed_loss
+from hudes.model_data_and_subspace import ModelDataAndSubspace
+from hudes.models_and_datasets.mnist import MNISTFFNN, mnist_model_data_and_subpace
 
 client_idx = 0
 active_clients = {}

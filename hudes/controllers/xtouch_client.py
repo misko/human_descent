@@ -1,6 +1,6 @@
 import pygame.midi
 
-from hudes.keyboard_client import KeyboardClient
+from hudes.controllers.keyboard_client import KeyboardClient
 
 
 class XTouchClient(KeyboardClient):

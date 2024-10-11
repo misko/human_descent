@@ -8,7 +8,6 @@ import numpy as np
 import pygame as pg
 
 from hudes import hudes_pb2
-from hudes.view import View
 from hudes.websocket_client import (
     HudesWebsocketClient,
     dims_and_steps_to_control_message,
