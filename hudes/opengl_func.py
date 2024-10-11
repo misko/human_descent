@@ -473,11 +473,6 @@ def create_grid_points_with_colors(
 
     # Generate colors based on height (blue for low, red for high)
     colors = get_color_matrix(n, H, grid_colors=grid_colors).copy()  # RGBA colors
-    # colors[..., 0] = normalized_heights  # Red channel (proportional to height)
-    # colors[..., 2] = (
-    #    1.0 - normalized_heights
-    # )  # Blue channel (inverse proportional to height)
-    # colors[..., 3] = 1.0  # Alpha channel
     colors[..., 3] = -height_maps
 
     colors[..., 3][colors[..., 3] >= 0] = 1.0 - selected_alpha
@@ -485,7 +480,7 @@ def create_grid_points_with_colors(
     colors[..., 3][colors[..., 3] < 0] = 0.02
 
     colors[selected_grid, ..., 3] += selected_alpha
-    # breakpoint()
+
     # Flatten the points and colors arrays to shape (n * H * W, 3) and (n * H * W, 4)
     points = points.reshape(-1, 3).astype(np.float32)
     colors = colors.reshape(-1, 4).astype(np.float32)
@@ -547,8 +542,6 @@ def draw_red_plane(plane_z, grid_size, spacing):
     """
     half_size = (grid_size - 1) / 2.0 * spacing
 
-    # Enable blending for transparency
-    # glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
     # Set the plane color (faint red with transparency)
@@ -569,9 +562,6 @@ def draw_red_plane(plane_z, grid_size, spacing):
             glVertex3f(x2, plane_z, z2)
             glVertex3f(x1, plane_z, z2)
     glEnd()
-
-    # Disable blending to return to normal rendering
-    # glDisable(GL_BLEND)
 
 
 def draw_axes():
@@ -598,7 +588,6 @@ def t20_get_loss(mad, batch, arange, brange, dims):
     mp = mad.dim_idxs_and_ranges_to_models_parms(dims, arange=arange, brange=brange)
 
     mp_reshaped = mp.reshape(-1, 26506)
-    # batch = torch.rand(1, 512, 28, 28, device=device)
     data = batch[0].unsqueeze(0)
     batch_size = data.shape[1]
     label = batch[1]

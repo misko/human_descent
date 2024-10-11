@@ -1,42 +1,13 @@
-import argparse
-import math
-from time import sleep
-
-import pygame as pg
 import pygame.midi
 
 from hudes.keyboard_client import KeyboardClient
-from hudes.websocket_client import next_batch_message, next_dims_message
 
 
 class XTouchClient(KeyboardClient):
     def init_input(self):
         super().init_input()  # setup keyboard
 
-        self.set_n(8)
-        # pg.init()
-        # pg.midi.init()
-        # _print_device_info()
-        # self.midi_input_id = pygame.midi.get_default_input_id()
-        # print(f"using input_id :{self.midi_input_id}:")
-        # self.midi_input = pygame.midi.Input(self.midi_input_id)
-        # pg.display.set_mode((1, 1))
-
-        # for e in events:
-        #     if e.type in [pg.QUIT]:
-        #         going = False
-        #     if e.type in [pg.KEYDOWN]:
-        #         going = False
-        #     if e.type in [pygame.midi.MIDIIN]:
-        #         print(e)
-
-        # if i.poll():
-        #     midi_events = i.read(10)
-        #     # convert them into pygame events.
-        #     midi_evs = pygame.midi.midis2events(midi_events, i.device_id)
-
-        #     for m_e in midi_evs:
-        #         pygame.event.post(m_e)
+        self.set_n(8)  # controller uses 8 dimensions
 
     def before_pg_event(self):
         if self.view.midi_input.poll():

@@ -4,31 +4,11 @@ import torch
 from torch import nn
 from torchvision import datasets, transforms
 
-import hudes.param_nn as param_nn
 from hudes.model_data_and_subspace import (
     DatasetBatcher,
     ModelDataAndSubspace,
     indexed_loss,
 )
-
-
-def MNISTParamNet(seed=0):
-    torch.manual_seed(seed)
-    mnist_width_height = 28
-    mnist_classes = 10
-    hidden = 32
-
-    return param_nn.Sequential(
-        [
-            torch.nn.Flatten(start_dim=2),
-            param_nn.Linear(mnist_width_height * mnist_width_height, hidden),
-            torch.nn.ReLU(),
-            param_nn.Linear(hidden, hidden),
-            torch.nn.ReLU(),
-            param_nn.Linear(hidden, mnist_classes),
-            torch.nn.LogSoftmax(dim=2),
-        ]
-    )
 
 
 class MNISTFFNN(nn.Module):
