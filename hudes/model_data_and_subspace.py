@@ -51,6 +51,7 @@ def fuse_parameters(model: nn.Module, device, dtype):
     return params
 
 
+# @torch.jit.script
 def indexed_loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
     return pred[torch.arange(label.shape[0]), label]
 
@@ -72,6 +73,7 @@ def param_nn_from_sequential(model):
     return param_nn.Sequential([get_param_module(m) for m in model])
 
 
+@torch.jit.script
 def get_confusion_matrix(preds: torch.Tensor, labels: torch.Tensor):
     # (Pdb) preds.shape
     # torch.Size([512, 10])
@@ -87,7 +89,7 @@ def get_confusion_matrix(preds: torch.Tensor, labels: torch.Tensor):
             for idx in torch.arange(n)
         ]
     )
-    return torch.nn.functional.normalize(c_matrix, p=1, dim=1)
+    return torch.nn.functional.normalize(c_matrix, p=1.0, dim=1)
 
 
 class ModelDataAndSubspace:

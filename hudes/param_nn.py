@@ -15,6 +15,7 @@ class Sequential:
         return models_params, x
 
 
+@torch.jit.script
 class Linear:
     def __init__(self, input_channels, output_channels):
         self.input_channels = input_channels
