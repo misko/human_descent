@@ -166,32 +166,24 @@ class HudesClient:
     def run_loop(self):
         self.before_first_loop()
         while self.hudes_websocket_client.running:
-            # check and send local interactions(?)
             self.before_pg_event()
             redraw = False
             for event in pg.event.get():
                 redraw |= self.process_key_press(event)
 
-            # logging.debug("hudes_client: receive messages")
             redraw |= self.receive_messages()
-            # logging.debug("hudes_client: receive messages done")
             if redraw:
                 self.view.draw()
             else:
-                # logging.debug("hudes_client: sleep")
                 sleep(0.01)
-                # logging.debug("hudes_client: sleep up")
 
     def receive_messages(self):
-        # listen from server?
         received_message = False
         received_train = False
         received_batch = False
         received_val = False
         while self.hudes_websocket_client.recv_ready():
-            # logging.debug("hudes_client: recieve message")
             received_message = True
-            # recv and process!
             raw_msg = self.hudes_websocket_client.recv_msg()
             msg = hudes_pb2.Control()
             msg.ParseFromString(raw_msg)
@@ -207,15 +199,12 @@ class HudesClient:
                 self.train_losses.append(msg.train_loss_and_preds.train_loss)
                 self.train_steps.append(msg.request_idx)
                 logging.debug("hudes_client: recieve message : loss and preds : done")
-                # self.val_losses.append(msg.loss_and_preds.val_loss)
 
             elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:
                 logging.debug("hudes_client: recieve message : examples")
                 received_batch = True
                 self.train_data = pickle.loads(msg.batch_examples.train_data)
-                # self.val_data = pickle.loads(msg.batch_examples.val_data)
                 self.train_labels = pickle.loads(msg.batch_examples.train_labels)
-                # self.val_labels = pickle.loads(msg.batch_examples.val_labels)
                 logging.debug("hudes_client: recieve message : done")
 
             elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:
@@ -228,7 +217,6 @@ class HudesClient:
             # called if we only changed scale etc?
             elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_RESULTS:
                 self.view.update_mesh_grids(pickle.loads(msg.mesh_grid_results))
-                # print("GOT MESH GRID", self.mesh_grid.shape)
 
         if received_message:
             if received_train:

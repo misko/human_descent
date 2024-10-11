@@ -135,12 +135,6 @@ class KeyboardClientGL(KeyboardClient):
 
             ct = time.time()
             for joystick in self.joysticks.values():
-                # axes = joystick.get_numaxes()
-                # print(f"Number of axes: {axes}")
-                # for i in range(axes):
-                #     axis = joystick.get_axis(i)
-                #     print(f"Axis {i} value: {axis:>6.3f}")
-
                 if (
                     joystick.get_button(self.joystick_controller.right_js_press_button)
                     > 0.5
@@ -155,14 +149,6 @@ class KeyboardClientGL(KeyboardClient):
                 if joystick.get_button(self.joystick_controller.button_right) > 0.5:
                     self.step_size_increase(2)
                     self.send_config()
-
-                # if joystick.get_button(11) > 0.5:
-                #     self.view.increase_zoom()
-                #     redraw = True
-
-                # if joystick.get_button(12) > 0.5:
-                #     self.view.decrease_zoom()
-                #     redraw = True
 
                 if (
                     joystick.get_axis(self.joystick_controller.left_trig_axis) > 0.5
@@ -206,15 +192,6 @@ class KeyboardClientGL(KeyboardClient):
 
                     adjustH = B[0] * 2
                     adjustV = B[1]
-                    # if np.abs(np.abs(angle) - 90 / 2) < 40:
-                    #     adjustH += np.sign(angle)
-                    #     redraw = True
-
-                    # if np.abs(angle) < 40:
-                    #     adjustV += 1
-                    #     redraw = True
-                    # elif np.abs(np.abs(angle) - 180) < 40:
-                    #     adjustV += -1
                     redraw = True
                     self.view.adjust_angles(adjustH, adjustV)
             redraw = redraw | self.view.is_mouse_dragging | self.receive_messages()

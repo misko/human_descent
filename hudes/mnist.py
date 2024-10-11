@@ -113,7 +113,6 @@ def mnist_model_data_and_subpace(
     seed: int = 0,
     store: str = "./",
     device="cpu",
-    loss_fn=indexed_loss,
 ):
     transform = transforms.Compose(
         [

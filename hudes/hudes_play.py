@@ -2,7 +2,6 @@ import argparse
 import logging
 import os
 
-# from hudes.akai_client import AkaiClient
 from hudes.keyboard_client import KeyboardClient
 from hudes.keyboard_client_openGL import KeyboardClientGL
 from hudes.view import OpenGLView, View
@@ -41,9 +40,6 @@ def main():
             joystick_controller_key=args.controller,
         )
         view = OpenGLView(grid_size=args.grid_size, grids=args.grids)
-    # elif args.input == "akai":
-    #     controller = AkaiClient(seed=args.seed)
-    #     view = View()
     elif args.input == "xtouch":
         controller = XTouchClient(
             addr=args.addr,

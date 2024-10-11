@@ -15,37 +15,6 @@ from websockets.sync.client import connect as sync_connect
 
 from hudes import hudes_pb2
 
-"""
-Websocket client has a queue in and out
-can push many messages down into ws client, but only sends as fast as possible
-
-ws client loop (thread)
-
-
-While True:
-    #prepare and send
-    while get(timeout=0.1) from queue():
-        check how many events
-        goup as many as possible
-
-        send 
-
-    #recv and pipe back up
-    recv(timeout=0)
-
-
-
-"""
-
-
-# def mesh_grid_config_message(dimA, dimB, grid_size, step_size):
-#     return hudes_pb2.Control(
-#         type=hudes_pb2.Control.CONTROL_MESHGRID_CONFIG,
-#         mesh_grid_config=hudes_pb2.MeshGridConfig(
-#             dimA=dimA, dimB=dimB, grid_size=grid_size, step_size=step_size
-#         ),
-#     )
-
 
 @cache
 def next_batch_message():
@@ -180,9 +149,7 @@ async def send_dims(n: int = 10):
         for _ in range(n):
             msg = hudes_pb2.Control(
                 type=hudes_pb2.Control.CONTROL_DIMS,
-                # dims_and_steps=[hudes_pb2.DimAndStep(dim=1, step=0.01)],
             )
-            # msg = {"type": "control", "dims": {1: 0.1, 2: 0.3}}
             logging.info(msg.SerializeToString())
             await websocket.send(msg.SerializeToString())
             await asyncio.sleep(0.01)

@@ -27,86 +27,11 @@ from hudes.opengl_func import (
     update_grid_vbo,
 )
 
-# backend = "Agg"
-# backend = "cairo"
-# matplotlib.use(backend)
 plt_backend = matplotlib.get_backend()
 
 import matplotlib.style as mplstyle
 
 mplstyle.use("fast")
-
-
-def surface_to_npim(surface):
-    """Transforms a Cairo surface into a numpy array."""
-    im = +np.frombuffer(surface.get_data(), np.uint8)
-    H, W = surface.get_height(), surface.get_width()
-    im.shape = (H, W, 4)  # for RGBA
-    return im[:, :, :3]
-
-
-def svg_to_npim(svg_bytestring, dpi):
-    """Renders a svg bytestring as a RGB image in a numpy array"""
-    tree = cairosvg.parser.Tree(bytestring=svg_bytestring)
-    surf = cairosvg.surface.PNGSurface(tree, None, dpi).cairo
-    return surface_to_npim(surf)
-
-
-# Shader creation helper functions
-def create_shader(shader_type, source):
-    shader = glCreateShader(shader_type)
-    glShaderSource(shader, source)
-    glCompileShader(shader)
-
-    # Check for compilation errors
-    if not glGetShaderiv(shader, GL_COMPILE_STATUS):
-        error = glGetShaderInfoLog(shader).decode()
-        raise RuntimeError(f"Shader compilation error: {error}")
-    return shader
-
-
-def create_shader_program(vertex_source, fragment_source):
-    program = glCreateProgram()
-
-    # Create vertex and fragment shaders
-    vertex_shader = create_shader(GL_VERTEX_SHADER, vertex_source)
-    fragment_shader = create_shader(GL_FRAGMENT_SHADER, fragment_source)
-
-    # Attach shaders to the program
-    glAttachShader(program, vertex_shader)
-    glAttachShader(program, fragment_shader)
-
-    # Link the program
-    glLinkProgram(program)
-
-    # Check for linking errors
-    if not glGetProgramiv(program, GL_LINK_STATUS):
-        error = glGetProgramInfoLog(program).decode()
-        raise RuntimeError(f"Program linking error: {error}")
-
-    # Clean up shaders (they are now linked into the program)
-    glDeleteShader(vertex_shader)
-    glDeleteShader(fragment_shader)
-
-    return program
-
-
-# Vertex and fragment shader source code (compatible with OpenGL 2.1)
-vertex_shader_src = """
-#version 120
-attribute vec3 vertexPosition;  // Position of each vertex (x, y, z)
-
-void main() {
-    gl_Position = vec4(vertexPosition, 1.0);  // Set the vertex position
-}
-"""
-
-fragment_shader_src = """
-#version 120
-void main() {
-    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);  // Set all fragments to red
-}
-"""
 
 
 def norm_mesh(mesh_grid):
@@ -118,46 +43,6 @@ def norm_mesh(mesh_grid):
     mesh_grid /= (mesh_grid.std() + 1e-3) * 4
     # mesh_grid = mesh_grid.sign() * (mesh_grid.abs() + 1).log()
     return mesh_grid
-
-
-# Helper function used for visualization in the following examples
-def identify_axes(ax_dict, fontsize=48):
-    """
-    Helper to identify the Axes in the examples below.
-
-    Draws the label in a large font in the center of the Axes.
-
-    Parameters
-    ----------
-    ax_dict : dict[str, Axes]
-        Mapping between the title / label and the Axes.
-    fontsize : int, optional
-        How big the label should be.
-    """
-    kw = dict(ha="center", va="center", fontsize=fontsize, color="darkgrey")
-    for k, ax in ax_dict.items():
-        ax.text(0.5, 0.5, k, transform=ax.transAxes, **kw)
-
-    # pygame.init()
-    # pygame.display.set_mode(self.window_size)
-    return pg.display.get_surface()
-
-
-def _print_device_info():
-    for i in range(pygame.midi.get_count()):
-        r = pygame.midi.get_device_info(i)
-        (interf, name, input, output, opened) = r
-
-        in_out = ""
-        if input:
-            in_out = "(input)"
-        if output:
-            in_out = "(output)"
-
-        print(
-            "%2i: interface :%s:, name :%s:, opened :%s:  %s"
-            % (i, interf, name, opened, in_out)
-        )
 
 
 class View:
@@ -172,27 +57,13 @@ class View:
             print(f"using input_id :{self.midi_input_id}:")
             self.midi_input = pygame.midi.Input(self.midi_input_id)
 
-        # dpi = 200  # plt.rcParams["figure.dpi"]
         logging.info(f"Matplotlib backend: {plt.get_backend()}")
 
         self.window_size = (1200, 800)
-        # self.fig = plt.figure(
-        #     figsize=(self.window_size[0] / dpi, self.window_size[1] / dpi), dpi=dpi
-        # )
         self.fig = plt.figure(figsize=(12, 8), facecolor="white")
-
-        # if self.fig.dpi != dpi:
-        #     logging.warning(
-        #         f"DPI flag not respected by matplotlib backend ({plt.get_backend()})! Should be {dpi} but is {self.fig.dpi} "
-        #     )
-        #     self.window_size = (
-        #         int(self.fig.get_figwidth() * self.fig.dpi),
-        #         int(self.fig.get_figheight() * self.fig.dpi),
-        #     )
 
         self.window = pg.display.set_mode(self.window_size)
 
-        # self.canvas = agg.FigureCanvasAgg(self.fig)
         self.canvas = self.fig.canvas
         self.renderer = self.canvas.get_renderer()
         if "cairo" in plt_backend.lower():
@@ -254,9 +125,6 @@ class View:
                 ax = self.axd[_ax]
                 ax.im.set_data(train_data[idx])
                 ax.redraw = True
-
-        # self.axd["I"].cla()
-        # self.axd["I"].imshow(train_data[3])
 
     def update_top(self, maybe_new_best_score):
         if self.best_score is None or maybe_new_best_score > self.best_score:
@@ -346,8 +214,6 @@ class View:
         maybe_new_best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
         self.update_top(maybe_new_best_score=maybe_new_best_score)
 
-        n = len(train_losses)
-        # x = torch.arange(n)
         self.axd["B"].cla()
         self.axd["B"].plot(train_steps, train_losses, label="train")
         self.axd["B"].plot(val_steps, val_losses, label="val")
@@ -356,12 +222,6 @@ class View:
         self.axd["B"].set_xlabel("Step")
         self.axd["B"].set_ylabel("Loss")
         self.axd["B"].redraw = True
-
-        # self.axd["C"].cla()
-        # self.axd["C"].plot(train_steps[n // 2 :], train_losses[n // 2 :], label="train")
-        # self.axd["C"].set_title("Loss [half time]")
-        # self.axd["C"].set_xlabel("Step")
-        # self.axd["C"].set_yticks([])
 
         self.axd["D"].cla()
         self.axd["D"].plot(train_steps[-8:], train_losses[-8:], label="train")
@@ -384,69 +244,27 @@ class View:
     def draw(self):
 
         logging.debug("hudes_client: redraw")
-        # cairo
-        # np.frombuffer(self.canvas._get_printed_image_surface().get_data(),np.uint8)
-        # https://www.pygame.org/wiki/CairoPygame
         if "cairo" in plt_backend.lower():
 
-            # self.renderer.gc.ctx = fake_ctx()
-            # self.canvas.draw()
-            if True:
-                self.draw_or_restore()
+            self.draw_or_restore()
 
-                # self.update_top(self.best_score)
-                surf = pygame.image.frombuffer(
-                    self.surface.get_data(), self.window_size, "RGBA"
-                )
-                self.screen.blit(surf, (0, 0))
-                self.screen.blit(self.top_title_rendered, (0, 0))
-            # self.draw_or_restore()
-            # self.renderer = self.canvas._renderer
-
-            # self.draw_or_restore()
-            if False:
-                self.canvas.draw()
-                surf = pg.image.frombuffer(
-                    # self.renderer.tostring_rgb(),
-                    self.canvas._get_printed_image_surface().get_data(),
-                    self.window_size,
-                    "RGBA",
-                )
-                self.screen.blit(surf, (0, 0))
-        else:  # backend.lower()=='agg':
-            # self.canvas.draw()
-            # self.canvas.update()
-            # breakpoint()
+            surf = pygame.image.frombuffer(
+                self.surface.get_data(), self.window_size, "RGBA"
+            )
+            self.screen.blit(surf, (0, 0))
+            self.screen.blit(self.top_title_rendered, (0, 0))
+        else:
             self.renderer.clear()
             self.draw_or_restore()
 
-            # self.update_top(self.best_score)
-            # if self.redraw_train_and_val:
-            #     self.axd["B"].draw(self.renderer)
-            #     self.axd["B"].cache = self.fig.canvas.copy_from_bbox(
-            #         self.axd["B"].get_tightbbox(self.renderer)
-            #     )
-            #     self.axd["D"].draw(self.renderer)
-            #     self.axd["D"].cache = self.fig.canvas.copy_from_bbox(self.axd["D"].bbox)
-            #     self.redraw_train_and_val = False
-            # else:
-            #     self.fig.canvas.restore_region(self.axd["B"].cache)
-            #     self.fig.canvas.restore_region(self.axd["D"].cache)
-            # TODO TRY FORM BUFFER AND USE THE TOSTRING BUFFER!!!
             surf = pg.image.frombytes(
                 self.renderer.tostring_rgb(),
                 self.window_size,
                 "RGB",
             )
-            # surf = pg.image.frombuffer(
-            #     self.renderer.buffer_rgba(),
-            #     self.window_size,
-            #     "RGBA",
-            # )
             self.screen.blit(surf, (0, 0))
             self.screen.blit(self.top_title_rendered, (0, 0))
-        # else:
-        # self.draw_text()
+
         pg.display.flip()  # draws whole screen vs update that draws a parts
 
         logging.debug("hudes_client: redraw done")
@@ -461,7 +279,6 @@ class OpenGLView:
 
         pg.init()
         pg.font.init()
-        # display = (800, 600)
 
         self.window_size = (1200, 800)
 
@@ -573,10 +390,6 @@ class OpenGLView:
             GL_ELEMENT_ARRAY_BUFFER, self.indices.nbytes, self.indices, GL_STATIC_DRAW
         )
 
-        # # Enable vertex attribute 0 (positions)
-        # glEnableClientState(GL_VERTEX_ARRAY)
-        # glVertexPointer(3, GL_FLOAT, 0, None)
-
         # Enable vertex arrays and color arrays
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_COLOR_ARRAY)
@@ -593,7 +406,6 @@ class OpenGLView:
         self.angleH = 0.0
         self.angleV = self.default_angleV
         self.origin_loss = 0.0
-        self.target = (0.0, 0.0, 0.0)
 
         # init plt
         plt.style.use("dark_background")
@@ -612,15 +424,6 @@ class OpenGLView:
         self.dtype = "?"
         self.batch_size = "?"
 
-        # self.screen = pg.display.get_surface()
-
-        # # # Step 2: Create the Matplotlib figure
-        # self.fig, ax = plt.subplots(figsize=(4, 3), facecolor="white")
-        # x = np.linspace(0, 10, 100)
-        # y = np.sin(x)
-        # ax.plot(x, y)
-        # ax.set_title("Sine Wave")
-
     def update_examples(self, train_data: torch.Tensor):
         self.axd["F"].cla()
         self.axd["F"].imshow(train_data[0])
@@ -635,16 +438,10 @@ class OpenGLView:
             self.fig.suptitle("Human Descent: MNIST      Top-score: ?")
         else:
             self.fig.suptitle(f"Human Descent: MNIST      Top-score: {best_score:.5e}")
-        # self.fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     def update_step_size(
         self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
     ):
-        # self.axd["I"].cla()
-        # self.axd["I"].bar([0], log_step_size)
-        # self.axd["I"].set_ylim(min_log_step_size, max_log_step_size)
-        # self.axd["I"].set_title("log(Step size)")
-        # self.axd["I"].set_xticks([])
         pass
 
     def update_confusion_matrix(self, confusion_matrix: torch.Tensor):
@@ -678,8 +475,6 @@ class OpenGLView:
         best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
         self.update_top(best_score)
 
-        n = len(train_losses)
-        # x = torch.arange(n)
         self.axd["B"].cla()
         self.axd["B"].plot(train_steps, train_losses, label="train")
         self.axd["B"].plot(val_steps, val_losses, label="val")
@@ -697,77 +492,33 @@ class OpenGLView:
     def update_mesh_grids(self, mesh_grids):
         self.raw_mesh_grids = mesh_grids
 
-        # if self.grids > 1:
-        #     normalized_grids.append(norm_mesh(mesh_grids.sum(axis=0)).unsqueeze(0))
-        # for grid_idx in range(mesh_grids.shape[0]):
-        #     normalized_grids.append(
-        #         norm_mesh(mesh_grids[grid_idx].clone()).unsqueeze(0)
-        #     )  # might not need clone if we are safe here
-
-        # if self.grids > 1:
-        #    normalized_grids.append(norm_mesh(mesh_grids.sum(axis=0)).unsqueeze(0))
-
         origin_loss = mesh_grids[0, self.grid_size // 2, self.grid_size // 2].item()
         mesh_grids -= origin_loss
-        # _u, _std, _mx = mesh_grids.mean(), mesh_grids.var()
+
         _mx = mesh_grids.abs().max()
         eps = 1e-3
         mesh_grids *= self.grid_width / (_mx + eps)
-        # for grid_idx in range(mesh_grids.shape[0]):
-        #     normalized_grids.append(
-        #         # ((mesh_grids[grid_idx] - _u) / (_std + eps)).unsqueeze(0)
-        #         self.grid_width
-        #         * ((mesh_grids[grid_idx] - _u) / (_mx + eps)).unsqueeze(0)
-        #     )  # might not need clone if we are safe here
 
-        # # origin_loss = mesh_grid[grid_size // 2, grid_size // 2].item()
-
-        # self.normalized_grids = torch.concatenate(normalized_grids, dim=0)
         self.normalized_grids = mesh_grids
-        # breakpoint()
-        # Define the center point (where the red sphere is located) and relative target position (A, B)
-        center_row, center_col = self.grid_size // 2, self.grid_size // 2
-
-        # Relative target offset (A, B) in grid units
-        A, B = 0, 5  # Example: One cell to the right of the red sphere
-
-        # Convert relative target (A, B) to absolute grid coordinates
-        target_row = center_row + A
-        target_col = center_col + B
-
-        self.target = (0, 1, 0)
-        # # Ensure target is within bounds of the height_map
-        # if 0 <= target_row < self.grid_size and 0 <= target_col < self.grid_size:
-        #     # Convert grid position to 3D coordinates
-        #     target_x = (target_row - (self.grid_size - 1) / 2.0) * self.spacing
-        #     target_y = self.origin_loss  # 3  # self.mesh_grid[-target_row, -target_col]
-        #     target_z = (target_col - (self.grid_size - 1) / 2.0) * self.spacing
-        #     self.target = (target_x, target_y, target_z)  # Target grid point
-        # else:
-        #     self.target = (0, self.origin_loss, 0)  # Default to center if out of bounds
-
-        # self.target = (target_x, target_y, target_z)  # Target grid point
         self.update_points_and_colors()
 
     def update_points_and_colors(self):
         if self.use_surface:
             new_points = create_surface_grid_points(self.normalized_grids, self.spacing)
         else:
-            # new_points_old = create_grid_points(self.normalized_grids, self.spacing)
             new_points, new_colors = create_grid_points_with_colors(
                 self.normalized_grids,
                 self.spacing,
                 self.grid_colors,
                 selected_grid=self.selected_grid,
             )
-        # print(new_points.shape)
-        print(new_points.shape[0] / self.grid_size)
+
         start_idx = self.selected_grid * self.grid_size * self.grid_size
 
         new_points[
             start_idx : start_idx + self.grid_size * self.grid_size, [0, 2]
         ] *= self.selected_grid_multiplier
-        # breakpoint()
+
         update_grid_vbo(self.vbo, new_points)
         update_grid_cbo(self.cbo, new_colors)
 
@@ -795,15 +546,12 @@ class OpenGLView:
         self.angleV = norm_deg(self.angleV)  # % 360
         self.angleH = norm_deg(self.angleH)  # % 360
         self.angleV = np.sign(self.angleV) * min(np.abs(self.angleV), self.max_angleV)
-        # print(self.angleH, self.angleV)
 
     def reset_angle(self):
         self.angleH = 0
         self.angleV = self.default_angleV
 
     def draw_all_text(self):
-
-        # render_text_2d("Batch size:", 36, self.window_size[0], self.window_size[1])
         render_text_2d(
             f"batch-size: {self.batch_size}, dtype: {self.dtype}",
             20,
@@ -812,8 +560,6 @@ class OpenGLView:
         )
 
     def draw(self):
-
-        # glClearColor(1.0, 1.0, 1.0, 1.0)  # Set the clear color to white
         # Handle mouse motion for rotation
         if self.is_mouse_dragging:
             mouse_pos = pg.mouse.get_pos()
@@ -834,10 +580,6 @@ class OpenGLView:
 
         self.camera_distance = self.total_width * self.scale_factor
         glTranslatef(0, 0.0, -self.camera_distance)
-
-        # Apply rotations
-        # glRotatef(self.angleV, 1, 0, 0)
-        # glRotatef(self.angleH, 0, 1, 0)
 
         # Translate to center the grids
         # -3 for now, moves it up
@@ -912,13 +654,7 @@ class OpenGLView:
                 )
 
             # Draw the grid as a surface using triangles
-
             draw_red_sphere(0.0)
-            # draw_red_plane(
-            #     0.0,
-            #     grid_size=self.grid_size,
-            #     spacing=self.spacing,
-            # )
 
             # Restore the previous matrix state
             glPopMatrix()

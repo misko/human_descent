@@ -49,9 +49,7 @@ def prepare_batch_example_message(
             type=hudes_pb2.BatchExamples.Type.IMG_BW,
             n=n,
             train_data=pickle.dumps(batch[0][:n].tolist()),
-            # val_data=pickle.dumps(batch["val"][0][:n].tolist()),
             train_labels=pickle.dumps(batch[1][:n].tolist()),
-            # val_labels=pickle.dumps(batch["val"][1][:n].tolist()),
             batch_idx=batch_idx,
         ),
     )
@@ -65,7 +63,6 @@ def listen_and_run(
     mad.move_to_device()
     mad.fuse()
     mad.init_param_model()
-    # breakpoint()
 
     client_weights = {}  # TODO memory leak, but prevents continously copying models
 
@@ -377,7 +374,6 @@ async def process_client(websocket, client_runner_q):
             logging.debug(f"process_client: {client_idx} : next batch")
             client.batch_idx += 1
             client.request_full_val = True
-            # send back batch examples
 
         elif msg.type == hudes_pb2.Control.CONTROL_NEXT_DIMS:
             logging.debug(f"process_client: {client_idx} : next dims")
@@ -394,14 +390,9 @@ async def process_client(websocket, client_runner_q):
             client.batch_size = msg.config.batch_size
             client.dtype = getattr(torch, msg.config.dtype)
 
-            # send back batch examples
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:
             logging.debug(f"process_client: {client_idx} : quit")
             break
-        # elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_CONFIG:
-        #     logging.info(
-        #         f"process_client: {client_idx} : meshgrid, {client.dims_offset}, {config['dims_at_a_time']}"
-        #     )
 
         else:
             logging.warning("received invalid type from client")

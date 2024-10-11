@@ -51,9 +51,13 @@ def fuse_parameters(model: nn.Module, device, dtype):
     return params
 
 
-# @torch.jit.script
-def indexed_loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
+@torch.jit.script
+def jit_indexed_loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
     return pred[torch.arange(label.shape[0]), label]
+
+
+def indexed_loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
+    return jit_indexed_loss(pred, label)
 
 
 def get_param_module(module):
@@ -75,10 +79,6 @@ def param_nn_from_sequential(model):
 
 @torch.jit.script
 def get_confusion_matrix(preds: torch.Tensor, labels: torch.Tensor):
-    # (Pdb) preds.shape
-    # torch.Size([512, 10])
-    # (Pdb) labels.shape
-    # torch.Size([512])
     assert preds.ndim == 2 and labels.ndim == 1
     n = preds.shape[1]
     c_matrix = torch.vstack(
@@ -164,7 +164,6 @@ class ModelDataAndSubspace:
             dim=1,
         ).to(dtype)
 
-    # dims is a dictionary {dim:step_size}
     @torch.no_grad
     def delta_from_dims(self, dims: dict[int, float], dtype: torch.dtype):
         if len(dims) > 0:
@@ -311,15 +310,9 @@ class ModelDataAndSubspace:
                 base_weights, dims, arange=r, brange=r, dtype=dtype
             )
 
-            # self.model.net[:2](batch[0])
-            # self.param_model.modules_list=self.param_model.modules_list[:2]
-            # base_model = mp[grid_size//2,grid_size//2].reshape(1,-1)
-            # (self.model.net[:1](batch[0])==self.param_model.forward(bm,data)[1]).all()
-
             logging.info(f"get_loss: mp done {mp.device} {mp.dtype}")
 
             mp_reshaped = mp.reshape(-1, self.num_params).contiguous()
-            # batch = torch.rand(1, 512, 28, 28, device=device)
             logging.info(f"get_loss: fwd start , batch size {batch_size}")
             predictions = (
                 self.param_models[dtype]
@@ -333,26 +326,8 @@ class ModelDataAndSubspace:
                 label.reshape(1, 1, -1, 1).expand(*mp.shape[:2], batch_size, 1),
             ).mean(axis=[2, 3])
             logging.info("get_loss: gather done")
-            # logging.info(
-            #     f"get_loss: {label.shape} {predictions.shape} {label.device} {predictions.device} {mp.device}"
-            # )
-            # logging.info(
-            #     f"grid {grid_idx} MO:{predictions[grid_size//2,grid_size//2].mean()} {predictions[grid_size//2,grid_size//2].shape}"
-            # )
-
-            # loss_np = loss.detach().cpu().numpy()
-            # breakpoint()
-            # loss -= loss.mean()
-            # loss /= loss.std() + 1e-5
-            # print(loss.mean())
-            # invert loss_np
             loss = -loss
             grid_losses.append(loss.unsqueeze(0))
-            #
-            # loss = -loss.cpu()
-            # breakpoint()
-            # a = 1
         loss = torch.concatenate(grid_losses, dim=0).cpu()
-        # breakpoint()
         logging.info(f"get_loss: return loss {loss[:, grid_size // 2, grid_size // 2]}")
         return loss
