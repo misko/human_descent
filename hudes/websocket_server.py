@@ -425,7 +425,6 @@ async def run_wrapper(args):
 
     mad = mnist_model_data_and_subpace(
         model=MNISTFFNN(),
-        loss_fn=indexed_loss,
         device=args.device,
     )
     stop = asyncio.get_running_loop().create_future()
