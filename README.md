@@ -1,4 +1,4 @@
-# HUman DEScent (UNDER CONSTRUCTION)
+# HUman DEScent
 
 Human Descent opens the door for you to explore neural network optimization in high-dimensional weight space using the MNIST dataset. Manipulate everyday controllers (keyboard, xbox, DJ MIDI), each corresponding to a random direction in high dimensional weight space, to gain intuitive insights into the dynamics and complexities of neural network training.
 
