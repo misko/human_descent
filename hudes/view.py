@@ -3,8 +3,10 @@ import math
 import os
 from typing import List
 
-import cairo
+# import cairo # uncomment if trying cairo
 import matplotlib
+
+matplotlib.use("Agg")  # also kinda works with Cairo , else its ?
 import matplotlib.pyplot as plt
 import numpy as np
 import pygame as pg
@@ -22,6 +24,7 @@ from hudes.opengl_func import (
     create_surface_grid_points,
     create_texture_rgba,
     draw_red_sphere,
+    load_texture,
     render_text_2d,
     render_texture_rgba,
     update_grid_cbo,
@@ -49,14 +52,12 @@ def norm_mesh(mesh_grid):
 class View:
     def __init__(self, use_midi=False):
 
-        pg.init()
-
         pg.midi.init()
 
         pg.key.set_repeat(100)
         if use_midi:
             self.midi_input_id = pygame.midi.get_default_input_id()
-            print(f"using input_id :{self.midi_input_id}:")
+            logging.info(f"using input_id :{self.midi_input_id}:")
             self.midi_input = pygame.midi.Input(self.midi_input_id)
 
         logging.info(f"Matplotlib backend: {plt.get_backend()}")
@@ -108,18 +109,6 @@ class View:
         for _ax in self.axd:
             self.axd[_ax].redraw = True
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.help_screen_fns = [
-            os.path.join(current_dir, x)
-            for x in [
-                "help_screens/hudes_help_start.png",
-                "help_screens/hudes_1d_1.png",
-                "help_screens/hudes_1d_2.png",
-                "help_screens/hudes_1d_3.png",
-                "help_screens/hudes_1d_4.png",
-            ]
-        ]
-
     def update_examples(self, train_data: torch.Tensor):
         if not self.example_im_show_init:
             for idx, _ax in enumerate(("F", "G", "H", "M")):
@@ -140,18 +129,20 @@ class View:
         render_str = f"Hudes: MNIST ,Score: {self.client_state.best_score:.4e} , Batch-size: {self.client_state.batch_size}, {self.client_state.dtype}, SGDsteps: {self.client_state.sgd_steps}"
         self.top_title_rendered = self.font.render(render_str, False, (0, 0, 0))
 
-    def update_step_size(
-        self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
-    ):
+    def update_step_size(self):
         if not self.init_step_size_plot:
             self.axd["I"].cla()
-            self.axd["I"].bars = self.axd["I"].barh([0], log_step_size)
-            self.axd["I"].set_xlim(min_log_step_size, max_log_step_size)
+            self.axd["I"].bars = self.axd["I"].barh(
+                [0], self.client_state.log_step_size
+            )
+            self.axd["I"].set_xlim(
+                self.client_state.min_log_step_size, self.client_state.max_log_step_size
+            )
             self.axd["I"].set_title("log(Step size)")
             self.axd["I"].set_yticks([])
             self.init_step_size_plot = True
         else:
-            self.axd["I"].bars[0].set_width(log_step_size)
+            self.axd["I"].bars[0].set_width(self.client_state.log_step_size)
         self.axd["I"].redraw = True
 
     def update_confusion_matrix(self, confusion_matrix: torch.Tensor):
@@ -228,6 +219,9 @@ class View:
         self.axd["B"].cla()
         self.axd["B"].plot(train_steps, train_losses, label="train")
         self.axd["B"].plot(val_steps, val_losses, label="val")
+        # self.axd["B"].axhline(y=0.5, color="m", linestyle="--", label="Amazing")
+        self.axd["B"].axhline(y=1.5, color="r", linestyle="--", label="Warmer")
+        self.axd["B"].axhline(y=2.3, color="black", linestyle="--", label="Random")
         self.axd["B"].legend(loc="upper right")
         self.axd["B"].set_title("Loss")
         self.axd["B"].set_xlabel("Step")
@@ -284,7 +278,9 @@ class View:
                 self.screen.blit(self.top_title_rendered, (0, 0))
         else:
 
-            help_screen_fn = self.help_screen_fns[self.client_state.help_screen_idx]
+            help_screen_fn = self.client_state.help_screen_fns[
+                self.client_state.help_screen_idx
+            ]
             logging.debug(f"help_screen: {help_screen_fn}")
             image = pygame.image.load(
                 help_screen_fn
@@ -304,8 +300,9 @@ def norm_deg(x):
 class OpenGLView:
     def __init__(self, grid_size, grids):
 
-        pg.init()
+        # pg.init()
         pg.font.init()
+        pg.key.set_repeat(70)
 
         self.window_size = (1200, 800)
 
@@ -421,12 +418,6 @@ class OpenGLView:
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_COLOR_ARRAY)
 
-        # Mouse control variables
-        self.is_mouse_dragging = False
-        self.last_mouse_pos = None
-        self.rotation_x, self.rotation_y = 0.0, 0.0  # Initialize rotation angles
-        self.sensitivity = 0.5  # Mouse sensitivity for controlling rotation
-
         self.running = True
         self.default_angleV = 20
         self.max_angleV = 25
@@ -450,6 +441,23 @@ class OpenGLView:
 
         self.client_state = None
 
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.help_screen_fns = [
+            os.path.join(current_dir, x)
+            for x in [
+                "help_screens/hudes_help_start.png",
+                "help_screens/hudes_1.png",
+                "help_screens/hudes_2.png",
+                "help_screens/hudes_3.png",
+                "help_screens/hudes_2d_keyboard_controls.png",
+                "help_screens/hudes_2d_xbox_controls.png",
+            ]
+        ]
+
+        self.old_batch_size = 0
+        self.old_dtype = 0
+        self.large_text_start = 0
+
     def update_examples(self, train_data: torch.Tensor):
         self.axd["F"].cla()
         self.axd["F"].imshow(train_data[0])
@@ -465,9 +473,7 @@ class OpenGLView:
         else:
             self.fig.suptitle(f"Hudes: MNIST , Top-score: {best_score:.5e}")
 
-    def update_step_size(
-        self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
-    ):
+    def update_step_size(self):
         pass
 
     def update_confusion_matrix(self, confusion_matrix: torch.Tensor):
@@ -566,6 +572,9 @@ class OpenGLView:
     def decrement_selected_grid(self):
         self.selected_grid = (self.selected_grid - 1) % self.effective_grids
 
+    def set_selected_grid(self, grid_idx):
+        self.selected_grid = grid_idx
+
     def adjust_angles(self, angle_H, angle_V):
         self.angleH += 2 * angle_H
         self.angleV += 2 * angle_V
@@ -579,27 +588,49 @@ class OpenGLView:
 
     def draw_all_text(self):
         if self.client_state is not None:
+            if (
+                self.old_batch_size != self.client_state.batch_size
+                or self.old_dtype != self.client_state.dtype
+            ):
+                self.large_text_start = pg.time.get_ticks()
+                self.old_batch_size = self.client_state.batch_size
+                self.old_dtype = self.client_state.dtype
+            font_size = 20
+            if (pg.time.get_ticks() - self.large_text_start) < 2000:
+                font_size = 80
             render_text_2d(
                 f"batch-size: {self.client_state.batch_size}, dtype: {self.client_state.dtype}",
-                20,
+                font_size,
                 self.window_size[0],
                 self.window_size[1],
             )
 
+    def next_help_screen(self):
+        self.client_state.help_screen_idx += 1
+        if self.client_state.help_screen_idx >= len(self.help_screen_fns):
+            self.client_state.help_screen_idx = -1  # disable help screen mode
+            return
+
     def draw(self):
-        # Handle mouse motion for rotation
-        if self.is_mouse_dragging:
-            mouse_pos = pg.mouse.get_pos()
-            if self.last_mouse_pos:
+        if self.client_state.help_screen_idx == -1:
+            self.draw_gl()
 
-                dx = mouse_pos[0] - self.last_mouse_pos[0]
-                dy = mouse_pos[1] - self.last_mouse_pos[1]
+        else:
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            glLoadIdentity()
+            help_screen_fn = self.help_screen_fns[self.client_state.help_screen_idx]
 
-                # Update rotation angles based on mouse movement
-                self.rotation_x += dy * self.sensitivity
-                self.rotation_y += dx * self.sensitivity
+            logging.debug(f"help_screen: {help_screen_fn}")
 
-            self.last_mouse_pos = mouse_pos
+            texture_id, image_width, image_height = load_texture(
+                help_screen_fn, *self.window_size
+            )
+
+            render_texture_rgba(texture_id, image_width, image_height, self.window_size)
+            pg.display.flip()
+            pg.time.wait(10)
+
+    def draw_gl(self):
 
         # Rendering Loop
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)

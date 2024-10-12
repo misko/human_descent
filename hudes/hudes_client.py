@@ -1,5 +1,6 @@
 import logging
 import math
+import os
 import pickle
 import time
 from dataclasses import dataclass
@@ -20,11 +21,7 @@ from hudes.websocket_client import (
 
 class ClientState:
 
-    def __init__(
-        self,
-        step_size_resolution,
-        inital_step_size_idx,
-    ):
+    def __init__(self, step_size_resolution, inital_step_size_idx, help_screen_idx=0):
         self.best_score = math.inf
         self.sgd_steps = 0
 
@@ -32,20 +29,25 @@ class ClientState:
         self.dtypes = ("float16", "float32")
 
         self.batch_size_idx = 3 - 1
-        self.batch_sizes = [2, 8, 32, 128, 512]
+        self.batch_sizes = [2, 8, 32, 64, 256, 512]
 
         self.n = 6
 
-        self.max_log_step_size = 10
-        self.min_log_step_size = -10
+        self.max_log_step_size = 2
+        self.min_log_step_size = -4
         self.inital_step_size_idx = inital_step_size_idx
         self.step_size_resolution = step_size_resolution
 
         self.set_step_size_idx(inital_step_size_idx)
 
-        self.help_screen_idx = 0
-        self.quit_count = 0
-        self.help_count = 0
+        self.current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.help_screen_idx = help_screen_idx
+        self.help_screen_fns = []
+
+    def set_help_screen_fns(self, help_screen_fns):
+        self.help_screen_fns = [
+            os.path.join(self.current_dir, fn) for fn in help_screen_fns
+        ]
 
     def set_dtype(self, dtype):
         self.dtype_idx = self.dtypes.index(dtype)
@@ -73,7 +75,9 @@ class ClientState:
             self.max_log_step_size,
         )
         self.step_size = math.pow(10, self.log_step_size)
-        print(f"Step size: {self.step_size} , Log step size: {self.log_step_size}")
+        logging.debug(
+            f"Step size: {self.step_size} , Log step size: {self.log_step_size}"
+        )
 
     def set_n(self, n):
         n = max(6, n)
@@ -85,6 +89,17 @@ class ClientState:
 
     def step_size_decrease(self, mag: int = 1):
         self.set_step_size_idx(self.step_size_idx - 1 * mag)
+
+    def next_help_screen(self):
+        self.help_screen_idx += 1
+        if self.help_screen_idx == len(self.help_screen_fns):
+            self.help_screen_idx = -1
+
+
+@dataclass
+class KeyHold:
+    first_press: float = 0
+    last_exec: float = 0
 
 
 class HudesClient:
@@ -98,6 +113,7 @@ class HudesClient:
         joystick_controller_key=None,
         step_size_resolution=-0.05,
         inital_step_size_idx=10,
+        skip_help=False,
     ):
         self.joystick_controller_key = joystick_controller_key
 
@@ -118,17 +134,38 @@ class HudesClient:
         self.client_state = ClientState(
             step_size_resolution=step_size_resolution,
             inital_step_size_idx=inital_step_size_idx,
+            help_screen_idx=-1 if skip_help else 0,
         )
 
         self.view = None
+        self.step_size_keyboard_multiplier = 1
+
+        self.key_holds: dict[int, KeyHold] = {}
+        for key in (
+            pg.K_LSHIFT,
+            pg.K_RSHIFT,
+            pg.K_SPACE,
+            pg.K_QUOTE,
+            pg.K_RETURN,
+            pg.K_SEMICOLON,
+            pg.K_SLASH,
+            pg.K_x,
+            pg.K_q,
+        ):
+            self.add_key_to_watch(key=key)
+
+        self.key_seconds_pressed = 0.2
+
         self.init_input()
+
+    def add_key_to_watch(self, key):
+        self.key_holds[key] = KeyHold()
 
     def get_sgd(self):
         self.hudes_websocket_client.send_q.put(
             sgd_step_message(1, request_idx=self.request_idx).SerializeToString()
         )
         self.request_idx += 1
-        print("SGD REQ IDX", self.request_idx)
 
     def get_next_batch(self):
         self.hudes_websocket_client.send_q.put(
@@ -182,11 +219,7 @@ class HudesClient:
     def before_first_loop(self):
         self.get_next_batch()
         self.send_config()
-        self.view.update_step_size(
-            self.client_state.log_step_size,
-            self.client_state.max_log_step_size,
-            self.client_state.min_log_step_size,
-        )
+        self.view.update_step_size()
         self.view.plot_train_and_val(
             self.train_losses,
             self.train_steps,
@@ -198,12 +231,116 @@ class HudesClient:
     def before_pg_event(self):
         pass
 
+    def check_cooldown_time(self, event, key, ct, cool_down_time):
+        cool_down_time *= 1000  # convert to ms
+        if event.key != key:
+            return False
+        if ct - self.key_holds[key].last_exec > cool_down_time:
+            self.key_holds[key].last_exec = ct
+            return True
+        return False
+
+    # check if time held down exceeds wait time, if so reurn True and reset
+    def check_keyhold_time(self, event, key, ct, wait_time):
+        wait_time *= 1000  # convert to ms
+        if event.key != key:
+            return False
+        if (
+            self.key_holds[key].first_press >= 0
+            and (ct - self.key_holds[key].first_press) > wait_time
+        ):
+            return True
+        return False
+
+    def update_key_holds(self):
+        ct = pg.time.get_ticks()
+        currently_pressing = pg.key.get_pressed()
+        for key in self.key_holds:
+            if currently_pressing[key]:
+                if self.key_holds[key].first_press == -1:
+                    self.key_holds[key].first_press = ct
+            elif key in self.key_holds:
+                self.key_holds[key].first_press = -1
+
+    def quit(self):
+        logging.debug("quitting...")
+        self.hudes_websocket_client.running = False
+
+    def process_common_keys(self, event):
+        ct = pg.time.get_ticks()
+        if event.type == pg.KEYDOWN:
+
+            if self.check_cooldown_time(
+                event=event, key=pg.K_x, ct=ct, cool_down_time=0.5
+            ):
+                logging.debug("calling next_help_screen...")
+                self.client_state.next_help_screen()
+                return True
+
+            if self.client_state.help_screen_idx != -1:
+                return False  # we are in help screen mode
+
+            if self.check_keyhold_time(event=event, key=pg.K_q, ct=ct, wait_time=1.0):
+                self.quit()
+                return False
+
+            if self.check_cooldown_time(
+                event=event, key=pg.K_SLASH, ct=ct, cool_down_time=0.1
+            ):
+                self.get_sgd()
+            elif self.check_cooldown_time(
+                event=event,
+                key=pg.K_SPACE,
+                ct=ct,
+                cool_down_time=self.key_seconds_pressed,
+            ):
+                logging.debug("getting new set of vectors")
+                self.get_next_dims()
+            elif event.key == pg.K_LEFTBRACKET:
+                self.client_state.step_size_increase(self.step_size_keyboard_multiplier)
+                self.view.update_step_size()
+                self.send_config()
+                logging.debug("keyboard_client: increase step size")
+                return True
+            elif event.key == pg.K_RIGHTBRACKET:
+                self.client_state.step_size_decrease(self.step_size_keyboard_multiplier)
+                self.view.update_step_size()
+                self.send_config()
+                logging.debug("keyboard_client: decrease step size")
+                return True
+            elif self.check_cooldown_time(
+                event=event,
+                key=pg.K_SLASH,
+                ct=ct,
+                cool_down_time=self.key_seconds_pressed,
+            ):
+                self.client_state.toggle_dtype()
+                self.send_config()
+            elif self.check_cooldown_time(
+                event=event,
+                key=pg.K_SEMICOLON,
+                ct=ct,
+                cool_down_time=0.5,
+            ):
+                self.client_state.toggle_batch_size()
+                self.send_config()
+            elif self.check_cooldown_time(
+                event=event,
+                key=pg.K_RETURN,
+                ct=ct,
+                cool_down_time=self.key_seconds_pressed,
+            ):
+                self.get_next_batch()
+        return False
+
     def run_loop(self):
         self.before_first_loop()
         while self.hudes_websocket_client.running:
             self.before_pg_event()
             redraw = False
             for event in pg.event.get():
+                if event.type == pg.KEYDOWN:
+                    self.update_key_holds()
                 redraw |= self.process_key_press(event)
 
             redraw |= self.receive_messages()

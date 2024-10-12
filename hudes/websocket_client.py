@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import socket
 import time
 from functools import cache
 from multiprocessing import Queue
@@ -148,7 +149,11 @@ class HudesWebsocketClient:
                     # when there is no interaction give the system a break(?)
                     # if not send_or_recv:
                     time.sleep(0.01)
-        except ConnectionRefusedError:
+        except (ConnectionRefusedError, socket.gaierror) as e:
+            logging.error(f"Connection issue with {self.remote_addr}, {e}")
+            self.running = False
+        except Exception as e:
+            logging.error(f"Unexpected connection issue with {self.remote_addr}, {e}")
             self.running = False
 
 

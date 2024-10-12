@@ -2,6 +2,8 @@ import argparse
 import logging
 import os
 
+import pygame as pg
+
 from hudes.controllers.keyboard_client import KeyboardClient
 from hudes.controllers.keyboard_client_openGL import KeyboardClientGL
 from hudes.controllers.xtouch_client import XTouchClient
@@ -9,14 +11,21 @@ from hudes.view import OpenGLView, View
 
 
 def main():
+
+    pg.init()
+
     parser = argparse.ArgumentParser(description="Hudes: Keyboardclient")
     parser.add_argument("--input", type=str, default="keyboard")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--grid-size", type=int, default=41)
-    parser.add_argument("--grids", type=int, default=2)
+    parser.add_argument("--grids", type=int, default=3)
     parser.add_argument("--addr", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--controller", type=str, default="wireless_osx")
+    parser.add_argument(
+        "--skip-help",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
@@ -26,6 +35,7 @@ def main():
             port=args.port,
             seed=args.seed,
             joystick_controller_key=args.controller,
+            skip_help=args.skip_help,
         )
         view = View()
     elif args.input == "keyboardGL":
@@ -38,6 +48,7 @@ def main():
             mesh_grids=args.grids,
             mesh_grid_size=args.grid_size,
             joystick_controller_key=args.controller,
+            skip_help=args.skip_help,
         )
         view = OpenGLView(grid_size=args.grid_size, grids=args.grids)
     elif args.input == "xtouch":
@@ -46,6 +57,7 @@ def main():
             port=args.port,
             seed=args.seed,
             joystick_controller_key=args.controller,
+            skip_help=args.skip_help,
         )
         view = View(use_midi=True)
     else:

@@ -1,12 +1,11 @@
 from functools import cache
 
 import matplotlib.backends.backend_agg as agg
-import matplotlib.pyplot as plt
 import numpy as np
 import pygame as pg
-import torch
 from OpenGL.GL import *
 from OpenGL.GLU import *  # Import GLU for perspective functions
+from PIL import Image
 from pygame.locals import *
 
 """
@@ -214,6 +213,53 @@ def create_texture_from_surface(surf):
     )
 
     return texture_id, width, height
+
+
+import pygame as pg
+from OpenGL.GL import *
+
+
+def load_texture(image_path, output_width, output_height):
+    # Load the image using Pygame
+    image = pg.image.load(
+        image_path
+    ).convert_alpha()  # Ensure the image has an alpha channel
+
+    # Flip the image vertically to match OpenGL's coordinate system
+    image = pg.transform.flip(image, False, True)
+
+    # Resize the image to the specified output dimensions
+    image = pg.transform.smoothscale(image, (output_width, output_height))
+
+    # Get the resized image data
+    image_data = pg.image.tostring(
+        image, "RGBA", True
+    )  # Convert the image to a string with RGBA format
+
+    # Generate and bind texture
+    texture_id = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, texture_id)
+
+    # Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+    # Upload the resized image data to the texture
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        output_width,
+        output_height,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        image_data,
+    )
+
+    return texture_id, output_width, output_height
 
 
 def render_texture_rgba(texture_id, width, height, window_size):
