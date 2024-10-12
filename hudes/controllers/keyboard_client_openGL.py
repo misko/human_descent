@@ -42,6 +42,9 @@ class JoyStickController:
     button_key_up: int
     button_key_down: int
 
+    right_js_accel: float = 1.0
+    left_js_accel: float = 1.0
+
 
 controllers = {
     "wireless_osx": JoyStickController(
@@ -72,8 +75,8 @@ controllers = {
         left_js_right_axis=0,
         right_js_down_axis=4,
         right_js_right_axis=3,
-        sgd_button=100,
-        quit_button=100,
+        sgd_button=7,
+        quit_button=6,
         button_y=3,
         button_b=1,
         button_x=2,
@@ -85,6 +88,7 @@ controllers = {
         button_key_up=100,
         button_key_left=100,
         button_key_right=100,
+        right_js_accel=5,
     ),
 }
 
@@ -104,6 +108,7 @@ class KeyboardClientGL(HudesClient):
         self.last_select_press = 0
         self.last_batch_press = 0
         self.last_dims_press = 0
+        self.last_batch_size_press = 0
 
         self.step_size_keyboard_multiplier = 2.5
 
@@ -285,10 +290,20 @@ class KeyboardClientGL(HudesClient):
             radius, angle = B.as_polar()
             if radius > 0.4:
 
-                adjustH = B[0] * 2
-                adjustV = B[1]
+                adjustH = B[0] * 2 * self.joystick_controller.right_js_accel
+                adjustV = B[1] * self.joystick_controller.right_js_accel
                 redraw = True
                 self.view.adjust_angles(adjustH, adjustV)
+
+            hats = joystick.get_numhats()
+            if hats > 0:
+
+                hat = joystick.get_hat(0)
+                if abs(hat[1]) > 0.5 and (ct - self.last_batch_size_press) > 0.2 * 1000:
+                    self.last_batch_size_press = ct
+                    self.client_state.toggle_dtype()
+                    self.send_config()
+
         return redraw
 
     def run_loop(self):
