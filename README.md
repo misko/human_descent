@@ -2,7 +2,7 @@
 
 Human Descent opens the door for you to explore neural network optimization in high-dimensional weight space using the MNIST dataset. Manipulate everyday controllers (keyboard, xbox, DJ MIDI), each corresponding to a random direction in high dimensional weight space, to gain intuitive insights into the dynamics and complexities of neural network training.
 
-[Demo video 2D/3D](https://youtu.be/ADk4AI5_8rw)
+[Demo video 2D/3D](https://youtu.be/VtF9dwoNQ_0)
 
 ### Older demo
 [Demo video](https://youtu.be/mqAmaBP3-Q4)
