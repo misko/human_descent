@@ -3,7 +3,22 @@
 Human Descent opens the door for you to explore neural network optimization in high-dimensional weight space using the MNIST dataset. Manipulate everyday controllers (keyboard, xbox, DJ MIDI), each corresponding to a random direction in high dimensional weight space, to gain intuitive insights into the dynamics and complexities of neural network training.
 
 [Demo video 2D/3D](https://youtu.be/ADk4AI5_8rw)
+
+### Older demo
 [Demo video](https://youtu.be/mqAmaBP3-Q4)
+
+## Installation
+
+```
+git clone https://github.com/misko/human_descent.git # clone the repo
+python3 -m venv hudes_env # create a virual enviornment
+source hudes_env/bin/activate 
+cd human_descent
+pip install . # install human descent and its dependencies in the virtual env
+bash run.sh # download mnist, run the server, and then run the client!
+```
+
+## Details 
 
 The aim of this repository is to build an interactive tool to allow humans to directly
 optimize high dimension problems such as neural network training.
@@ -16,13 +31,3 @@ For example its possible to train a 26,000 parameter MNIST model using a 6 dimen
 
 ![Example snapshot](images/01_demo.jpg)
 
-## Installation
-
-```
-git clone https://github.com/misko/human_descent.git # clone the repo
-python3 -m venv hudes_env # create a virual enviornment
-source hudes_env/bin/activate 
-cd human_descent
-pip install . # install human descent and its dependencies in the virtual env
-bash run.sh # download mnist, run the server, and then run the client!
-```
