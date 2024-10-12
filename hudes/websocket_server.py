@@ -438,6 +438,17 @@ async def run_server(stop, client_runner_q):
 
 
 async def run_wrapper(args):
+    if args.device == "mps" and (
+        not getattr(torch.backends, "mps", False)
+        or not torch.backends.mps.is_available()
+    ):
+        logging.warning("MPS device not found, using CPU")
+        args.device = "cpu"
+    if args.device == "cuda" and (
+        not getattr(torch, "cuda", False) or not torch.cuda.is_available()
+    ):
+        logging.warning("CUDA device not found, using CPU")
+        args.device = "cpu"
     mp.set_start_method("spawn")
     client_runner_q = mp.Queue()
     executor = ThreadPoolExecutor(max_workers=12)
@@ -448,6 +459,8 @@ async def run_wrapper(args):
         model=MNISTFFNN(),
         device=args.device,
     )
+    if args.download_dataset_and_exit:
+        return
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(
         run_server(stop, client_runner_q),
@@ -467,6 +480,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hudes: Server")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--run-in", type=str, default="process")
+    parser.add_argument(
+        "--download-dataset-and-exit",
+        action="store_true",
+    )
 
     args = parser.parse_args()
     asyncio.run(run_wrapper(args))

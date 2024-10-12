@@ -18,8 +18,11 @@ For example its possible to train a 26,000 parameter MNIST model using a 6 dimen
 
 ## Installation
 
-
 ```
-git clone https://github.com/misko/human_descent.git
-
+git clone https://github.com/misko/human_descent.git # clone the repo
+python3 -m venv hudes_env # create a virual enviornment
+source hudes_env/bin/activate 
+cd human_descent
+pip install . # install human descent and its dependencies in the virtual env
+bash run.sh # download mnist, run the server, and then run the client!
 ```
