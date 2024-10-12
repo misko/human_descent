@@ -1,5 +1,6 @@
 import logging
 import math
+import os
 from typing import List
 
 import cairo
@@ -52,6 +53,7 @@ class View:
 
         pg.midi.init()
 
+        pg.key.set_repeat(100)
         if use_midi:
             self.midi_input_id = pygame.midi.get_default_input_id()
             print(f"using input_id :{self.midi_input_id}:")
@@ -89,8 +91,6 @@ class View:
         prop_cycle = plt.rcParams["axes.prop_cycle"]
         self.plt_colors = prop_cycle.by_key()["color"]
 
-        self.best_score = math.inf
-
         self.redraw_confusion = True
         self.redraw_dims = True
         self.redraw_preds = True
@@ -104,12 +104,21 @@ class View:
         self.dims_chart_init = False
         self.init_step_size_plot = False
 
-        self.best_score = None
-
         self.font = pygame.font.SysFont("Comic Sans MS", 30)
-        self.update_top(-math.inf)
         for _ax in self.axd:
             self.axd[_ax].redraw = True
+
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.help_screen_fns = [
+            os.path.join(current_dir, x)
+            for x in [
+                "help_screens/hudes_help_start.png",
+                "help_screens/hudes_1d_1.png",
+                "help_screens/hudes_1d_2.png",
+                "help_screens/hudes_1d_3.png",
+                "help_screens/hudes_1d_4.png",
+            ]
+        ]
 
     def update_examples(self, train_data: torch.Tensor):
         if not self.example_im_show_init:
@@ -123,14 +132,13 @@ class View:
         else:
             for idx, _ax in enumerate(("F", "G", "H", "M")):
                 ax = self.axd[_ax]
-                ax.im.set_data(train_data[idx])
+                if idx < len(train_data):
+                    ax.im.set_data(train_data[idx])
                 ax.redraw = True
 
-    def update_top(self, maybe_new_best_score):
-        if self.best_score is None or maybe_new_best_score > self.best_score:
-            self.best_score = maybe_new_best_score
-            render_str = f"Human Descent: MNIST      Top-score: {self.best_score:.5e}"
-            self.top_title_rendered = self.font.render(render_str, False, (0, 0, 0))
+    def update_top(self):
+        render_str = f"Hudes: MNIST ,Score: {self.client_state.best_score:.4e} , Batch-size: {self.client_state.batch_size}, {self.client_state.dtype}, SGDsteps: {self.client_state.sgd_steps}"
+        self.top_title_rendered = self.font.render(render_str, False, (0, 0, 0))
 
     def update_step_size(
         self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
@@ -200,8 +208,12 @@ class View:
         else:
             for idx, _ax in enumerate(("J", "K", "L", "N")):
                 ax = self.axd[_ax]
-                for bar, new_height in zip(ax.bars, train_preds[idx]):
-                    bar.set_height(new_height)
+                if idx < train_preds.shape[0]:
+                    for bar, new_height in zip(ax.bars, train_preds[idx]):
+                        bar.set_height(new_height)
+                else:
+                    for bar in ax.bars:
+                        bar.set_height(0)
                 ax.redraw = True
 
     def plot_train_and_val(
@@ -211,8 +223,7 @@ class View:
         val_losses: List[float],
         val_steps: List[int],
     ):
-        maybe_new_best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
-        self.update_top(maybe_new_best_score=maybe_new_best_score)
+        self.update_top()
 
         self.axd["B"].cla()
         self.axd["B"].plot(train_steps, train_losses, label="train")
@@ -241,29 +252,45 @@ class View:
             else:
                 self.fig.canvas.restore_region(ax.cache)
 
+    def next_help_screen(self):
+        self.client_state.help_screen_idx += 1
+        if self.client_state.help_screen_idx >= len(self.help_screen_fns):
+            self.client_state.help_screen_idx = -1  # disable help screen mode
+            return
+
     def draw(self):
 
-        logging.debug("hudes_client: redraw")
-        if "cairo" in plt_backend.lower():
+        logging.debug("hudes_client: redraw ")
+        if self.client_state.help_screen_idx == -1:
+            if "cairo" in plt_backend.lower():
 
-            self.draw_or_restore()
+                self.draw_or_restore()
 
-            surf = pygame.image.frombuffer(
-                self.surface.get_data(), self.window_size, "RGBA"
-            )
-            self.screen.blit(surf, (0, 0))
-            self.screen.blit(self.top_title_rendered, (0, 0))
+                surf = pygame.image.frombuffer(
+                    self.surface.get_data(), self.window_size, "RGBA"
+                )
+                self.screen.blit(surf, (0, 0))
+                self.screen.blit(self.top_title_rendered, (0, 0))
+            else:
+                self.renderer.clear()
+                self.draw_or_restore()
+
+                surf = pg.image.frombytes(
+                    self.renderer.tostring_rgb(),
+                    self.window_size,
+                    "RGB",
+                )
+                self.screen.blit(surf, (0, 0))
+                self.screen.blit(self.top_title_rendered, (0, 0))
         else:
-            self.renderer.clear()
-            self.draw_or_restore()
 
-            surf = pg.image.frombytes(
-                self.renderer.tostring_rgb(),
-                self.window_size,
-                "RGB",
-            )
-            self.screen.blit(surf, (0, 0))
-            self.screen.blit(self.top_title_rendered, (0, 0))
+            help_screen_fn = self.help_screen_fns[self.client_state.help_screen_idx]
+            logging.debug(f"help_screen: {help_screen_fn}")
+            image = pygame.image.load(
+                help_screen_fn
+            ).convert()  # Replace "your_image.jpg" with the path to your image
+            image = pygame.transform.scale(image, self.window_size)
+            self.screen.blit(image, (0, 0))
 
         pg.display.flip()  # draws whole screen vs update that draws a parts
 
@@ -421,8 +448,7 @@ class OpenGLView:
                 """
         )
 
-        self.dtype = "?"
-        self.batch_size = "?"
+        self.client_state = None
 
     def update_examples(self, train_data: torch.Tensor):
         self.axd["F"].cla()
@@ -435,9 +461,9 @@ class OpenGLView:
 
     def update_top(self, best_score):
         if best_score is None:
-            self.fig.suptitle("Human Descent: MNIST      Top-score: ?")
+            self.fig.suptitle("Hudes: MNIST , Top-score: ?")
         else:
-            self.fig.suptitle(f"Human Descent: MNIST      Top-score: {best_score:.5e}")
+            self.fig.suptitle(f"Hudes: MNIST , Top-score: {best_score:.5e}")
 
     def update_step_size(
         self, log_step_size: float, max_log_step_size: float, min_log_step_size: float
@@ -552,12 +578,13 @@ class OpenGLView:
         self.angleV = self.default_angleV
 
     def draw_all_text(self):
-        render_text_2d(
-            f"batch-size: {self.batch_size}, dtype: {self.dtype}",
-            20,
-            self.window_size[0],
-            self.window_size[1],
-        )
+        if self.client_state is not None:
+            render_text_2d(
+                f"batch-size: {self.client_state.batch_size}, dtype: {self.client_state.dtype}",
+                20,
+                self.window_size[0],
+                self.window_size[1],
+            )
 
     def draw(self):
         # Handle mouse motion for rotation

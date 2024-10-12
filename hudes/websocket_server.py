@@ -393,6 +393,9 @@ async def process_client(websocket, client_runner_q):
             client.force_update = True
         elif msg.type == hudes_pb2.Control.CONTROL_CONFIG:
             logging.debug(f"process_client: {client_idx} : control config")
+            old_batch_size = client.batch_size
+            old_dtype = client.dtype
+
             client.dims_at_a_time = msg.config.dims_at_a_time
             client.seed = msg.config.seed
             client.mesh_grid_size = msg.config.mesh_grid_size
@@ -401,7 +404,11 @@ async def process_client(websocket, client_runner_q):
             client.batch_size = msg.config.batch_size
             client.dtype = getattr(torch, msg.config.dtype)
 
-            if client.mesh_grids > 0:  # if we have grids, step size changes mesh
+            if (
+                client.mesh_grids > 0
+                or old_batch_size != client.batch_size
+                or old_dtype != client.dtype
+            ):  # if we have grids, step size changes mesh
                 client.force_update = True
 
         elif msg.type == hudes_pb2.Control.CONTROL_QUIT:

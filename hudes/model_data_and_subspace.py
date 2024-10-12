@@ -220,6 +220,7 @@ class ModelDataAndSubspace:
     ) -> dict[str, torch.Tensor]:
         assert self.fused
         batch = self.get_batch(batch_size, batch_idx, dtype=dtype, train_or_val="train")
+        logging.debug(f"GOT batch {batch_size} {batch_idx} {batch[0].shape}")
         self.set_parameters(weights, dtype)
         model_output = self.models[dtype](batch[0])
         train_loss = self.loss_fn(model_output, batch[1]).mean().item()
@@ -231,6 +232,8 @@ class ModelDataAndSubspace:
         logging.info(
             f"train loss: {train_loss} MO:{model_output.mean()}/{model_output.shape} weights {weights.mean().item()} {dtype}"
         )
+        logging.debug(f"train loss: total preds {train_pred.shape}")
+        # breakpoint()
         return {
             "train_loss": train_loss,
             "train_preds": train_pred[: self.return_n_preds].cpu(),
@@ -240,6 +243,8 @@ class ModelDataAndSubspace:
     def sgd_step(self, model_weights, n_steps, dtype, batch_size, batch_idx):
         # set the model parameters
         self.set_parameters(model_weights, dtype)
+        if model_weights.device.type == "mps" and dtype != torch.float32:
+            dtype = torch.float32
         # figure out if we need to make a new optimizer
         model = self.models[dtype]
         optimizer = torch.optim.SGD(model.parameters(), lr=0.05)

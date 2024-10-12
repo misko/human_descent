@@ -75,9 +75,9 @@ class KeyboardClientGL(KeyboardClient):
             self.joystick_controller_key
         ]
 
-        self.set_batch_size(32)
-        self.set_dtype("float16")
-        self.set_n(self.mesh_grids * 2)
+        self.client_state.set_batch_size(32)
+        self.client_state.set_dtype("float16")
+        self.client_state.set_n(self.mesh_grids * 2)
 
     def process_key_press(self, event):
         redraw = super().process_key_press(event)  # use the keyboard interface
