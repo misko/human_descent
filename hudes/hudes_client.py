@@ -21,7 +21,7 @@ from hudes.websocket_client import (
 
 class ClientState:
 
-    def __init__(self, step_size_resolution, inital_step_size_idx, help_screen_idx=0):
+    def __init__(self, step_size_resolution, initial_step_size_idx, help_screen_idx=0):
         self.best_score = math.inf
         self.sgd_steps = 0
 
@@ -35,10 +35,10 @@ class ClientState:
 
         self.max_log_step_size = 2
         self.min_log_step_size = -4
-        self.inital_step_size_idx = inital_step_size_idx
+        self.inital_step_size_idx = initial_step_size_idx
         self.step_size_resolution = step_size_resolution
 
-        self.set_step_size_idx(inital_step_size_idx)
+        self.set_step_size_idx(initial_step_size_idx)
 
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.help_screen_idx = help_screen_idx
@@ -113,7 +113,7 @@ class HudesClient:
         mesh_grid_size=31,
         joystick_controller_key=None,
         step_size_resolution=-0.05,
-        inital_step_size_idx=10,
+        inital_step_size_idx=12,
         skip_help=False,
     ):
         self.joystick_controller_key = joystick_controller_key
@@ -136,7 +136,7 @@ class HudesClient:
 
         self.client_state = ClientState(
             step_size_resolution=step_size_resolution,
-            inital_step_size_idx=inital_step_size_idx,
+            initial_step_size_idx=inital_step_size_idx,
             help_screen_idx=-1 if skip_help else 0,
         )
 
