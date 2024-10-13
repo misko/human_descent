@@ -43,6 +43,7 @@ class ClientState:
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.help_screen_idx = help_screen_idx
         self.help_screen_fns = []
+        self.dims_used = 0
 
     def set_help_screen_fns(self, help_screen_fns):
         self.help_screen_fns = [
@@ -131,6 +132,8 @@ class HudesClient:
         self.val_steps = []
         self.val_losses = []
 
+        self.dims_used = 0
+
         self.client_state = ClientState(
             step_size_resolution=step_size_resolution,
             inital_step_size_idx=inital_step_size_idx,
@@ -177,6 +180,7 @@ class HudesClient:
         self.hudes_websocket_client.send_q.put(next_dims_message().SerializeToString())
         self.zero_dims_and_steps_on_current_dims()
         self.dims_and_steps_updated()
+        self.client_state.dims_used += self.client_state.n
 
     def zero_dims_and_steps_on_current_dims(self):
         self.dims_and_steps_on_current_dims = np.zeros(self.client_state.n)

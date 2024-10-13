@@ -74,7 +74,9 @@ class XTouchClient(KeyboardClient):
                 action = self.bindings[event.data1]
                 if action == "quit":
                     logging.debug("quitting...")
-                    self.hudes_websocket_client.running = False
+                    self.quit()
+                    return False
+                    # self.hudes_websocket_client.running = False
                 elif action == "sgd":
                     self.get_sgd()
                 elif action == "batch":

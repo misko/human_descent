@@ -139,7 +139,7 @@ class View:
 
     def update_top(self):
         time = pg.time.get_ticks() / 1000
-        render_str = f"Hudes: MNIST ,Score: {self.client_state.best_score:.4e} , BSize: {self.client_state.batch_size}, {self.client_state.dtype}, SGD: {self.client_state.sgd_steps} Time: {time:0.1f}"
+        render_str = f"Hudes: MNIST Score: {self.client_state.best_score:.3f} BSize: {self.client_state.batch_size} {self.client_state.dtype} SGD: {self.client_state.sgd_steps} Time: {time:0.1f} Dims: {self.client_state.dims_used}"
         self.top_title_rendered = self.font.render(render_str, False, (0, 0, 0))
 
     def update_step_size(self):
@@ -469,7 +469,10 @@ class OpenGLView:
 
         self.old_batch_size = 0
         self.old_dtype = 0
+        self.old_dims_used = 0
+        self.old_best_score = 0
         self.large_text_start = 0
+        self.old_sgd = 0
 
         self.text_str = ""
 
@@ -481,12 +484,6 @@ class OpenGLView:
         self.axd["G"].cla()
         self.axd["G"].imshow(train_data[1])
         self.axd["G"].set_title("Ex. 2 img")
-
-    def update_top(self, best_score):
-        if best_score is None:
-            self.fig.suptitle("Hudes: MNIST , Top-score: ?")
-        else:
-            self.fig.suptitle(f"Hudes: MNIST , Top-score: {best_score:.5e}")
 
     def update_step_size(self):
         pass
@@ -519,9 +516,6 @@ class OpenGLView:
         val_losses: List[float],
         val_steps: List[int],
     ):
-        best_score = min(val_losses) if len(val_losses) > 0 else -math.inf
-        self.update_top(best_score)
-
         self.axd["B"].cla()
         self.axd["B"].plot(train_steps, train_losses, label="train")
         self.axd["B"].plot(val_steps, val_losses, label="val")
@@ -606,16 +600,26 @@ class OpenGLView:
             if (
                 self.old_batch_size != self.client_state.batch_size
                 or self.old_dtype != self.client_state.dtype
+                or self.old_dims_used != self.client_state.dims_used
+                or self.old_best_score != self.client_state.best_score
+                or self.old_sgd != self.client_state.sgd_steps
             ):
                 self.large_text_start = pg.time.get_ticks()
                 self.old_batch_size = self.client_state.batch_size
                 self.old_dtype = self.client_state.dtype
+                self.old_dims_used = self.client_state.dims_used
+                self.old_best_score = self.client_state.best_score
+                self.old_sgd = self.client_state.sgd_steps
             font_size = 20
             time = pg.time.get_ticks()
             if (time - self.large_text_start) < 2000:
-                font_size = 60
+                font_size = 50
 
-            text_str = f"batch-size: {self.client_state.batch_size}, dtype: {self.client_state.dtype}, time: {time/1000:.1f}"
+            text_str = (
+                f"val:{self.client_state.best_score:.3f} "
+                + f"bs:{self.client_state.batch_size} ({self.client_state.dtype.replace('float','f')})"
+                + f" t:{time/1000:.1f}s dims:{self.client_state.dims_used} sgd:{self.client_state.sgd_steps}"
+            )
             if self.text_str != text_str:
                 self.text_str = text_str
                 self.text_data, self.text_width, self.text_height = (

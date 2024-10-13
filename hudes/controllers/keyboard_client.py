@@ -79,7 +79,7 @@ To control each dimension use:
                     event=event,
                     key=event.key,
                     ct=ct,
-                    cool_down_time=0.1,
+                    cool_down_time=0.2,
                 ):
                     dim, sign = self.key_to_param_and_sign[event.key]
                     self.send_dims_and_steps({dim: self.client_state.step_size * sign})
