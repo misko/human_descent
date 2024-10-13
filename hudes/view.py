@@ -239,6 +239,7 @@ class View:
         self.axd["B"].set_title("Loss")
         self.axd["B"].set_xlabel("Step")
         self.axd["B"].set_ylabel("Loss")
+        self.axd["B"].set_ylim([0.0, 2.5])
         self.axd["B"].redraw = True
 
         self.axd["D"].cla()
