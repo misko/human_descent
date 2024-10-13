@@ -36,6 +36,50 @@ class MNISTFFNN(nn.Module):
         return x.exp()
 
 
+class MNISTCNN2(nn.Module):
+    def __init__(self, seed=0):
+        super().__init__()
+        torch.manual_seed(seed)
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=1,
+                out_channels=8,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+            ),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+        )
+        out_c_l2 = 2
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=8,
+                out_channels=out_c_l2,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+            ),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        # fully connected layer, output 10 classes
+        self.out = nn.Linear(out_c_l2 * 3 * 3, 10)
+        self.sm = nn.LogSoftmax(dim=1)
+        self.flatten = torch.nn.Flatten(1)
+        self.unsqueeze = Unsqueeze(1)
+
+        self.net = torch.nn.Sequential(
+            self.unsqueeze, self.conv1, self.conv2, self.flatten, self.out, self.sm
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+    def probs(self, x: torch.Tensor):
+        return x.exp()
+
+
 class MNISTCNN(nn.Module):
     def __init__(self, seed=0):
         super().__init__()

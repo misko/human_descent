@@ -24,6 +24,7 @@ from hudes import hudes_pb2
 from hudes.model_data_and_subspace import ModelDataAndSubspace
 from hudes.models_and_datasets.mnist import (
     MNISTCNN,
+    MNISTCNN2,
     MNISTFFNN,
     mnist_model_data_and_subpace,
 )
@@ -464,6 +465,8 @@ async def run_wrapper(args):
         model = MNISTCNN()
     elif args.model == "ffnn":
         model = MNISTFFNN()
+    elif args.model == "cnn2":
+        model = MNISTCNN2()
     n_params = sum([p.numel() for p in model.parameters()])
     logging.info(f"Initialized model with {n_params} parameters")
 
@@ -495,7 +498,7 @@ if __name__ == "__main__":
         "--model",
         type=str,
         default="ffnn",
-        choices=["cnn", "ffnn"],
+        choices=["cnn", "ffnn", "cnn2"],
     )
     parser.add_argument("--run-in", type=str, default="process")
     parser.add_argument(
