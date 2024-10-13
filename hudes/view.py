@@ -117,7 +117,7 @@ class View:
         self.dims_chart_init = False
         self.init_step_size_plot = False
 
-        self.font = pygame.font.SysFont("Comic Sans MS", 30)
+        self.font = pygame.font.SysFont(pygame.font.get_default_font(), 46)
         for _ax in self.axd:
             self.axd[_ax].redraw = True
 
