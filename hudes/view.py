@@ -56,7 +56,18 @@ class View:
 
         pg.key.set_repeat(100)
         if use_midi:
-            self.midi_input_id = pygame.midi.get_default_input_id()
+            device_count = pygame.midi.get_count()
+            logging.info(f"Number of MIDI devices found: {device_count}")
+            # List available MIDI devices
+            for device_id in range(device_count):
+                device_info = pygame.midi.get_device_info(device_id)
+                # device_info returns a tuple (interface, name, input, output, opened)
+                interface, name, is_input, is_output, opened = device_info
+                if is_input:
+                    name = name.decode("utf-8")
+                    logging.info(f"Device ID {device_id}: {name}")
+                    if "x-touch" in name.lower() or "xtouch" in name.lower():
+                        self.midi_input_id = device_id
             logging.info(f"using input_id :{self.midi_input_id}:")
             self.midi_input = pygame.midi.Input(self.midi_input_id)
 
