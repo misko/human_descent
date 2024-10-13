@@ -45,12 +45,12 @@ class Unsqueeze(torch.nn.Module):
         return x.unsqueeze(self.dim)
 
 
-@torch.compile
 class MFSequential:
     def __init__(self, modules_list):
         self.params = 0
         self.modules_list = modules_list
 
+    @torch.compile
     def forward(self, models_params, x):
         for module in self.modules_list:
             if isinstance(module, torch.nn.Module):
@@ -60,13 +60,13 @@ class MFSequential:
         return models_params, x
 
 
-@torch.compile
 class MFMaxPool2d:
     def __init__(self, kernel_size, stride, padding):
         self.maxpool2d = torch.nn.MaxPool2d(
             kernel_size=kernel_size, stride=stride, padding=padding
         )
 
+    @torch.compile
     def forward(self, models_params, x):
         n, k, out_c, in_h, in_w = x.shape
         output = self.maxpool2d(x.reshape(n * k, out_c, in_h, in_w))
@@ -79,7 +79,6 @@ class MFMaxPool2d:
         )
 
 
-@torch.compile
 class MFConv2d:
     def __init__(
         self,
@@ -104,6 +103,7 @@ class MFConv2d:
         self.bias_params = self.output_channels
         self.params = self.weight_params + self.bias_params
 
+    @torch.compile
     def forward(self, models_params: torch.Tensor, x: torch.Tensor):
         # model_params ~ (models, params)
         weights = models_params[:, : self.weight_params].reshape(
@@ -146,7 +146,6 @@ class MFConv2d:
         )
 
 
-@torch.compile
 class MFLinear:
     def __init__(self, input_channels: int, output_channels: int):
         self.input_channels = input_channels
@@ -156,7 +155,7 @@ class MFLinear:
         self.bias_params = self.output_channels
         self.params = self.weight_params + self.bias_params
 
-    # @torch.compile
+    @torch.compile
     def forward(self, models_params: torch.Tensor, x: torch.Tensor):
         # model_params ~ (models, params)
         _weights = models_params[:, : self.weight_params].reshape(
