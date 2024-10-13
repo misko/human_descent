@@ -45,6 +45,7 @@ class Unsqueeze(torch.nn.Module):
         return x.unsqueeze(self.dim)
 
 
+@torch.compile
 class MFSequential:
     def __init__(self, modules_list):
         self.params = 0
@@ -52,16 +53,14 @@ class MFSequential:
 
     def forward(self, models_params, x):
         for module in self.modules_list:
-            print("BEFORE", models_params.shape, x.shape)
             if isinstance(module, torch.nn.Module):
-                print("RUNNING MODULE")
                 x = module(x)
             else:
                 models_params, x = module.forward(models_params, x)
-            print("AFTER", models_params.shape, x.shape)
         return models_params, x
 
 
+@torch.compile
 class MFMaxPool2d:
     def __init__(self, kernel_size, stride, padding):
         self.maxpool2d = torch.nn.MaxPool2d(

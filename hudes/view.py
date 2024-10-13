@@ -666,7 +666,10 @@ class OpenGLView:
 
         # Translate to center the grids
         # -3 for now, moves it up
-        glTranslatef(-self.total_width / 2.0 + self.grid_width / 2, -3, 0.0)
+        translate_offset = -(self.grid_size - 11) / 10
+        glTranslatef(
+            -self.total_width / 2.0 + self.grid_width / 2, translate_offset, 0.0
+        )
 
         # Enable vertex arrays and color arrays
         glEnableClientState(GL_VERTEX_ARRAY)

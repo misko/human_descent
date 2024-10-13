@@ -494,7 +494,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         type=str,
-        default="cnn",
+        default="ffnn",
         choices=["cnn", "ffnn"],
     )
     parser.add_argument("--run-in", type=str, default="process")

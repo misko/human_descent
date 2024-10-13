@@ -203,9 +203,6 @@ class ModelDataAndSubspace:
     ) -> dict[str, torch.Tensor]:
         assert self.fused
         batch = self.get_batch(batch_size, batch_idx, dtype=dtype, train_or_val="train")
-        logging.debug(
-            f"GOT batch {batch_size} {batch_idx} {batch[0].shape} , weights {weights.shape}"
-        )
         self.set_parameters(weights, dtype)
         model_output = self.models[dtype](batch[0])
         train_loss = self.loss_fn(model_output, batch[1]).mean().item()
@@ -217,7 +214,6 @@ class ModelDataAndSubspace:
         logging.info(
             f"train loss: {train_loss} MO:{model_output.mean()}/{model_output.shape} weights {weights.mean().item()} {dtype}"
         )
-        logging.debug(f"train loss: total preds {train_pred.shape}")
         # breakpoint()
         return {
             "train_loss": train_loss,
@@ -285,6 +281,7 @@ class ModelDataAndSubspace:
         step_size,
         batch_size,
         dtype,
+        max_models=256,
     ):
         assert grid_size % 2 == 1
         assert grid_size > 3
@@ -296,7 +293,7 @@ class ModelDataAndSubspace:
             dtype=dtype,
             train_or_val="train",
         )
-        data = batch[0].unsqueeze(0).expand(grid_size * grid_size, *batch[0].shape)
+        data = batch[0].unsqueeze(0).expand(max_models, *batch[0].shape)
         batch_size = data.shape[1]
         label = batch[1]
         r = (torch.arange(grid_size, device=self.device) - grid_size // 2) * step_size
@@ -311,13 +308,25 @@ class ModelDataAndSubspace:
             mp = self.dim_idxs_and_ranges_to_models_parms(
                 base_weights, dims, arange=r, brange=r, dtype=dtype
             )
-            # breakpoint()
+
+            # chunkify the models, so not to blow up the GPU
             mp_reshaped = mp.reshape(-1, self.num_params).contiguous()
-            predictions = (
-                self.param_models[dtype]
-                .forward(mp_reshaped, data)[1]
-                .reshape(*mp.shape[:2], batch_size, -1)
+            offset = 0
+            predictions = []
+            while offset < mp_reshaped.shape[0]:
+                effective_models = min(mp_reshaped.shape[0] - offset, max_models)
+                predictions.append(
+                    self.param_models[dtype].forward(
+                        mp_reshaped[offset : offset + effective_models],
+                        data[:effective_models],
+                    )[1]
+                )
+                offset += max_models
+            predictions = torch.vstack(predictions).reshape(
+                *mp.shape[:2], batch_size, -1
             )
+
+            # predictions = self.param_models[dtype].forward(mp_reshaped, data)[1]
             loss = torch.gather(
                 predictions,
                 3,
