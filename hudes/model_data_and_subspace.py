@@ -6,7 +6,7 @@ from functools import cache
 import torch
 from torch import nn
 
-from hudes.model_first import model_first_nn
+from hudes.model_first.model_first_nn import param_nn_from_sequential
 
 MAX_DIMS = 2**16
 
@@ -57,25 +57,6 @@ def jit_indexed_loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
 
 def indexed_loss(pred: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
     return jit_indexed_loss(pred, label)
-
-
-def get_param_module(module):
-    if isinstance(module, torch.nn.Flatten):
-        return torch.nn.Flatten(start_dim=module.start_dim + 1)
-    if isinstance(module, torch.nn.LogSoftmax):
-        return torch.nn.LogSoftmax(dim=module.dim + 1)
-    if not hasattr(module, "parameters") or len(list(module.parameters())) == 0:
-        return module
-    if isinstance(module, torch.nn.Linear):
-        out_channels, in_channels = module.weight.shape
-        return model_first_nn.Linear(
-            input_channels=in_channels, output_channels=out_channels
-        )
-    raise ValueError(type(module))
-
-
-def param_nn_from_sequential(model):
-    return model_first_nn.Sequential([get_param_module(m) for m in model])
 
 
 @torch.jit.script
@@ -195,7 +176,9 @@ class ModelDataAndSubspace:
         self.model_params[dtype].data.copy_(weights)
 
     @torch.no_grad
-    def val_model_inference_with_delta_weights(self, weights: torch.Tensor, dtype):
+    def val_model_inference_with_delta_weights(
+        self, weights: torch.Tensor, dtype: torch.dtype
+    ):
         assert self.fused
         self.set_parameters(weights, dtype)
         full_val_loss = 0
@@ -216,11 +199,13 @@ class ModelDataAndSubspace:
 
     @torch.no_grad
     def train_model_inference_with_delta_weights(
-        self, weights: torch.Tensor, batch_size: int, batch_idx: int, dtype
+        self, weights: torch.Tensor, batch_size: int, batch_idx: int, dtype: torch.dtype
     ) -> dict[str, torch.Tensor]:
         assert self.fused
         batch = self.get_batch(batch_size, batch_idx, dtype=dtype, train_or_val="train")
-        logging.debug(f"GOT batch {batch_size} {batch_idx} {batch[0].shape}")
+        logging.debug(
+            f"GOT batch {batch_size} {batch_idx} {batch[0].shape} , weights {weights.shape}"
+        )
         self.set_parameters(weights, dtype)
         model_output = self.models[dtype](batch[0])
         train_loss = self.loss_fn(model_output, batch[1]).mean().item()
@@ -311,7 +296,7 @@ class ModelDataAndSubspace:
             dtype=dtype,
             train_or_val="train",
         )
-        data = batch[0].unsqueeze(0)
+        data = batch[0].unsqueeze(0).expand(grid_size * grid_size, *batch[0].shape)
         batch_size = data.shape[1]
         label = batch[1]
         r = (torch.arange(grid_size, device=self.device) - grid_size // 2) * step_size
@@ -326,7 +311,7 @@ class ModelDataAndSubspace:
             mp = self.dim_idxs_and_ranges_to_models_parms(
                 base_weights, dims, arange=r, brange=r, dtype=dtype
             )
-
+            # breakpoint()
             mp_reshaped = mp.reshape(-1, self.num_params).contiguous()
             predictions = (
                 self.param_models[dtype]

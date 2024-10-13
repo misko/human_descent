@@ -9,6 +9,7 @@ from hudes.model_data_and_subspace import (
     ModelDataAndSubspace,
     indexed_loss,
 )
+from hudes.model_first.model_first_nn import Unsqueeze
 
 
 class MNISTFFNN(nn.Module):
@@ -58,14 +59,15 @@ class MNISTCNN(nn.Module):
         # fully connected layer, output 10 classes
         self.out = nn.Linear(32 * 7 * 7, 10)
         self.sm = nn.LogSoftmax(dim=1)
+        self.flatten = torch.nn.Flatten(1)
+        self.unsqueeze = Unsqueeze(1)
+
+        self.net = torch.nn.Sequential(
+            self.unsqueeze, self.conv1, self.conv2, self.flatten, self.out, self.sm
+        )
 
     def forward(self, x):
-        x = self.conv1(x[:, None])
-        x = self.conv2(x)
-        # flatten the output of conv2 to (batch_size, 32 * 7 * 7)
-        x = x.view(x.size(0), -1)
-        output = self.sm(self.out(x))
-        return output  # return x for visualization
+        return self.net(x)
 
     def probs(self, x: torch.Tensor):
         return x.exp()

@@ -310,7 +310,7 @@ class HudesClient:
                 return True
             elif self.check_cooldown_time(
                 event=event,
-                key=pg.K_SLASH,
+                key=pg.K_QUOTE,
                 ct=ct,
                 cool_down_time=self.key_seconds_pressed,
             ):

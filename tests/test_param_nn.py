@@ -1,7 +1,8 @@
 import torch
 
 from hudes.model_data_and_subspace import param_nn_from_sequential
-from hudes.param_nn import Linear, Sequential
+from hudes.model_first.model_first_nn import MFLinear, MFSequential
+from hudes.models_and_datasets.mnist import MNISTCNN
 
 
 def test_linear_and_relu():
@@ -16,7 +17,7 @@ def test_linear_and_relu():
         n_models, batch_size, in_channels
     )
 
-    _mp, out = Linear(in_channels, out_channels).forward(model_params, batch)
+    _mp, out = MFLinear(in_channels, out_channels).forward(model_params, batch)
     out = torch.nn.functional.relu(out)
 
     outputs = []
@@ -47,14 +48,14 @@ def test_mnist():
         torch.nn.LogSoftmax(dim=1),
     )
 
-    mnist_param_net = Sequential(
+    mnist_param_net = MFSequential(
         [
             torch.nn.Flatten(start_dim=2),
-            Linear(mnist_width_height * mnist_width_height, hidden),
+            MFLinear(mnist_width_height * mnist_width_height, hidden),
             torch.nn.ReLU(),
-            Linear(hidden, hidden),
+            MFLinear(hidden, hidden),
             torch.nn.ReLU(),
-            Linear(hidden, mnist_classes),
+            MFLinear(hidden, mnist_classes),
             torch.nn.LogSoftmax(dim=2),
         ]
     )
@@ -66,7 +67,7 @@ def test_mnist():
 
     batch = torch.rand(1, 7, mnist_width_height, mnist_width_height)
 
-    out = mnist_param_net.forward(params, batch)
+    out = mnist_param_net.forward(params, batch.repeat(3, 1, 1, 1))
     _out = mnist_net(batch[0])
     assert out[1][0].isclose(_out, atol=1e-5).all()
     assert not out[1][1].isclose(_out, atol=1e-5).all()
@@ -96,8 +97,27 @@ def test_mnist_multimodel():
 
     batch = torch.rand(1, 7, mnist_width_height, mnist_width_height)
 
-    out = mnist_param_net.forward(params, batch)
+    out = mnist_param_net.forward(params, batch.repeat(3, 1, 1, 1))
     _out = mnist_net(batch[0])
+    assert out[1][0].isclose(_out, atol=1e-5).all()
+    assert not out[1][1].isclose(_out, atol=1e-5).all()
+    assert out[1][2].isclose(_out, atol=1e-5).all()
+
+
+def test_mnistcnn_multimodel():
+    mnist_width_height = 28
+    mnist_cnn = MNISTCNN()
+
+    mnist_param_net = param_nn_from_sequential(mnist_cnn.net)
+
+    params = torch.hstack(
+        [p.clone().reshape(-1) for p in mnist_cnn.parameters()]
+    ).reshape(1, -1)
+    params = torch.vstack([params, params + 0.01, params])
+
+    batch = torch.rand(1, 7, mnist_width_height, mnist_width_height)
+    out = mnist_param_net.forward(params, batch.repeat(3, 1, 1, 1))
+    _out = mnist_cnn(batch[0])
     assert out[1][0].isclose(_out, atol=1e-5).all()
     assert not out[1][1].isclose(_out, atol=1e-5).all()
     assert out[1][2].isclose(_out, atol=1e-5).all()

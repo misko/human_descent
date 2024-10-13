@@ -22,7 +22,11 @@ from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
 from hudes.model_data_and_subspace import ModelDataAndSubspace
-from hudes.models_and_datasets.mnist import MNISTFFNN, mnist_model_data_and_subpace
+from hudes.models_and_datasets.mnist import (
+    MNISTCNN,
+    MNISTFFNN,
+    mnist_model_data_and_subpace,
+)
 
 client_idx = 0
 active_clients = {}
@@ -456,8 +460,15 @@ async def run_wrapper(args):
     loop = asyncio.get_running_loop()
     loop.set_default_executor(executor)
 
+    if args.model == "cnn":
+        model = MNISTCNN()
+    elif args.model == "ffnn":
+        model = MNISTFFNN()
+    n_params = sum([p.numel() for p in model.parameters()])
+    logging.info(f"Initialized model with {n_params} parameters")
+
     mad = mnist_model_data_and_subpace(
-        model=MNISTFFNN(),
+        model=model,
         device=args.device,
     )
     if args.download_dataset_and_exit:
@@ -480,6 +491,12 @@ if __name__ == "__main__":
     )
     parser = argparse.ArgumentParser(description="Hudes: Server")
     parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="cnn",
+        choices=["cnn", "ffnn"],
+    )
     parser.add_argument("--run-in", type=str, default="process")
     parser.add_argument(
         "--download-dataset-and-exit",
