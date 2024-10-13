@@ -26,6 +26,7 @@ from hudes.opengl_func import (
     draw_red_sphere,
     load_texture,
     render_text_2d,
+    render_text_2d_to_data,
     render_texture_rgba,
     update_grid_cbo,
     update_grid_vbo,
@@ -137,7 +138,8 @@ class View:
                 ax.redraw = True
 
     def update_top(self):
-        render_str = f"Hudes: MNIST ,Score: {self.client_state.best_score:.4e} , Batch-size: {self.client_state.batch_size}, {self.client_state.dtype}, SGDsteps: {self.client_state.sgd_steps}"
+        time = pg.time.get_ticks() / 1000
+        render_str = f"Hudes: MNIST ,Score: {self.client_state.best_score:.4e} , BSize: {self.client_state.batch_size}, {self.client_state.dtype}, SGD: {self.client_state.sgd_steps} Time: {time:0.1f}"
         self.top_title_rendered = self.font.render(render_str, False, (0, 0, 0))
 
     def update_step_size(self):
@@ -469,6 +471,8 @@ class OpenGLView:
         self.old_dtype = 0
         self.large_text_start = 0
 
+        self.text_str = ""
+
     def update_examples(self, train_data: torch.Tensor):
         self.axd["F"].cla()
         self.axd["F"].imshow(train_data[0])
@@ -607,13 +611,23 @@ class OpenGLView:
                 self.old_batch_size = self.client_state.batch_size
                 self.old_dtype = self.client_state.dtype
             font_size = 20
-            if (pg.time.get_ticks() - self.large_text_start) < 2000:
-                font_size = 80
+            time = pg.time.get_ticks()
+            if (time - self.large_text_start) < 2000:
+                font_size = 60
+
+            text_str = f"batch-size: {self.client_state.batch_size}, dtype: {self.client_state.dtype}, time: {time/1000:.1f}"
+            if self.text_str != text_str:
+                self.text_str = text_str
+                self.text_data, self.text_width, self.text_height = (
+                    render_text_2d_to_data(text=text_str, font_size=font_size)
+                )
+
             render_text_2d(
-                f"batch-size: {self.client_state.batch_size}, dtype: {self.client_state.dtype}",
-                font_size,
-                self.window_size[0],
-                self.window_size[1],
+                text_data=self.text_data,
+                text_width=self.text_width,
+                text_height=self.text_height,
+                screen_width=self.window_size[0],
+                screen_height=self.window_size[1],
             )
 
     def next_help_screen(self):

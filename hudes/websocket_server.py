@@ -175,7 +175,8 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
     logging.info(f"inference_runner_clients: started")
     while True:
         try:
-            await asyncio.to_thread(client_runner_q.get, timeout=0.01)
+            if client_runner_q.empty():
+                await asyncio.to_thread(client_runner_q.get, timeout=0.01)
         except Empty:
             pass
 

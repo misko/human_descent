@@ -414,7 +414,7 @@ def create_matplotlib_texture(fig):
     return raw_data, int(width), int(height)
 
 
-def render_text_2d(text, font_size, screen_width, screen_height):
+def render_text_2d_to_data(text, font_size):
     font = pg.font.SysFont("Arial", font_size)
     text_surface = font.render(text, True, (255, 255, 255))  # White text
     text_data = pg.image.tostring(text_surface, "RGBA", True)
@@ -422,6 +422,10 @@ def render_text_2d(text, font_size, screen_width, screen_height):
     # Get the dimensions of the text surface
     text_width = text_surface.get_width()
     text_height = text_surface.get_height()
+    return text_data, text_width, text_height
+
+
+def render_text_2d(text_data, text_width, text_height, screen_width, screen_height):
 
     # Calculate the position to center the text at the top
     x_position = (screen_width - text_width) // 2
