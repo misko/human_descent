@@ -52,12 +52,10 @@ class MFSequential:
 
     def forward(self, models_params, x):
         for module in self.modules_list:
-            print(type(module), "IN", x.shape)
             if isinstance(module, torch.nn.Module):
                 x = module(x)
             else:
                 models_params, x = module.forward(models_params, x)
-            print(type(module), "OUT", x.shape)
         return models_params, x
 
 
