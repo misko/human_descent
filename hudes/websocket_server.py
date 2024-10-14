@@ -24,8 +24,9 @@ from hudes import hudes_pb2
 from hudes.model_data_and_subspace import ModelDataAndSubspace
 from hudes.models_and_datasets.mnist import (
     MNISTCNN,
-    MNISTCNN2,
+    MNISTCNN3,
     MNISTFFNN,
+    MNISTCNNFlipped,
     mnist_model_data_and_subpace,
 )
 
@@ -461,18 +462,27 @@ async def run_wrapper(args):
     loop = asyncio.get_running_loop()
     loop.set_default_executor(executor)
 
+    param_models = None
     if args.model == "cnn":
         model = MNISTCNN()
+    elif args.model == "cnn3":
+        model = MNISTCNN3()
+    elif args.model == "cnn2":
+        model = MNISTCNN()
+
+        param_models = {
+            torch.float16: MNISTCNNFlipped(),
+            torch.float32: MNISTCNNFlipped(),
+        }
     elif args.model == "ffnn":
         model = MNISTFFNN()
-    elif args.model == "cnn2":
-        model = MNISTCNN2()
+    else:
+        raise ValueError
     n_params = sum([p.numel() for p in model.parameters()])
     logging.info(f"Initialized model with {n_params} parameters")
 
     mad = mnist_model_data_and_subpace(
-        model=model,
-        device=args.device,
+        model=model, device=args.device, param_models=param_models
     )
     if args.download_dataset_and_exit:
         return
@@ -498,7 +508,7 @@ if __name__ == "__main__":
         "--model",
         type=str,
         default="ffnn",
-        choices=["cnn", "ffnn", "cnn2"],
+        choices=["cnn", "ffnn", "cnn2", "cnn3"],
     )
     parser.add_argument("--run-in", type=str, default="process")
     parser.add_argument(

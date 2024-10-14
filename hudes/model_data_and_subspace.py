@@ -86,7 +86,9 @@ class ModelDataAndSubspace:
         minimize: bool = False,
         device="cpu",
         val_batch_size: int = 1024,
+        param_models=None,
     ):
+        self.param_models = param_models
         self.val_batch_size = val_batch_size
         self.device = device
         self._model = model  # .to(self.device)
@@ -157,6 +159,7 @@ class ModelDataAndSubspace:
 
     # todo cache this?
     @cache
+    @torch.no_grad
     def get_batch(self, batch_size: int, batch_idx: int, dtype, train_or_val: str):
         assert train_or_val in self.batchers
         batch = self.batchers[train_or_val].get_batch(batch_size, batch_idx)
@@ -167,6 +170,7 @@ class ModelDataAndSubspace:
 
     # TODO could optimize with one large chunk of shared memory? and slice it?
     @cache
+    @torch.no_grad
     def blank_weight_vec(self):
         return torch.zeros(*self.model_params[torch.float32].shape, device=self.device)
 
@@ -247,12 +251,14 @@ class ModelDataAndSubspace:
         )
 
     def init_param_model(self):
-        self.param_models = {
-            torch.float32: param_nn_from_sequential(self.models[torch.float32].net),
-            torch.float16: param_nn_from_sequential(self.models[torch.float16].net),
-        }
+        if self.param_models is None:
+            self.param_models = {
+                torch.float32: param_nn_from_sequential(self.models[torch.float32].net),
+                torch.float16: param_nn_from_sequential(self.models[torch.float16].net),
+            }
 
     # return model parameters for given ranges
+    @torch.no_grad
     def dim_idxs_and_ranges_to_models_parms(
         self,
         base_weights,
@@ -271,6 +277,7 @@ class ModelDataAndSubspace:
             dtype
         ) @ vs + base_weights.reshape(1, 1, -1)
 
+    @torch.no_grad
     def get_loss_grid(
         self,
         base_weights,

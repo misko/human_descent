@@ -29,7 +29,7 @@ class ClientState:
         self.dtypes = ("float16", "float32")
 
         self.batch_size_idx = 3 - 1
-        self.batch_sizes = [2, 8, 32, 64, 256, 512]
+        self.batch_sizes = [2, 8, 32, 64, 128, 256, 512]
 
         self.n = 6
 

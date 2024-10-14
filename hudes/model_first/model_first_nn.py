@@ -52,10 +52,12 @@ class MFSequential:
 
     def forward(self, models_params, x):
         for module in self.modules_list:
+            print(type(module), "IN", x.shape)
             if isinstance(module, torch.nn.Module):
                 x = module(x)
             else:
                 models_params, x = module.forward(models_params, x)
+            print(type(module), "OUT", x.shape)
         return models_params, x
 
 
@@ -77,6 +79,14 @@ class MFMaxPool2d:
         )
 
 
+class MFFlip:
+    def __init__(self):
+        self.params = 0
+
+    def forward(self, model_params, x):
+        return (model_params, x.transpose(0, 1))
+
+
 class MFConv2d:
     def __init__(
         self,
@@ -85,6 +95,7 @@ class MFConv2d:
         kernel_size: Tuple[int, int],
         stride: Tuple[int, int],
         padding: Tuple[int, int],
+        flipped=False,
     ):
         self.input_channels = input_channels
         self.output_channels = output_channels
@@ -100,6 +111,7 @@ class MFConv2d:
         )
         self.bias_params = self.output_channels
         self.params = self.weight_params + self.bias_params
+        self.flipped = flipped
 
     def forward(self, models_params: torch.Tensor, x: torch.Tensor):
         # model_params ~ (models, params)
@@ -116,12 +128,18 @@ class MFConv2d:
         ].reshape(-1, self.bias_params)
 
         n, out_c, in_c, kh, kw = weights.shape
-        _n, im_k, im_in_c, im_h, im_w = x.shape
-        assert n == _n
 
-        # x is shape (n, k,in_c,h.,w.)
-        # but we need (k,n*in_c,h.,w.)
-        _x = x.transpose(0, 1).reshape(im_k, n * im_in_c, im_h, im_w)
+        if not self.flipped:
+            # x is shape (n, k,in_c,h.,w.)
+            # but we need (k,n*in_c,h.,w.)
+            _n, im_k, im_in_c, im_h, im_w = x.shape
+
+            _x = x.transpose(0, 1).reshape(im_k, n * im_in_c, im_h, im_w)
+        else:
+            # x is shape (k, n , in_c, h., w.)
+            im_k, _n, im_in_c, im_h, im_w = x.shape
+            _x = x.reshape(im_k, n * im_in_c, im_h, im_w)
+        assert n == _n
 
         # weights are (n, out_c, in_c, kh, kw)
         # but we need (n*out_c, in_c, kh, kw)
@@ -135,7 +153,10 @@ class MFConv2d:
             _x, _weights, _bias, stride=self.stride, padding=self.padding, groups=n
         )
         _, _, out_h, out_w = output.shape
-        output = output.reshape(im_k, n, out_c, out_h, out_w).transpose(0, 1)
+        output = output.reshape(im_k, n, out_c, out_h, out_w)
+
+        if not self.flipped:
+            output = output.transpose(0, 1)
 
         return (
             models_params[:, self.params :],
