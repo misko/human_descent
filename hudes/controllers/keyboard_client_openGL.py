@@ -19,8 +19,6 @@ I used chatGPT a lot for this, I have no idea how to use openGL
 
 @dataclass
 class JoyStickController:
-    left_trig_axis: int
-    right_trig_axis: int
     left_js_down_axis: int
     left_js_right_axis: int
     right_js_down_axis: int
@@ -37,36 +35,38 @@ class JoyStickController:
     button_left: int
     button_right: int
 
-    button_key_left: int
-    button_key_right: int
-    button_key_up: int
-    button_key_down: int
+    button_key_left: int = -1
+    button_key_right: int = -1
+    button_key_up: int = -1
+    button_key_down: int = -1
 
     right_js_accel: float = 1.0
     left_js_accel: float = 1.0
 
+    left_trig_axis: int = -1
+    right_trig_axis: int = -1
+
+    left_trig_button: int = -1
+    right_trig_button: int = -1
+
 
 controllers = {
     "wireless_osx": JoyStickController(
-        left_trig_axis=4,
-        right_trig_axis=5,
+        left_trig_button=6,
+        right_trig_button=7,
         left_js_down_axis=1,
         left_js_right_axis=0,
         right_js_down_axis=3,
         right_js_right_axis=2,
-        sgd_button=6,
-        quit_button=4,
-        button_y=2,
-        button_b=0,
-        button_x=3,
+        sgd_button=9,
+        quit_button=8,
+        button_y=3,
+        button_b=2,
+        button_x=0,
         button_a=1,
-        button_left=9,
-        button_right=10,
-        right_js_press_button=8,
-        button_key_down=12,
-        button_key_up=11,
-        button_key_left=13,
-        button_key_right=14,
+        button_left=4,
+        button_right=5,
+        right_js_press_button=11,
     ),
     "wireless_rpi": JoyStickController(
         left_trig_axis=2,
@@ -84,10 +84,6 @@ controllers = {
         button_left=4,
         button_right=5,
         right_js_press_button=10,
-        button_key_down=100,
-        button_key_up=100,
-        button_key_left=100,
-        button_key_right=100,
         right_js_accel=5,
     ),
 }
@@ -217,6 +213,20 @@ class KeyboardClientGL(HudesClient):
                 self.get_sgd()
             elif event.button == self.joystick_controller.quit_button:
                 self.quit()
+            elif (
+                self.joystick_controller.left_trig_button >= 0
+                and event.button == self.joystick_controller.left_trig_button
+            ):
+                self.view.decrement_selected_grid()
+                self.view.update_points_and_colors()
+                redraw = True
+            elif (
+                self.joystick_controller.right_trig_button >= 0
+                and event.button == self.joystick_controller.right_trig_button
+            ):
+                self.view.increment_selected_grid()
+                self.view.update_points_and_colors()
+                redraw = True
 
             elif event.button in (
                 self.joystick_controller.button_key_down,
@@ -257,8 +267,10 @@ class KeyboardClientGL(HudesClient):
                 self.client_state.step_size_increase(2)
                 self.send_config()
 
+            # use that axis that sometimes shows up?
             if (
-                joystick.get_axis(self.joystick_controller.left_trig_axis) > 0.5
+                self.joystick_controller.left_trig_axis >= 0
+                and joystick.get_axis(self.joystick_controller.left_trig_axis) > 0.5
                 and (ct - self.last_select_press) > 0.2 * 1000
             ):
                 self.view.decrement_selected_grid()
@@ -266,7 +278,8 @@ class KeyboardClientGL(HudesClient):
                 redraw = True
                 self.last_select_press = ct
             if (
-                joystick.get_axis(self.joystick_controller.right_trig_axis) > 0.5
+                self.joystick_controller.right_trig_axis >= 0
+                and joystick.get_axis(self.joystick_controller.right_trig_axis) > 0.5
                 and (ct - self.last_select_press) > 0.2 * 1000
             ):
                 self.view.increment_selected_grid()
