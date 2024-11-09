@@ -364,28 +364,43 @@ class HudesClient:
             msg = hudes_pb2.Control()
             msg.ParseFromString(raw_msg)
             if msg.type == hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS:
-                logging.debug("hudes_client: recieve message : loss and preds")
+                logging.debug("hudes_client: receive message : loss and preds")
                 received_train = True
-
-                self.train_preds = pickle.loads(msg.train_loss_and_preds.preds)
+                # Reconstruct the train predictions and confusion matrix from the protobuf message
+                self.train_preds = np.array(msg.train_loss_and_preds.preds).reshape(
+                    msg.train_loss_and_preds.preds_shape
+                )
                 logging.debug(f"hudes_client: len train preds {len(self.train_preds)}")
-                self.confusion_matrix = pickle.loads(
+
+                self.confusion_matrix = np.array(
                     msg.train_loss_and_preds.confusion_matrix
+                ).reshape(msg.train_loss_and_preds.confusion_matrix_shape)
+                logging.debug(
+                    f"hudes_client: confusion {msg.train_loss_and_preds.confusion_matrix_shape}"
                 )
 
                 self.client_state.sgd_steps = msg.total_sgd_steps
 
+                # Update the train losses and steps
                 if len(self.train_steps) == 0 or self.train_steps[-1] < msg.request_idx:
                     self.train_losses.append(msg.train_loss_and_preds.train_loss)
                     self.train_steps.append(msg.request_idx)
-                logging.debug("hudes_client: recieve message : loss and preds : done")
+
+                logging.debug("hudes_client: receive message : loss and preds : done")
 
             elif msg.type == hudes_pb2.Control.CONTROL_BATCH_EXAMPLES:
-                logging.debug("hudes_client: recieve message : examples")
+                logging.debug("hudes_client: receive message : examples")
                 received_batch = True
-                self.train_data = pickle.loads(msg.batch_examples.train_data)
-                self.train_labels = pickle.loads(msg.batch_examples.train_labels)
-                logging.debug("hudes_client: recieve message : done")
+
+                # Reshape train data and labels using numpy and convert them to PyTorch tensors
+                self.train_data = np.array(msg.batch_examples.train_data).reshape(
+                    list(msg.batch_examples.train_data_shape)
+                )
+                self.train_labels = np.array(msg.batch_examples.train_labels).reshape(
+                    list(msg.batch_examples.train_labels_shape)
+                )
+
+                logging.debug("hudes_client: receive message : done")
 
             elif msg.type == hudes_pb2.Control.CONTROL_VAL_LOSS:
                 logging.debug("hudes_client: recieve message : val loss")

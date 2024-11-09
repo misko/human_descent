@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import copy
+import json
 import logging
 import os
 import pickle
@@ -50,13 +51,28 @@ def prepare_batch_example_message(
     batch = mad.get_batch(
         batch_size=batch_size, batch_idx=batch_idx, dtype=dtype, train_or_val="train"
     )
+
+    train_data = batch[0][:n]
+    train_labels = batch[1][:n]
+
+    # Flatten the data for easy serialization
+    train_data_flattened = train_data.flatten().tolist()
+    train_labels_flattened = train_labels.flatten().tolist()
+
+    # Get the shapes
+    train_data_shape = list(train_data.size())
+    train_labels_shape = list(train_labels.size())
+
+    # Create protobuf message
     return hudes_pb2.Control(
         type=hudes_pb2.Control.CONTROL_BATCH_EXAMPLES,
         batch_examples=hudes_pb2.BatchExamples(
             type=hudes_pb2.BatchExamples.Type.IMG_BW,
             n=n,
-            train_data=pickle.dumps(batch[0][:n].tolist()),
-            train_labels=pickle.dumps(batch[1][:n].tolist()),
+            train_data=train_data_flattened,
+            train_data_shape=train_data_shape,
+            train_labels=train_labels_flattened,
+            train_labels_shape=train_labels_shape,
             batch_idx=batch_idx,
         ),
     )
@@ -206,19 +222,20 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
             if client.sent_batch != client.batch_idx:
                 try:
                     logging.debug(f"inference_runner_clients: send batch msg")
-                    await client.websocket.send(
-                        prepare_batch_example_message(
-                            batch_size=client.batch_size,
-                            batch_idx=client.batch_idx,
-                            dtype=client.dtype,
-                            mad=mad,
-                        ).SerializeToString()
-                    )
+                    msg = prepare_batch_example_message(
+                        batch_size=client.batch_size,
+                        batch_idx=client.batch_idx,
+                        dtype=client.dtype,
+                        mad=mad,
+                    ).SerializeToString()
+                    await client.websocket.send(msg)
                 except (
                     websockets.exceptions.ConnectionClosedOK,
                     websockets.exceptions.ConnectionClosedError,
                 ) as e:
                     pass
+                except Exception as e:
+                    logging.error("Error in prepare batch", e)
                 client.sent_batch = client.batch_idx
                 client.force_update = True
 
@@ -283,22 +300,29 @@ async def inference_result_sender(results_q, stop):
             if train_or_val in ("train", "mesh", "sgd"):
                 # TODO need to be ok with getting errors here
                 logging.debug(f"inference_result_sender: sent train to client")
-                await client.websocket.send(
-                    hudes_pb2.Control(
-                        type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
-                        train_loss_and_preds=hudes_pb2.TrainLossAndPreds(
-                            train_loss=res["train"]["train_loss"],
-                            preds=pickle.dumps(
-                                res["train"]["train_preds"].cpu().float()
-                            ),
-                            confusion_matrix=pickle.dumps(
-                                res["train"]["confusion_matrix"].cpu().float()
-                            ),
+                msg = hudes_pb2.Control(
+                    type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
+                    train_loss_and_preds=hudes_pb2.TrainLossAndPreds(
+                        train_loss=res["train"]["train_loss"],
+                        preds=res["train"]["train_preds"]
+                        .cpu()
+                        .float()
+                        .flatten()
+                        .tolist(),
+                        preds_shape=list(res["train"]["train_preds"].shape),
+                        confusion_matrix=res["train"]["confusion_matrix"]
+                        .cpu()
+                        .float()
+                        .flatten()
+                        .tolist(),
+                        confusion_matrix_shape=list(
+                            res["train"]["confusion_matrix"].shape
                         ),
-                        request_idx=client.active_request_idx,
-                        total_sgd_steps=client.total_sgd_steps,
-                    ).SerializeToString()
-                )
+                    ),
+                    request_idx=client.active_request_idx,
+                    total_sgd_steps=client.total_sgd_steps,
+                ).SerializeToString()
+                await client.websocket.send(msg)
                 logging.debug(f"inference_result_sender: sent train to client : done")
             if train_or_val == "val":
                 logging.debug(f"inference_result_sender: sent val to client")
