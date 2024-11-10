@@ -120,7 +120,7 @@ def listen_and_run(
 
                 res["train"] = mad.train_model_inference_with_delta_weights(
                     client_weights[client.client_id].to(client.dtype),
-                    batch_size=client.batch_size,
+                    batch_size=min(client.batch_size, mad.max_batch_size),
                     batch_idx=client.batch_idx,
                     dtype=client.dtype,
                 )
@@ -131,18 +131,18 @@ def listen_and_run(
             if mode == "mesh":
                 res["mesh"] = mad.get_loss_grid(
                     base_weights=client_weights[client.client_id].to(client.dtype),
-                    grid_size=client.mesh_grid_size,
+                    grid_size=min(client.mesh_grid_size, mad.max_grid_size),
                     step_size=client.mesh_step_size / 2,
-                    grids=client.mesh_grids,
+                    grids=min(client.mesh_grids, mad.max_grids),
                     dims_offset=client.dims_offset,
                     batch_idx=client.batch_idx,
-                    batch_size=client.batch_size,
+                    batch_size=min(client.batch_size, mad.max_batch_size),
                     dtype=client.dtype,
                 )
             if mode == "sgd":
                 res["train"], model_weights = mad.sgd_step(
                     client_weights[client.client_id].to(client.dtype),
-                    batch_size=client.batch_size,
+                    batch_size=min(client.batch_size, mad.max_batch_size),
                     batch_idx=client.batch_idx,
                     dtype=client.dtype,
                     n_steps=client.sgd,
@@ -522,7 +522,12 @@ async def run_wrapper(args):
     logging.info(f"Initialized model with {n_params} parameters")
 
     mad = mnist_model_data_and_subpace(
-        model=model, device=args.device, param_models=param_models
+        model=model,
+        device=args.device,
+        param_models=param_models,
+        max_batch_size=args.max_batch_size,
+        max_grids=args.max_grids,
+        max_grid_size=args.max_grid_size,
     )
     if args.download_dataset_and_exit:
         return
@@ -549,6 +554,21 @@ if __name__ == "__main__":
         type=str,
         default="ffnn",
         choices=["cnn", "ffnn", "cnn2", "cnn3"],
+    )
+    parser.add_argument(
+        "--max-batch-size",
+        type=int,
+        default=512,
+    )
+    parser.add_argument(
+        "--max-grids",
+        type=int,
+        default=5,
+    )
+    parser.add_argument(
+        "--max-grid-size",
+        type=int,
+        default=41,
     )
     parser.add_argument("--run-in", type=str, default="process")
     parser.add_argument(

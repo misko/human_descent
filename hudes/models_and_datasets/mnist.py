@@ -172,7 +172,14 @@ def set_parameters(model, weights: torch.Tensor):
 
 
 def mnist_model_data_and_subpace(
-    model: nn.Module, seed: int = 0, store: str = "./", device="cpu", param_models=None
+    model: nn.Module,
+    seed: int = 0,
+    store: str = "./",
+    device="cpu",
+    param_models=None,
+    max_batch_size=512,
+    max_grids=4,
+    max_grid_size=41,
 ):
     transform = transforms.Compose(
         [
@@ -207,4 +214,5 @@ def mnist_model_data_and_subpace(
         minimize=False,
         device=device,
         param_models=param_models,
+        max_batch_size=max_batch_size,
     )

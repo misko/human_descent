@@ -87,6 +87,9 @@ class ModelDataAndSubspace:
         device="cpu",
         val_batch_size: int = 1024,
         param_models=None,
+        max_batch_size=512,
+        max_grids=4,
+        max_grid_size=41,
     ):
         self.param_models = param_models
         self.val_batch_size = val_batch_size
@@ -95,6 +98,9 @@ class ModelDataAndSubspace:
         self.num_params = sum([p.numel() for p in self._model.parameters()])
         self.batchers = {"train": train_data_batcher, "val": val_data_batcher}
         self.minimize = minimize
+        self.max_batch_size = max_batch_size
+        self.max_grids = max_grids
+        self.max_grid_size = max_grid_size
 
         self.fused = False  # Cant fuse before forking
 
@@ -161,6 +167,7 @@ class ModelDataAndSubspace:
     @cache
     @torch.no_grad
     def get_batch(self, batch_size: int, batch_idx: int, dtype, train_or_val: str):
+        batch_size = min(batch_size, self.max_batch_size)
         assert train_or_val in self.batchers
         batch = self.batchers[train_or_val].get_batch(batch_size, batch_idx)
         return (
