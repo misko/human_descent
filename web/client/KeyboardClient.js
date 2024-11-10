@@ -7,6 +7,11 @@ export default class KeyboardClient extends HudesClient {
     this.pairedKeys = [];
     this.keyToParamAndSign = {};
     this.initInput();
+
+
+    if (this.state.helpScreenIdx != -1) {
+      this.view.showImage(this.state.helpScreenFns[this.state.helpScreenIdx]);
+  }
   }
 
   initInput() {
@@ -40,6 +45,7 @@ export default class KeyboardClient extends HudesClient {
       'help_screens/hudes_3.png',
       'help_screens/hudes_1d_keyboard_controls.png',
     ]);
+    
   }
 
   usageStr() {
@@ -70,9 +76,12 @@ GOOD LUCK!
     const currentTime = performance.now(); // High-precision timing
     let redraw = this.processCommonKeys(event);
 
-    // if (this.state.helpScreenIdx !== -1) {
-    //   return redraw; // Skip further processing if help screen is active
-    // }
+
+    if (this.state.helpScreenIdx !== -1) {
+      this.view.showImage(this.state.helpScreenFns[this.state.helpScreenIdx]);
+      return redraw; // Skip further processing if help screen is active
+    }
+    this.view.hideImage();
 
     if (event.type === 'keydown') {
       const key = event.key.toLowerCase(); // Normalize to lowercase

@@ -124,12 +124,11 @@ export default class View {
             window.addEventListener('resize', this.onWindowResize.bind(this), false);
         }
 
-
     }
     annotateBottomScreen(text, size = 20) {
         const bottomTextContainer = document.getElementById('bottomTextContainer');
         if (bottomTextContainer) {
-            bottomTextContainer.innerText = text;
+            bottomTextContainer.innerText = `Human Descent : MNIST\n${text}`;
             bottomTextContainer.style.fontSize = `${size}px`;
         }
     }
@@ -769,7 +768,38 @@ export default class View {
         });
     }
 
+    showImage(filename) {
+        // Select the image container div
+        const container = document.getElementById('imageContainer');
+    
+        // Clear any previous image from the container
+        container.innerHTML = '';
+    
+        // Create a new img element
+        const img = document.createElement('img');
+        img.src = filename; // Set the source to the provided filename
+        img.alt = 'Floating Image';
+    
+        // Style the image
+        img.style.position = 'absolute';
+        img.style.top = '50%';
+        img.style.left = '50%';
+        img.style.transform = 'translate(-50%, -50%)'; // Center the image in the container
+        img.style.zIndex = '9999'; // Ensure it appears above everything else
+        img.style.pointerEvents = 'none'; // Allow clicks through the image
+        img.style.height = '70vh'; // Set the image height to 70% of the window height
+        img.style.width = 'auto'; // Maintain aspect ratio
+    
+        // Append the image to the container
+        container.appendChild(img);
+    }
 
+    hideImage() {
+        const container = document.getElementById('imageContainer');
+        if (container) {
+            container.innerHTML = ''; // Clear the container
+        }
+    }
 
 
 }

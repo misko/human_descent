@@ -9,6 +9,7 @@ export default class ClientState {
         this.maxLogStepSize = 2;
         this.stepSizeResolution = stepSizeResolution;
         this.stepSizeIdx = initialStepSizeIdx;
+        this.helpScreenIdx = 0;
         this.updateStepSize();
     }
 
@@ -71,11 +72,15 @@ export default class ClientState {
         console.log(`Dtype set to ${dtype}`);
     }
     setHelpScreenFns(helpScreenFns) {
-        this.helpScreenFns = helpScreenFns.map((fn) => `${this.currentDir}/${fn}`);
+        this.helpScreenFns = helpScreenFns;
         console.log(`Help screen paths set:`, this.helpScreenFns);
     }
 
     nextHelpScreen() {
         console.log("Help screen toggled. (Not implemented)");
+        this.helpScreenIdx +=1;
+        if (this.helpScreenIdx ==this.helpScreenFns.length) {
+            this.helpScreenIdx=-1;
+        }
     }
 }

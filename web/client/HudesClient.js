@@ -11,7 +11,7 @@ export default class HudesClient {
         this.requestIdx = 0;
         this.running = true;
 
-        this.state = new ClientState(-0.05, 12);
+        this.state = new ClientState(-0.05, 6);
         this.grids=3;
         this.grid_size=31;
         this.view = new View(this.grid_size,this.grids, this.state); // Add a View instance
@@ -104,10 +104,14 @@ export default class HudesClient {
                     //log(`Validation loss: ${message.valLoss.valLoss}`);
 
                     // Update validation loss
-                    while (this.valLosses.length<message.requestIdx) {
+                    log('valloss',message.valLoss.valLoss);
+                    log(message.valLoss.valLoss);
+                    while (this.valLosses.length<this.trainSteps.length) {
                         this.valLosses.push(message.valLoss.valLoss);
                         this.valSteps.push(message.requestIdx);
                     }
+                    log(this.valLosses.length);
+                    log(this.trainLosses.length);
                     // if (this.valLosses.length>1) {
                     //     var diffLoss = this.valLosses[this.valLosses.length-1]-this.valLosses[this.valLosses.length-2];
                     //     var diffSteps = this.valSteps[this.valSteps.length-1]-this.valSteps[this.valSteps.length-2];
@@ -345,7 +349,18 @@ export default class HudesClient {
                     log("Next help screen.");
                     this.state.nextHelpScreen();
                     break;
+                // default:
+                //       log(`Unhandled key: ${event.code}`);
+            }
+        }
 
+        if (this.state.helpScreenIdx!=-1) {
+            return;
+        }
+
+        if (event.type === "keydown") {
+
+            switch (event.code) {
                 case "KeyQ":
                     if (currentTime - keyInfo.firstPress > 1000) {
                         log("Quitting...");
@@ -353,7 +368,8 @@ export default class HudesClient {
                     }
                     break;
 
-                case "Slash":
+                case "Backspace":
+                case "Delete":
                     log("Performing SGD step.");
                     this.getSGDStep();
                     break;
@@ -394,8 +410,6 @@ export default class HudesClient {
                     this.getNextBatch();
                     break;
 
-                //default:
-                //    log(`Unhandled key: ${event.code}`);
             }
 
             // Update last execution time

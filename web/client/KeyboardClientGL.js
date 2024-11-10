@@ -6,6 +6,10 @@ export default class KeyboardClientGL extends KeyboardClient {
     constructor(addr, port) {
         super(addr, port);
         this.initInput();
+
+    if (this.state.helpScreenIdx != -1) {
+        this.view.showImage(this.state.helpScreenFns[this.state.helpScreenIdx]);
+    }
     }
 
     initInput() {
@@ -21,6 +25,22 @@ export default class KeyboardClientGL extends KeyboardClient {
         // Event listeners for keypresses
         //window.addEventListener('keydown', (event) => this.processKeyPress(event));
         //window.addEventListener('keyup', (event) => this.updateKeyHolds());
+
+        this.state.setHelpScreenFns([
+            "help_screens/hudes_help_start.png",
+            "help_screens/hudes_1.png",
+            "help_screens/hudes_2.png",
+            "help_screens/hudes_3.png",
+            "help_screens/hudes_4.png",
+            "help_screens/hudes_5.png",
+            "help_screens/hudes_6.png",
+            "help_screens/hudes_7.png",
+            "help_screens/hudes_8.png",
+            "help_screens/hudes_9.png",
+            "help_screens/hudes_2d_keyboard_controls.png",
+            "help_screens/hudes_2d_xbox_controls.png",
+          ]);
+
     }
 
       // Step in the selected grid with given s0 and s1 values
@@ -60,10 +80,12 @@ export default class KeyboardClientGL extends KeyboardClient {
         const currentTime = performance.now();
         let redraw = this.processCommonKeys(event);
 
-        // Skip if help screen is active
-        // if (this.state.helpScreenIdx !== -1) {
-        //     return redraw;
-        // }
+        if (this.state.helpScreenIdx !== -1) {
+            this.view.showImage(this.state.helpScreenFns[this.state.helpScreenIdx]);
+            return redraw; // Skip further processing if help screen is active
+          }
+          this.view.hideImage();
+
 
         if (event.type === 'keydown') {
             const key = event.key.toLowerCase();
