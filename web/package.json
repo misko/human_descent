@@ -4,9 +4,9 @@
   "description": "human descent on MNIST",
   "main": "index.js",
   "scripts": {
-    "build-proto": "pbjs --target static-module --wrap es6 --out hudes_proto.js ../hudes/hudes.proto",
-    "build": "npm run build-proto",
-    "dev": "vite"
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview"
   },
   "author": "",
   "license": "ISC",
@@ -27,3 +27,4 @@
     "webpack-cli": "^5.1.4"
   }
 }
+
