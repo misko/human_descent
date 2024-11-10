@@ -104,14 +104,10 @@ export default class HudesClient {
                     //log(`Validation loss: ${message.valLoss.valLoss}`);
 
                     // Update validation loss
-                    log('valloss',message.valLoss.valLoss);
-                    log(message.valLoss.valLoss);
                     while (this.valLosses.length<this.trainSteps.length) {
                         this.valLosses.push(message.valLoss.valLoss);
                         this.valSteps.push(message.requestIdx);
                     }
-                    log(this.valLosses.length);
-                    log(this.trainLosses.length);
                     // if (this.valLosses.length>1) {
                     //     var diffLoss = this.valLosses[this.valLosses.length-1]-this.valLosses[this.valLosses.length-2];
                     //     var diffSteps = this.valSteps[this.valSteps.length-1]-this.valSteps[this.valSteps.length-2];
@@ -182,7 +178,7 @@ export default class HudesClient {
                         throw new Error("meshGridResults or meshGridShape field missing");
                     }
     
-                    log("hudes_client: received message: mesh grid results");
+                    //log("hudes_client: received message: mesh grid results");
     
                     // Parse the mesh grid results and reshape to the original dimensions
                     const meshGridResultsFlattened = message.meshGridResults;
@@ -194,7 +190,7 @@ export default class HudesClient {
                         meshGridShape
                     );
     
-                    log(`Mesh grid results received:`, meshGridResults);
+                    //log(`Mesh grid results received:`, meshGridResults);
     
                     // Update the view with the reshaped mesh grid results
                     this.view.updateMeshGrids(meshGridResults);
@@ -209,6 +205,7 @@ export default class HudesClient {
             }
         } catch (error) {
             log(`Failed to handle message: ${error}`);
+            log(error);
         }
     }
     _reshapeArray(flatArray, shape) {
@@ -346,7 +343,7 @@ export default class HudesClient {
         if (event.type === "keydown") {
             switch (event.code) {
                 case "KeyX":
-                    log("Next help screen.");
+                    //log("Next help screen.");
                     this.state.nextHelpScreen();
                     break;
                 // default:
@@ -519,11 +516,11 @@ export default class HudesClient {
         //console.log("Dims and steps reset to zero.");
     }
     dimsAndStepsUpdated() {
-        if (this.view && typeof this.view.updateDimsSinceLastUpdate === 'function') {
-            this.view.updateDimsSinceLastUpdate(this.dimsAndStepsOnCurrentDims || []);
-        } else {
-            console.warn("View or updateDimsSinceLastUpdate is not defined.");
-        }
+        // if (this.view && typeof this.view.updateDimsSinceLastUpdate === 'function') {
+        //     this.view.updateDimsSinceLastUpdate(this.dimsAndStepsOnCurrentDims || []);
+        // } else {
+        //     console.warn("View or updateDimsSinceLastUpdate is not defined.");
+        // }
     }
     async sendDimsAndSteps(dimsAndSteps) {
         try {

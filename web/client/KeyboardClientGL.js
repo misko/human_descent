@@ -96,7 +96,6 @@ export default class KeyboardClientGL extends KeyboardClient {
                 case 'KeyW': {
                     // Rotate vector (0, -1) by angleH
                     const rotated = this._rotateVector( -1,0, -angleH);
-                    log(rotated);
                     this.stepInSelectedGrid(rotated.x, rotated.y);
                     redraw = true;
                     break;
@@ -104,7 +103,6 @@ export default class KeyboardClientGL extends KeyboardClient {
                 case 'KeyS': {
                     // Rotate vector (0, 1) by angleH
                     const rotated = this._rotateVector(1,0, -angleH);
-                    log(rotated);
                     this.stepInSelectedGrid(rotated.x, rotated.y);
                     redraw = true;
                     break;
@@ -112,7 +110,6 @@ export default class KeyboardClientGL extends KeyboardClient {
                 case 'KeyA': {
                     // Rotate vector (-1, 0) by angleH
                     const rotated = this._rotateVector(0,-1, -angleH);
-                    log(rotated);
                     this.stepInSelectedGrid(rotated.x, rotated.y);
                     redraw = true;
                     break;
@@ -120,7 +117,6 @@ export default class KeyboardClientGL extends KeyboardClient {
                 case 'KeyD': {
                     // Rotate vector (1, 0) by angleH
                     const rotated = this._rotateVector(0,1,-angleH);
-                    log(rotated);
                     this.stepInSelectedGrid(rotated.x, rotated.y);
                     redraw = true;
                     break;

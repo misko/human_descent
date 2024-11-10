@@ -451,7 +451,7 @@ export default class View {
 
             // Plot or update the heatmap
             Plotly.newPlot('confusionMatrixChart', updatedData, updatedLayout);
-            console.log("Confusion matrix heatmap updated successfully.");
+            //console.log("Confusion matrix heatmap updated successfully.");
         } catch (error) {
             console.error("Failed to update confusion matrix heatmap:", error);
         }
@@ -718,7 +718,7 @@ export default class View {
     }
     // Update Example Predictions (Bar Charts)
     updateExamplePreds(predictions) {
-        log('Received predictions for update');
+        //log('Received predictions for update');
 
         // Select side container and get the individual example cells
         const sideContainer = document.getElementById('sideContainer');
@@ -726,6 +726,9 @@ export default class View {
 
         predictions.forEach((prediction, index) => {
             // Get or create chart container for the corresponding example cell
+            if (exampleCells.length<=index) {
+                return;
+            }
             let chartDiv = exampleCells[index].querySelector('.example-chart');
 
             if (!chartDiv) {

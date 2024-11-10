@@ -73,11 +73,9 @@ export default class ClientState {
     }
     setHelpScreenFns(helpScreenFns) {
         this.helpScreenFns = helpScreenFns;
-        console.log(`Help screen paths set:`, this.helpScreenFns);
     }
 
     nextHelpScreen() {
-        console.log("Help screen toggled. (Not implemented)");
         this.helpScreenIdx +=1;
         if (this.helpScreenIdx ==this.helpScreenFns.length) {
             this.helpScreenIdx=-1;
