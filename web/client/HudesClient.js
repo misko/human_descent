@@ -14,7 +14,7 @@ export default class HudesClient {
         this.state = new ClientState(-0.05, 12);
         this.grids=3;
         this.grid_size=31;
-        this.view = new View(this.grid_size,this.grids); // Add a View instance
+        this.view = new View(this.grid_size,this.grids, this.state); // Add a View instance
         this.view.initializeCharts(); // Initialize charts
         this.Control = null;
         this.ControlType = null;
@@ -104,11 +104,22 @@ export default class HudesClient {
                     //log(`Validation loss: ${message.valLoss.valLoss}`);
 
                     // Update validation loss
-                    this.valLosses.push(message.valLoss.valLoss);
-                    this.valSteps.push(message.requestIdx);
-                    if (this.valLosses[this.valLosses.length - 1] < this.state.bestScore) {
-                        this.state.bestScore = this.valLosses[this.valLosses.length - 1];
+                    while (this.valLosses.length<message.requestIdx) {
+                        this.valLosses.push(message.valLoss.valLoss);
+                        this.valSteps.push(message.requestIdx);
                     }
+                    // if (this.valLosses.length>1) {
+                    //     var diffLoss = this.valLosses[this.valLosses.length-1]-this.valLosses[this.valLosses.length-2];
+                    //     var diffSteps = this.valSteps[this.valSteps.length-1]-this.valSteps[this.valSteps.length-2];
+                    //     for (let i = 0; i < diffSteps; i++) {
+                    //         console.log(i); // Will print numbers from 0 to 9
+                    //     }
+                    //     while (this.valLosses.length)<message.requestIdx:
+
+                    // }
+
+
+                    this.state.updateBestScoreOrNot(this.valLosses[this.valLosses.length - 1]);
 
                     // Update the view with training and validation loss history
                     this.view.updateLossChart(
@@ -563,8 +574,8 @@ export default class HudesClient {
                 meshGridSize: this.grid_size,
                 meshStepSize: this.state.stepSize,
                 meshGrids: this.grids,
-                batchSize: this.state.batchSize || 32,
-                dtype: this.state.dtype || "float16",
+                batchSize: this.state.batchSize,
+                dtype: this.state.dtype,
             },
         };
 

@@ -41,11 +41,12 @@ import Plotly from 'plotly.js-dist-min'; // Import Plotly
 import { log } from '../utils/logger.js'; // Import your logging utility
 
 export default class View {
-    constructor(gridSize, numGrids) {
+    constructor(gridSize, numGrids, clientState) {
         this.gridSize = gridSize;
         this.numGrids = numGrids;
         this.effectiveGrids = numGrids;
 
+        this.state=clientState;
         this.lossChart = null;
         this.lastStepsChart = null;
         this.stepSizeChart = null;
@@ -79,7 +80,7 @@ export default class View {
 
             // Set the y-offset for the camera to position the grids 2/3 of the way down the view
             // The y offset is calculated as (1/3 of the totalHeight) since we want the grids to be 2/3 of the way down
-            this.camera_yOffset = (totalWidth / 9);
+            this.camera_yOffset = (totalWidth / 8);
 
             // Update camera position
             this.camera.position.set(0, this.camera_yOffset, this.camera_distance);
@@ -229,40 +230,16 @@ export default class View {
                     plugins: {
                         legend: {
                             display: true,
-                            position: 'top', // Legend is placed at the top of the chart.
+                            position: 'top', // Ensure legend is at the top of the chart area
                             labels: {
-                                boxWidth: 10,
+                                boxWidth: 2,
                                 padding: 10,
-                            }
+                            },
                         },
-                        annotation: {
-                            annotations: {
-                                yEqualsOneLine: {
-                                    type: 'line',
-                                    yMin: 1,
-                                    yMax: 1,
-                                    borderColor: 'orange',
-                                    borderWidth: 2,
-                                    borderDash: [6, 4], // Optional: Dashed line
-                                    label: {
-                                        enabled: true,
-                                        content: 'y = 1',
-                                        position: 'end',
-                                        backgroundColor: 'rgba(255, 165, 0, 0.2)', // Background color for the label
-                                        color: 'orange', // Text color
-                                        font: {
-                                            size: 12,
-                                        },
-                                        xAdjust: 10,
-                                        yAdjust: -10,
-                                    },
-                                },
-                            }
-                        }
                     },
                     layout: {
                         padding: {
-                            top: 20, // Adds padding for the legend to appear above plot data.
+                            top: 0, // Add padding to avoid overlap between legend and plot data
                         },
                     },
                     elements: {
@@ -282,8 +259,6 @@ export default class View {
                                 display: true,
                                 text: 'Loss',
                             },
-                            suggestedMin: 0,
-                            suggestedMax: 2 // Optional: Adjust to make sure y = 1 line is visible.
                         },
                     },
                 },
@@ -373,8 +348,9 @@ export default class View {
 
     // Update Loss Chart
     updateLossChart(trainLoss, valLoss, steps) {
-        this.annotateBottomScreen("TESTSTRING");
-        log("annotate")
+        //var lastLoss = trainLoss[trainLoss.length-1];
+        //this.state.updateBestScoreOrNot(lastLoss);
+        this.annotateBottomScreen(this.state.toString());
         if (this.lossChart) {
             this.lossChart.data.labels = steps;
             this.lossChart.data.datasets[0].data = trainLoss;

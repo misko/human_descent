@@ -12,6 +12,16 @@ export default class ClientState {
         this.updateStepSize();
     }
 
+    updateBestScoreOrNot(newScore) {
+        if (newScore<this.bestScore) {
+            this.bestScore=newScore;
+        }
+    }
+
+    toString() {
+        return `Best-score: ${this.bestScore.toFixed(3)}, Batch-size: ${this.batchSize}, StepSize: ${this.stepSize.toExponential(3)}, SGD-steps: ${this.sgdSteps} , Dtype: ${this.dtype}`
+    }
+
     updateStepSize() {
         const logStepSize = Math.min(
             Math.max(this.stepSizeIdx * this.stepSizeResolution, this.minLogStepSize),
