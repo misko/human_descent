@@ -215,4 +215,6 @@ def mnist_model_data_and_subpace(
         device=device,
         param_models=param_models,
         max_batch_size=max_batch_size,
+        max_grids=max_grids,
+        max_grid_size=max_grid_size,
     )
