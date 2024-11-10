@@ -537,7 +537,7 @@ class OpenGLView:
         origin_loss = mesh_grids[0, self.grid_size // 2, self.grid_size // 2].item()
         mesh_grids -= origin_loss
 
-        _mx = mesh_grids.abs().max()
+        _mx = np.abs(mesh_grids).max()
         eps = 1e-3
         mesh_grids *= self.grid_width / (_mx + eps)
 

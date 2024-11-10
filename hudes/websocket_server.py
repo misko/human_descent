@@ -338,10 +338,18 @@ async def inference_result_sender(results_q, stop):
                 logging.debug(f"inference_result_sender: sent val to client : done")
             if train_or_val == "mesh":
                 logging.debug(f"inference_result_sender: sent mesh to client")
+
+                # Convert the tensor to a list of floats and capture the shape
+                mesh_tensor = res["mesh"].cpu().float()
+                mesh_grid_results_list = mesh_tensor.numpy().flatten().tolist()
+                mesh_grid_shape = list(mesh_tensor.shape)
+
+                # Send the message using repeated float for data and repeated int32 for shape
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_MESHGRID_RESULTS,
-                        mesh_grid_results=pickle.dumps(res["mesh"].cpu().float()),
+                        mesh_grid_results=mesh_grid_results_list,
+                        mesh_grid_shape=mesh_grid_shape,
                     ).SerializeToString()
                 )
                 logging.debug(f"inference_result_sender: sent mesh to client : done")

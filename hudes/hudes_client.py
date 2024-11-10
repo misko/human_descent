@@ -413,7 +413,12 @@ class HudesClient:
 
             # called if we only changed scale etc?
             elif msg.type == hudes_pb2.Control.CONTROL_MESHGRID_RESULTS:
-                self.view.update_mesh_grids(pickle.loads(msg.mesh_grid_results))
+                logging.debug("hudes_client: received message: mesh grid results")
+
+                # Update the view with the reshaped mesh grid results
+                self.view.update_mesh_grids(
+                    np.array(msg.mesh_grid_results).reshape(tuple(msg.mesh_grid_shape))
+                )
 
         if received_message:
             if received_train:

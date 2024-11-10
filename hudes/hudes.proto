@@ -67,8 +67,9 @@ message Control {
   optional ValLoss val_loss = 203;
   optional int32 request_idx = 204;
   optional BatchExamples batch_examples = 205;
-  optional bytes mesh_grid_results = 207;
-  optional int32 sgd_steps = 208;
-  optional int32 total_sgd_steps = 209;
+  repeated float mesh_grid_results = 207;  // Updated to repeated float
+  repeated int32 mesh_grid_shape = 208;    // Add the shape information
+  optional int32 sgd_steps = 209;
+  optional int32 total_sgd_steps = 210;
 
 }

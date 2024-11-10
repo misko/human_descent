@@ -77,7 +77,6 @@ GOOD LUCK!
     if (event.type === 'keydown') {
       const key = event.key.toLowerCase(); // Normalize to lowercase
 
-        log(`ClientState: process press down!`);
       if (this.keyToParamAndSign[key]) {
         const { dim, sign } = this.keyToParamAndSign[key];
         if (

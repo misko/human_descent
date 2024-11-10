@@ -12,7 +12,9 @@ export default class HudesClient {
         this.running = true;
 
         this.state = new ClientState(-0.05, 12);
-        this.view = new View(); // Add a View instance
+        this.grids=3;
+        this.grid_size=31;
+        this.view = new View(this.grid_size,this.grids); // Add a View instance
         this.view.initializeCharts(); // Initialize charts
         this.Control = null;
         this.ControlType = null;
@@ -20,6 +22,7 @@ export default class HudesClient {
         this.cooldownTimeMs = 200;
         this.keySecondsPressed = 200; // ms
         this.stepSizeMultiplier = 1;
+
 
         // Initialize loss and step tracking arrays
         this.trainLosses = [];
@@ -42,7 +45,7 @@ export default class HudesClient {
         try {
             const buffer = new Uint8Array(event.data);
             const message = this.Control.decode(buffer); // Decode the protobuf message
-            log("Decoded Message:", message);
+            //log("Decoded Message:", message);
 
             switch (message.type) {
                 case this.ControlType.values.CONTROL_TRAIN_LOSS_AND_PREDS:
@@ -50,19 +53,19 @@ export default class HudesClient {
                         throw new Error("trainLossAndPreds field missing");
                     }
 
-                    log("hudes_client: receive message: loss and preds");
+                    //log("hudes_client: receive message: loss and preds");
 
                     // Parse train predictions and reshape
                     const trainPredsFlattened = message.trainLossAndPreds.preds;
                     const trainPredsShape = message.trainLossAndPreds.predsShape;
                     const trainPreds = this._reshapeArray(trainPredsFlattened, trainPredsShape);
-                    log(`Train Predictions Length: ${trainPredsFlattened.length}`);
+                    //log(`Train Predictions Length: ${trainPredsFlattened.length}`);
 
                     // Parse confusion matrix and reshape
                     const confusionMatrixFlattened = message.trainLossAndPreds.confusionMatrix;
                     const confusionMatrixShape = message.trainLossAndPreds.confusionMatrixShape;
                     const confusionMatrix = this._reshapeArray(confusionMatrixFlattened, confusionMatrixShape);
-                    log("Confusion Matrix received");
+                    //log("Confusion Matrix received");
 
                     // Update client state with SGD steps and losses
                     this.state.sgdSteps = message.totalSgdSteps;
@@ -73,7 +76,7 @@ export default class HudesClient {
                     ) {
                         this.trainLosses.push(message.trainLossAndPreds.trainLoss);
                         this.trainSteps.push(message.requestIdx);
-                        log(`Train Loss: ${message.trainLossAndPreds.trainLoss}`);
+                        //log(`Train Loss: ${message.trainLossAndPreds.trainLoss}`);
                     }
 
                     // Update the view with training and validation loss history
@@ -87,7 +90,7 @@ export default class HudesClient {
                     //this.view.updateExamplePreds(trainPreds);
                     this.view.updateConfusionMatrix(confusionMatrix);
 
-                    log("hudes_client: receive message: loss and preds: done");
+                    //log("hudes_client: receive message: loss and preds: done");
 
                     break;
 
@@ -96,7 +99,7 @@ export default class HudesClient {
                         throw new Error("valLoss field missing");
                     }
 
-                    log(`Validation loss: ${message.valLoss.valLoss}`);
+                    //log(`Validation loss: ${message.valLoss.valLoss}`);
 
                     // Update validation loss
                     this.valLosses.push(message.valLoss.valLoss);
@@ -112,13 +115,13 @@ export default class HudesClient {
                         this.trainSteps
                     );
 
-                    log("hudes_client: receive message: val loss: done");
+                    //og("hudes_client: receive message: val loss: done");
                     break;
                 case this.ControlType.values.CONTROL_BATCH_EXAMPLES:
                     if (message.batchExamples) {
-                        log(
-                            `Batch received. Index: ${message.batchExamples.batchIdx}, N: ${message.batchExamples.n}, Train Data Length: ${message.batchExamples.trainData.length}`
-                        );
+                       // log(
+                        //    `Batch received. Index: ${message.batchExamples.batchIdx}, N: ${message.batchExamples.n}, Train Data Length: ${message.batchExamples.trainData.length}`
+                       //);
 
                         // Extract train data and labels from the message
                         const trainDataFlattened = message.batchExamples.trainData;
@@ -152,17 +155,32 @@ export default class HudesClient {
                         // Update the view with the new train data and labels
                         this.view.updateExamples(trainData, trainLabels);
                     } else {
-                        log("Batch example missing in message.");
+                        //log("Batch example missing in message.");
                     }
                     break;
 
 
                 case this.ControlType.values.CONTROL_MESHGRID_RESULTS:
-                    // if (message.meshGridResults) {
-                    //     const meshGridResults = this._deserializeBytes(message.meshGridResults);
-                    //     this.view.updateMeshGrids(meshGridResults);
-                    //     log("Meshgrid results updated.");
-                    // }
+                    if (!message.meshGridResults || !message.meshGridShape) {
+                        throw new Error("meshGridResults or meshGridShape field missing");
+                    }
+    
+                    log("hudes_client: received message: mesh grid results");
+    
+                    // Parse the mesh grid results and reshape to the original dimensions
+                    const meshGridResultsFlattened = message.meshGridResults;
+                    const meshGridShape = message.meshGridShape;
+    
+                    // Reshape the flattened results into a 3D array using meshGridShape
+                    const meshGridResults = this._reshapeArray(
+                        meshGridResultsFlattened,
+                        meshGridShape
+                    );
+    
+                    log(`Mesh grid results received:`, meshGridResults);
+    
+                    // Update the view with the reshaped mesh grid results
+                    this.view.updateMeshGrids(meshGridResults);
                     break;
 
 
@@ -270,7 +288,6 @@ export default class HudesClient {
         n = Math.max(6, n); // Ensure minimum value of 6
         this.state.n = n;
         this.zeroDimsAndStepsOnCurrentDims();
-        log(`ClientState: set_n(${n})`);
     }
     _handleKeyDown(event) {
         const currentTime = performance.now();
@@ -291,7 +308,6 @@ export default class HudesClient {
     processKeyPress(event) {
         // Default key handling logic, can be overridden by derived classes
         this.processCommonKeys(event);
-        log(`ClientState: process press!`);
     }
 
     addKeyToWatch(key) {
@@ -365,8 +381,8 @@ export default class HudesClient {
                     this.getNextBatch();
                     break;
 
-                default:
-                    log(`Unhandled key: ${event.code}`);
+                //default:
+                //    log(`Unhandled key: ${event.code}`);
             }
 
             // Update last execution time
@@ -401,7 +417,7 @@ export default class HudesClient {
         // Increment the request index
         this.requestIdx++;
 
-        console.log("Message sent:", payload);
+        //console.log("Message sent:", payload);
     }
 
 
@@ -467,13 +483,13 @@ export default class HudesClient {
         this.dimsAndStepsUpdated();
         this.state.dimsUsed += this.state.n;
 
-        console.log("Next dimensions requested and steps reset.");
+        //console.log("Next dimensions requested and steps reset.");
     }
 
 
     zeroDimsAndStepsOnCurrentDims() {
         this.dimsAndStepsOnCurrentDims = new Array(this.state.n).fill(0);
-        console.log("Dims and steps reset to zero.");
+        //console.log("Dims and steps reset to zero.");
     }
     dimsAndStepsUpdated() {
         if (this.view && typeof this.view.updateDimsSinceLastUpdate === 'function') {
@@ -483,39 +499,52 @@ export default class HudesClient {
         }
     }
     async sendDimsAndSteps(dimsAndSteps) {
-        if (!this.Control || !this.ControlType) {
-            console.error("Proto definitions not loaded. Cannot send dims and steps.");
-            return;
+        try {
+            // Debug: Log control type status
+            if (!this.Control || !this.ControlType) {
+                console.error("Proto definitions not loaded. Cannot send dims and steps.");
+                return;
+            }
+    
+            // Construct the payload
+            const payload = {
+                type: this.ControlType.values.CONTROL_DIMS,
+                dimsAndSteps: Object.entries(dimsAndSteps).map(([dim, step]) => ({
+                    dim: parseInt(dim, 10),
+                    step,
+                })),
+                requestIdx: this.requestIdx,
+            };
+    
+            // Debug: Log the payload before sending
+            //console.log("sendDimsAndSteps - Payload:", payload);
+    
+            // Use sendQ to handle message creation and sending
+            this.sendQ(payload);
+    
+            // Simulate delay for synchronization
+            await sleep(10);
+    
+            // Update local state
+            for (const [dim, step] of Object.entries(dimsAndSteps)) {
+                this.dimsAndStepsOnCurrentDims[dim] =
+                    (this.dimsAndStepsOnCurrentDims[dim] || 0) + step;
+            }
+    
+            // Debug: Log the updated dimsAndStepsOnCurrentDims state
+            //console.log("Updated dimsAndStepsOnCurrentDims:", this.dimsAndStepsOnCurrentDims);
+    
+            // Update the UI or internal state to reflect the changes
+            this.dimsAndStepsUpdated();
+    
+            // Increment the request index
+            this.requestIdx++;
+    
+        } catch (error) {
+            console.error("Error in sendDimsAndSteps:", error);
         }
-
-        // Construct the payload
-        const payload = {
-            type: this.ControlType.values.CONTROL_DIMS,
-            dimsAndSteps: Object.entries(dimsAndSteps).map(([dim, step]) => ({
-                dim: parseInt(dim, 10),
-                step,
-            })),
-            requestIdx: this.requestIdx,
-        };
-
-        // Use sendQ to handle message creation and sending
-        this.sendQ(payload);
-
-        // Simulate delay for synchronization
-        await sleep(10);
-
-        // Update local state
-        for (const [dim, step] of Object.entries(dimsAndSteps)) {
-            this.dimsAndStepsOnCurrentDims[dim] =
-                (this.dimsAndStepsOnCurrentDims[dim] || 0) + step;
-        }
-
-        // Update the UI or internal state to reflect the changes
-        this.dimsAndStepsUpdated();
-
-        // Increment the request index
-        this.requestIdx++;
     }
+    
 
     async sendConfig() {
         if (!this.Control || !this.ControlType) {
@@ -529,19 +558,18 @@ export default class HudesClient {
             config: {
                 seed: Math.floor(Math.random() * 1000),
                 dimsAtATime: this.state.n,
-                meshGridSize: 31,
+                meshGridSize: this.grid_size,
                 meshStepSize: this.state.stepSize,
-                meshGrids: 3,
+                meshGrids: this.grids,
                 batchSize: this.state.batchSize || 32,
-                dtype: this.state.dtype || "float32",
-                //serialize: "json"
+                dtype: this.state.dtype || "float16",
             },
         };
 
         // Use sendQ to send the message
         this.sendQ(payload);
 
-        console.log("Config sent.");
+        //console.log("Config sent.");
     }
 
 

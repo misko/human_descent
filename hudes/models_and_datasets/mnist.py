@@ -56,10 +56,10 @@ class MNISTCNN3(nn.Module):
                 padding=3,
             ),
             nn.ReLU(),
-            # nn.MaxPool2d(kernel_size=2),
+            nn.MaxPool2d(kernel_size=2),
         )
         # fully connected layer, output 10 classes
-        self.lin1 = nn.Linear(8 * 14 * 14, 32)
+        self.lin1 = nn.Linear(8 * 7 * 7, 32)
         self.lin2 = nn.Linear(32, 10)
         self.sm = nn.LogSoftmax(dim=1)
         self.flatten = torch.nn.Flatten(1)
