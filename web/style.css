@@ -1,0 +1,101 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background-color: #000; /* Set the background color to black */
+    color: #fff; /* Optional: Set the text color to white for better contrast */
+}
+#glContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 90%; /* Set to 80% of width to make space for the side container */
+    height: 100%;
+    z-index: 1; /* Lower index to be behind the plotly and other containers */
+    pointer-events: none; /* Allow interactions to go through the GL container */
+}
+
+#sideContainer {
+    position: absolute;
+    top: 20vh;
+    right: 0;
+    width: 17%; /* The container should take up the right 20% */
+    height: 80%; /* Full height of the viewport */
+    pointer-events: auto; /* Ensure the side container can be interacted with */
+    z-index: 3; /* Higher index to be on top of the GL container */
+    background: transparent; /* Transparent background */
+    overflow-y: auto; /* Allow scrolling if content exceeds height */
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box; /* Ensures padding and borders are included */
+    padding: 10px; /* Add some padding to the container */
+}
+
+.container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%; /* Make sure it also matches the GL container width */
+    height: 25vh; /* Set to 33% of the viewport height */
+    margin-left: 0; /* Align with glContainer */
+    z-index: 2; /* Higher than GL container, but lower than the side container */
+    background: transparent; /* Transparent background */
+    display: flex;
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+    gap: 10px; /* Add gap between the plot elements to improve spacing */
+}
+
+.plot {
+    width: 33%; /* There are two plots, each should take up half of the container width */
+    height: 100%;
+    box-sizing: border-box; /* Ensures padding and border are included in the element's total width and height */
+    padding: 1px; /* Optional padding */
+}
+
+.example-cell {
+    position: relative; /* Allow absolute positioning of children */
+    width: 100%; 
+    height: 25%; /* Adjusted for 4 cells in the side container */
+    box-sizing: border-box;
+}
+
+.example-item {
+    width: 100%;
+    height: 100%;
+    position: relative; /* Allow absolute positioning for the image and chart */
+}
+
+.example-chart {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2; /* Higher z-index to be above the image */
+    background: transparent;
+}
+
+.example-image {
+    width: 50%; /* Half the width of the cell */
+    height: 50%; /* Half the height of the cell */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1; /* Lower z-index to be behind the chart */
+    background: transparent;
+}
+
+#bottomTextContainer {
+    position: fixed;
+    bottom: 10%; /* Position at the bottom 10% of the window */
+    width: 100%;
+    text-align: center;
+    z-index: 5; /* Higher index to ensure it is on top of everything */
+    color: white; /* White text for visibility on black background */
+    font-size: 20px;
+    pointer-events: none; /* Ensure it does not block interactions with the 3D view */
+}
+.floating-text {
+    background: transparent; /* Transparent background to not obstruct view */
+}

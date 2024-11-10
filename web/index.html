@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,12 +9,53 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@latest/build/three.min.js"></script>
 
-
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-    <h1>Protobuf.js in Browser</h1>
+    <div id="glContainer"></div>
+    
+    <!-- Top Container for Plotly Charts -->
+    <div class="container">
+        <div id="plot1" class="plot">
+            <canvas id="lossChart"></canvas>
+        </div>
+        <div id="plot2" class="plot">
+            <canvas id="lastStepsChart"></canvas>
+        </div>
+
+        <div id="plot3" class="plot">
+        <div id="confusionMatrixChart" style="width:100%;height:100%;"></div>
+        </div>
+    </div>
+
+  
+
+    <div id="sideContainer">
+        <!-- 4 Rows each containing an image and an overlapping bar chart -->
+        <div class="example-cell" id="exampleCell1">
+            <img id="exampleImage1" class="example-image" src="" alt="Example Image 1">
+            <div id="exampleChart1" class="example-chart"></div>
+        </div>
+        <div class="example-cell" id="exampleCell2">
+            <img id="exampleImage2" class="example-image" src="" alt="Example Image 2">
+            <div id="exampleChart2" class="example-chart"></div>
+        </div>
+        <div class="example-cell" id="exampleCell3">
+            <img id="exampleImage3" class="example-image" src="" alt="Example Image 3">
+            <div id="exampleChart3" class="example-chart"></div>
+        </div>
+        <div class="example-cell" id="exampleCell4">
+            <img id="exampleImage4" class="example-image" src="" alt="Example Image 4">
+            <div id="exampleChart4" class="example-chart"></div>
+        </div>
+    </div>
+
+
+    <div id="bottomTextContainer" class="floating-text"></div>
+
     <script src="./protobuf.min.js"></script>
     <script type="module" src="./app.js"></script>
-
 </body>
+
 </html>

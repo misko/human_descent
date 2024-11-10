@@ -86,9 +86,11 @@ export default class HudesClient {
                         this.trainSteps
                     );
 
+                    this.view.updateLastStepsChart(this.trainSteps.slice(-9),this.trainLosses.slice(-9));
+
                     // Update the view with predictions and confusion matrix
-                    //this.view.updateExamplePreds(trainPreds);
                     this.view.updateConfusionMatrix(confusionMatrix);
+                    this.view.updateExamplePreds(trainPreds);
 
                     //log("hudes_client: receive message: loss and preds: done");
 
