@@ -21,7 +21,10 @@ bash run.sh # download mnist, run the server, and then run the client!
 ## Details 
 
 The aim of this repository is to build an interactive tool to allow humans to directly
-optimize high dimension problems such as neural network training.
+optimize high dimension problems such as neural network training. Inspired by [Measuring the Intrinsic Dimension of Objective Landscapes, (Chunyuan Li and
+                  Heerad Farkhoor and
+                  Rosanne Liu and
+                  Jason Yosinski)](https://arxiv.org/abs/1804.08838)
 
 A can use any of the ineractive inputs ([Xtouch mini midi mixer](https://www.amazon.com/gp/product/B013JLZCLS), [Xbox like controllers](https://www.amazon.com/gp/product/B091Y7HHS1), keyboard, etc..) to control a random n-dimensional subspace of parameter space at a time. 
 
