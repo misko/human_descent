@@ -477,9 +477,9 @@ async def process_client(websocket, client_runner_q):
         client_runner_q.put(True)
 
 
-async def run_server(stop, client_runner_q):
+async def run_server(stop, client_runner_q, server_port):
     async with serve(
-        partial(process_client, client_runner_q=client_runner_q), None, 8765
+        partial(process_client, client_runner_q=client_runner_q), None, server_port
     ):
         await stop
 
@@ -533,7 +533,7 @@ async def run_wrapper(args):
         return
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(
-        run_server(stop, client_runner_q),
+        run_server(stop, client_runner_q, args.port),
         inference_runner(
             mad, run_in=args.run_in, client_runner_q=client_runner_q, stop=stop
         ),
@@ -564,6 +564,11 @@ if __name__ == "__main__":
         "--max-grids",
         type=int,
         default=5,
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=10000,
     )
     parser.add_argument(
         "--max-grid-size",
