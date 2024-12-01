@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--grids", type=int, default=3)
     parser.add_argument("--addr", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--controller", type=str, default="wireless_osx")
+    parser.add_argument("--controller", type=str, default="wireless_osxA")
     parser.add_argument(
         "--skip-help",
         action="store_true",
