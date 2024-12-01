@@ -136,7 +136,7 @@ class HudesWebsocketClient:
 
                     # figure out what we are recv'ing if anything
                     try:
-                        msg = websocket.recv(timeout=0.0)
+                        msg = websocket.recv(timeout=0.00001)
                         self.recv_q.put(msg)
                     except TimeoutError:
                         pass
