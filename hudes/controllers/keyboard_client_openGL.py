@@ -51,7 +51,7 @@ class JoyStickController:
 
 
 controllers = {
-    "wireless_osx": JoyStickController(
+    "wireless_osxA": JoyStickController(
         left_trig_button=6,
         right_trig_button=7,
         left_js_down_axis=1,
@@ -67,6 +67,27 @@ controllers = {
         button_left=4,
         button_right=5,
         right_js_press_button=11,
+    ),
+    "wireless_osxB": JoyStickController(
+        left_trig_axis=4,
+        right_trig_axis=5,
+        left_js_down_axis=1,
+        left_js_right_axis=0,
+        right_js_down_axis=3,
+        right_js_right_axis=2,
+        sgd_button=6,
+        quit_button=4,
+        button_y=2,
+        button_b=0,
+        button_x=3,
+        button_a=1,
+        button_left=9,
+        button_right=10,
+        right_js_press_button=8,
+        button_key_down=12,
+        button_key_up=11,
+        button_key_left=13,
+        button_key_right=14,
     ),
     "wireless_rpi": JoyStickController(
         left_trig_axis=2,
