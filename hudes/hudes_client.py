@@ -339,6 +339,7 @@ class HudesClient:
 
     def run_loop(self):
         self.before_first_loop()
+        first_loop = True
         while self.hudes_websocket_client.running:
             self.before_pg_event()
             redraw = False
@@ -348,8 +349,9 @@ class HudesClient:
                 redraw |= self.process_key_press(event)
 
             redraw |= self.receive_messages()
-            if redraw:
+            if redraw or first_loop:
                 self.view.draw()
+                first_loop = False
             else:
                 sleep(0.01)
 
@@ -359,6 +361,7 @@ class HudesClient:
         received_batch = False
         received_val = False
         while self.hudes_websocket_client.recv_ready():
+            logging.debug("RECV MESSXX")
             received_message = True
             raw_msg = self.hudes_websocket_client.recv_msg()
             msg = hudes_pb2.Control()
