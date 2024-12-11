@@ -6,7 +6,7 @@ import View from './View.js';
 
 export default class HudesClient {
     constructor(addr, port) {
-        this.socket = new WebSocket(`ws://${addr}:${port}`);
+        this.socket = new WebSocket(`wss://${addr}:${port}`);
         this.socket.binaryType = "arraybuffer";
         this.requestIdx = 0;
         this.running = true;
