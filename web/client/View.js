@@ -209,7 +209,7 @@ export default class View {
                 responsive: true,
             };
 
-            newPlot(this.confusionMatrixContainer, initialData, layout);
+            Plotly.newPlot(this.confusionMatrixContainer, initialData, layout);
         }
     }
 
