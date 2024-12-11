@@ -1,4 +1,4 @@
-import protobuf from 'protobufjs';
+import protobuf from 'protobufjs/light';
 
 export async function loadProto(protoPath) {
     const root = await protobuf.load(protoPath);

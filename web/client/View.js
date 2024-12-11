@@ -1,8 +1,11 @@
-import * as THREE from 'three';
+import { Scene ,PerspectiveCamera ,MathUtils,WebGLRenderer,Color ,PlaneGeometry,BufferAttribute, ShaderMaterial, Mesh, SphereGeometry,MeshBasicMaterial} from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Import OrbitControls
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'; // Import CSS2DRenderer for annotations
 
+//import Plotly from 'plotly.js-dist-min'; // Import Plotly
+
+import { log } from '../utils/logger.js'; // Import your logging utility
 import {
     Chart,
     CategoryScale,    // Register the category scale
@@ -36,9 +39,6 @@ Chart.register(
     annotationPlugin
 );
 
-import Plotly from 'plotly.js-dist-min'; // Import Plotly
-
-import { log } from '../utils/logger.js'; // Import your logging utility
 
 export default class View {
     constructor(gridSize, numGrids, clientState) {
@@ -63,9 +63,9 @@ export default class View {
         // Three.js setup
         const glContainer = document.getElementById('glContainer');
         if (glContainer) {
-            this.scene = new THREE.Scene();
-            this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            this.scene = new Scene();
+            this.camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            this.renderer = new WebGLRenderer({ antialias: true });
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.domElement.style.position = 'absolute';
             this.renderer.domElement.style.top = '0';
@@ -98,18 +98,18 @@ export default class View {
 
             // Colors for the grids
             this.gridColors = [
-                new THREE.Color(0.0, 1.0, 1.0), // Cyan
-                new THREE.Color(1.0, 0.0, 1.0), // Magenta
-                new THREE.Color(1.0, 1.0, 0.0), // Yellow
-                new THREE.Color(0.0, 1.0, 0.0), // Green
-                new THREE.Color(1.0, 0.5, 0.0), // Orange
-                new THREE.Color(1.0, 0.0, 0.0), // Red
-                new THREE.Color(0.0, 0.0, 1.0), // Blue
-                new THREE.Color(0.5, 0.0, 1.0), // Purple
-                new THREE.Color(0.0, 0.5, 1.0), // Sky Blue
-                new THREE.Color(1.0, 0.0, 0.5), // Pink
-                new THREE.Color(0.5, 1.0, 0.0), // Lime
-                new THREE.Color(1.0, 0.75, 0.8), // Light Pink
+                new Color(0.0, 1.0, 1.0), // Cyan
+                new Color(1.0, 0.0, 1.0), // Magenta
+                new Color(1.0, 1.0, 0.0), // Yellow
+                new Color(0.0, 1.0, 0.0), // Green
+                new Color(1.0, 0.5, 0.0), // Orange
+                new Color(1.0, 0.0, 0.0), // Red
+                new Color(0.0, 0.0, 1.0), // Blue
+                new Color(0.5, 0.0, 1.0), // Purple
+                new Color(0.0, 0.5, 1.0), // Sky Blue
+                new Color(1.0, 0.0, 0.5), // Pink
+                new Color(0.5, 1.0, 0.0), // Lime
+                new Color(1.0, 0.75, 0.8), // Light Pink
             ];
 
             this.alpha = 0.8; // Transparency
@@ -209,7 +209,7 @@ export default class View {
                 responsive: true,
             };
 
-            Plotly.newPlot(this.confusionMatrixContainer, initialData, layout);
+            newPlot(this.confusionMatrixContainer, initialData, layout);
         }
     }
 
@@ -523,7 +523,7 @@ export default class View {
         // Create or update each grid and sphere
         for (let i = 0; i < numGrids; i++) {
             // Create new geometry for each grid
-            const geometry = new THREE.PlaneGeometry(this.gridSize, this.gridSize, this.gridSize - 1, this.gridSize - 1);
+            const geometry = new PlaneGeometry(this.gridSize, this.gridSize, this.gridSize - 1, this.gridSize - 1);
             const color = this.gridColors[i % this.gridColors.length];
             let baseOpacity = 1.0;//this.alpha;
             let secondaryOpacity = baseOpacity * 0.3;
@@ -551,11 +551,11 @@ export default class View {
                 }
             }
 
-            geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1)); // Add alpha as a vertex attribute
+            geometry.setAttribute('alpha', new BufferAttribute(alphas, 1)); // Add alpha as a vertex attribute
             geometry.attributes.position.needsUpdate = true;
 
             // Use ShaderMaterial to apply alpha for each vertex
-            const material = new THREE.ShaderMaterial({
+            const material = new ShaderMaterial({
                 uniforms: {
                     color: { value: color },
                 },
@@ -580,7 +580,7 @@ export default class View {
                 wireframe: true,
             });
 
-            const mesh = new THREE.Mesh(geometry, material);
+            const mesh = new Mesh(geometry, material);
             mesh.rotation.x = -Math.PI / 2; // Rotate to lay flat
 
             // Calculate position to center grids
@@ -604,9 +604,9 @@ export default class View {
             this.gridObjects.push(mesh);
 
             // Create a red sphere to represent the center point of each grid
-            const sphereGeometry = new THREE.SphereGeometry(1, 16, 16); // Radius = 1, segments for smoother look
-            const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color
-            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            const sphereGeometry = new SphereGeometry(1, 16, 16); // Radius = 1, segments for smoother look
+            const sphereMaterial = new MeshBasicMaterial({ color: 0xff0000 }); // Red color
+            const sphere = new Mesh(sphereGeometry, sphereMaterial);
 
             // Position the sphere at the center of the current grid
             sphere.position.set(xOffset, 0, 0); // Set it on the center of the grid
@@ -663,8 +663,8 @@ export default class View {
 
         // Rotate each grid according to the current angles
         this.gridObjects.forEach((grid, index) => {
-            grid.rotation.z = THREE.MathUtils.degToRad(this.angleH); // Rotate around Z axis
-            grid.rotation.x = THREE.MathUtils.degToRad(this.angleV - 90); // Rotate around X axis
+            grid.rotation.z = MathUtils.degToRad(this.angleH); // Rotate around Z axis
+            grid.rotation.x = MathUtils.degToRad(this.angleV - 90); // Rotate around X axis
         });
 
         // Render the scene
