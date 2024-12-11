@@ -5,7 +5,9 @@ import asyncio
 import copy
 import logging
 import os
+import pathlib
 import pickle
+import ssl
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -445,9 +447,17 @@ async def process_client(websocket, client_runner_q):
         client_runner_q.put(True)
 
 
-async def run_server(stop, client_runner_q):
+async def run_server(stop, client_runner_q, server_port, ssl_pem):
+    ssl_context = None
+    if ssl_pem is not None:
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        localhost_pem = pathlib.Path(__file__).with_name(ssl_pem)
+        ssl_context.load_cert_chain(localhost_pem)
     async with serve(
-        partial(process_client, client_runner_q=client_runner_q), None, 8765
+        partial(process_client, client_runner_q=client_runner_q),
+        None,
+        server_port,
+        ssl=ssl_context,
     ):
         await stop
 
@@ -496,7 +506,7 @@ async def run_wrapper(args):
         return
     stop = asyncio.get_running_loop().create_future()
     await asyncio.gather(
-        run_server(stop, client_runner_q),
+        run_server(stop, client_runner_q, args.port, args.ssl_pem),
         inference_runner(
             mad, run_in=args.run_in, client_runner_q=client_runner_q, stop=stop
         ),
@@ -517,6 +527,31 @@ if __name__ == "__main__":
         type=str,
         default="ffnn",
         choices=["cnn", "ffnn", "cnn2", "cnn3"],
+    )
+    parser.add_argument(
+        "--max-batch-size",
+        type=int,
+        default=512,
+    )
+    parser.add_argument(
+        "--max-grids",
+        type=int,
+        default=5,
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=10000,
+    )
+    parser.add_argument(
+        "--max-grid-size",
+        type=int,
+        default=41,
+    )
+    parser.add_argument(
+        "--ssl-pem",
+        type=str,
+        default=None,
     )
     parser.add_argument("--run-in", type=str, default="process")
     parser.add_argument(
