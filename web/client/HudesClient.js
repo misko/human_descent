@@ -415,6 +415,29 @@ export default class HudesClient {
             }
         }
     }
+
+    waitForWebSocket(callback) {
+        const checkInterval = 50; // Check every 50ms
+        const maxWaitTime = 5000; // Maximum wait time of 5 seconds
+        let elapsedTime = 0;
+    
+        // Quick check if the WebSocket is already open
+        if (this.socket.readyState === WebSocket.OPEN) {
+            callback();
+            return;
+        }
+
+        const interval = setInterval(() => {
+            if (this.socket.readyState === WebSocket.OPEN) {
+                clearInterval(interval);
+                callback(); // Invoke the callback when the WebSocket is ready
+            } else if (elapsedTime >= maxWaitTime) {
+                clearInterval(interval);
+                console.error("WebSocket did not open within the timeout period.");
+            }
+            elapsedTime += checkInterval;
+        }, checkInterval);
+    }
     sendQ(payload) {
         if (!this.Control || !this.ControlType) {
             console.error("Proto definitions not loaded. Cannot send message.");
@@ -436,11 +459,14 @@ export default class HudesClient {
         const buffer = this.Control.encode(message).finish();
 
         // Send the message over WebSocket
-        this.socket.send(buffer);
+        //this.socket.send(buffer);
 
         // Increment the request index
-        this.requestIdx++;
-
+        //this.requestIdx++;
+        this.waitForWebSocket(() => {
+            this.socket.send(buffer);
+            this.requestIdx++;
+        });
         //console.log("Message sent:", payload);
     }
 
