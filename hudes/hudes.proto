@@ -17,11 +17,12 @@ message Config {
   required string dtype = 7;
 }
 
-
 message TrainLossAndPreds {
   required double train_loss = 1;
-  optional bytes preds = 4;
-  optional bytes confusion_matrix = 5;
+  repeated float preds = 2; // Flattened predictions
+  repeated int32 preds_shape = 3; // Shape of the predictions
+  repeated float confusion_matrix = 4; // Flattened confusion matrix
+  repeated int32 confusion_matrix_shape = 5; // Shape of the confusion matrix
 }
 message ValLoss {
   required double val_loss = 1;
@@ -33,11 +34,13 @@ message BatchExamples {
   }
   required Type type = 1;
   required int32 n = 2;
-  required bytes train_data = 3;
-  optional bytes val_data = 4;
-  required bytes train_labels = 5;
-  optional bytes val_labels = 6;
-  required int32 batch_idx = 7;
+  repeated float train_data = 3; // Flattened data as repeated float
+  repeated int32 train_data_shape = 4; // Shape of the data as a list of integers
+  repeated float train_labels = 5; // Flattened labels as repeated float
+  repeated int32 train_labels_shape = 6; // Shape of the labels as a list of integers
+
+  required int32 batch_idx = 8;
+  
 }
 
 message Control {
@@ -64,8 +67,9 @@ message Control {
   optional ValLoss val_loss = 203;
   optional int32 request_idx = 204;
   optional BatchExamples batch_examples = 205;
-  optional bytes mesh_grid_results = 207;
-  optional int32 sgd_steps = 208;
-  optional int32 total_sgd_steps = 209;
+  repeated float mesh_grid_results = 207;  // Updated to repeated float
+  repeated int32 mesh_grid_shape = 208;    // Add the shape information
+  optional int32 sgd_steps = 209;
+  optional int32 total_sgd_steps = 210;
 
 }

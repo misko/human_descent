@@ -7,7 +7,7 @@ import pytest_asyncio
 import torch.multiprocessing as mp
 import websockets
 
-from hudes.mnist import MNISTFFNN, mnist_model_data_and_subpace
+from hudes.models_and_datasets.mnist import MNISTFFNN, mnist_model_data_and_subpace
 from hudes.websocket_client import send_dims
 from hudes.websocket_server import inference_runner, process_client
 

@@ -56,10 +56,10 @@ class MNISTCNN3(nn.Module):
                 padding=3,
             ),
             nn.ReLU(),
-            # nn.MaxPool2d(kernel_size=2),
+            nn.MaxPool2d(kernel_size=2),
         )
         # fully connected layer, output 10 classes
-        self.lin1 = nn.Linear(8 * 14 * 14, 32)
+        self.lin1 = nn.Linear(8 * 7 * 7, 32)
         self.lin2 = nn.Linear(32, 10)
         self.sm = nn.LogSoftmax(dim=1)
         self.flatten = torch.nn.Flatten(1)
@@ -172,7 +172,14 @@ def set_parameters(model, weights: torch.Tensor):
 
 
 def mnist_model_data_and_subpace(
-    model: nn.Module, seed: int = 0, store: str = "./", device="cpu", param_models=None
+    model: nn.Module,
+    seed: int = 0,
+    store: str = "./",
+    device="cpu",
+    param_models=None,
+    max_batch_size=512,
+    max_grids=4,
+    max_grid_size=41,
 ):
     transform = transforms.Compose(
         [
@@ -207,4 +214,7 @@ def mnist_model_data_and_subpace(
         minimize=False,
         device=device,
         param_models=param_models,
+        max_batch_size=max_batch_size,
+        max_grids=max_grids,
+        max_grid_size=max_grid_size,
     )

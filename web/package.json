@@ -1,0 +1,30 @@
+{
+  "name": "hudes",
+  "version": "1.0.0",
+  "description": "human descent on MNIST",
+  "main": "index.js",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --host 0.0.0.0",
+    "preview": "vite preview"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chart.js": "^4.4.6",
+    "chartjs-chart-matrix": "^2.0.1",
+    "chartjs-plugin-annotation": "^3.1.0",
+    "heatmap.js": "^2.0.5",
+    "plotly.js-dist-min": "^2.35.2",
+    "protobufjs": "^7.4.0",
+    "protobufjs-cli": "^1.1.3",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "vite": "^5.4.10",
+    "webpack": "^5.96.1",
+    "webpack-cli": "^5.1.4"
+  }
+}
+
