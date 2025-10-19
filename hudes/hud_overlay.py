@@ -5,7 +5,7 @@ import pygame as pg
 CONTROL_GROUPS: Sequence[dict] = (
     {"icon": None, "keys": ("W", "A", "S", "D"), "label": "Move"},
     {"icon": None, "keys": ("⬆️", "⬇️", "⬅️", "➡️"), "label": "Rotate"},
-    {"icon": None, "keys": ("Spacebar",), "label": "New Dirs"},
+    {"icon": None, "keys": ("Spacebar",), "label": "New Dims"},
     {"icon": None, "keys": ("Enter",), "label": "New Batch"},
     {"icon": None, "keys": ("⇧",), "label": "Cycle Plane"},
     {"icon": None, "keys": ("[", "]"), "label": "Step ±"},
@@ -57,7 +57,9 @@ def _horizontal_stack(surfaces: Iterable[pg.Surface], gap: int) -> pg.Surface:
     surfaces = tuple(surfaces)
     if not surfaces:
         return pg.Surface((0, 0), pg.SRCALPHA)
-    width = sum(surface.get_width() for surface in surfaces) + gap * (len(surfaces) - 1)
+    width = sum(surface.get_width() for surface in surfaces) + gap * (
+        len(surfaces) - 1
+    )
     height = max(surface.get_height() for surface in surfaces)
     stacked = pg.Surface((width, height), pg.SRCALPHA)
     x = 0
@@ -83,7 +85,9 @@ def _render_group(
         elements.append(_horizontal_stack(key_surfaces, gap=2))
 
     if label_text:
-        elements.append(_render_text(label_text, label_font, (200, 240, 255, 225)))
+        elements.append(
+            _render_text(label_text, label_font, (200, 240, 255, 225))
+        )
 
     return _horizontal_stack(elements, gap=6)
 
@@ -133,7 +137,9 @@ def render_bottom_hud(
     controls_surface = _horizontal_stack(control_elements, gap=8)
 
     blocks = [
-        block for block in (status_surface, controls_surface) if block.get_width() > 0
+        block
+        for block in (status_surface, controls_surface)
+        if block.get_width() > 0
     ]
 
     max_width = max(block.get_width() for block in blocks)
@@ -146,7 +152,10 @@ def render_bottom_hud(
         + inner_gap * (len(blocks) - 1)
     )
 
-    hud_surface = pg.Surface((max_width + padding_x * 2, total_height), pg.SRCALPHA)
+    hud_surface = pg.Surface(
+        (max_width + padding_x * 2, total_height),
+        pg.SRCALPHA,
+    )
     rect = hud_surface.get_rect()
 
     # Draw translucent background

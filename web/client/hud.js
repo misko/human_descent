@@ -1,7 +1,7 @@
 export const CONTROL_GROUPS = [
   { icon: null, keys: ['W', 'A', 'S', 'D'], label: 'Move' },
   { icon: null, keys: ['⬆️', '⬇️', '⬅️', '➡️'], label: 'Rotate' },
-  { icon: null, keys: ['Spacebar'], label: 'New Dirs' },
+  { icon: null, keys: ['Spacebar'], label: 'New Dims' },
   { icon: null, keys: ['Enter'], label: 'New Batch' },
   { icon: null, keys: ['⇧'], label: 'Cycle Plane' },
   { icon: null, keys: ['[', ']'], label: 'Step ±' },
