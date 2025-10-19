@@ -30,9 +30,10 @@ class DatasetBatcher:
         batch_idx = batch_idx % self.get_len(batch_size=batch_size)
         start_idx = batch_idx * batch_size
         end_idx = min(len(self.ds), start_idx + batch_size)
-        x, y = torch.cat(
-            [self.ds[idx][0] for idx in self.idxs[start_idx:end_idx]], dim=0
-        ), torch.tensor([self.ds[idx][1] for idx in self.idxs[start_idx:end_idx]])
+        x, y = (
+            torch.cat([self.ds[idx][0] for idx in self.idxs[start_idx:end_idx]], dim=0),
+            torch.tensor([self.ds[idx][1] for idx in self.idxs[start_idx:end_idx]]),
+        )
         return {"data": x, "label": y}
 
 
@@ -75,7 +76,6 @@ def get_confusion_matrix(preds: torch.Tensor, labels: torch.Tensor):
 
 
 class ModelDataAndSubspace:
-
     def __init__(
         self,
         model: nn.Module,

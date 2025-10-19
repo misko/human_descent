@@ -2,7 +2,7 @@ export default class Controls {
     constructor(ControlType) {
       this.ControlType = ControlType;
     }
-  
+
     get controlTypes() {
       return {
         CONTROL_DIMS: this.ControlType.values.CONTROL_DIMS,
@@ -18,10 +18,9 @@ export default class Controls {
         CONTROL_QUIT: this.ControlType.values.CONTROL_QUIT,
       };
     }
-  
+
     getTypeName(typeValue) {
       const entry = Object.entries(this.ControlType.values).find(([_, value]) => value === typeValue);
       return entry ? entry[0] : "UNKNOWN_TYPE";
     }
   }
-  

@@ -48,21 +48,21 @@ export default class KeyboardClientGL extends KeyboardClient {
         try {
             const selectedGrid = this.view.getSelectedGrid();
             const stepSize = this.state.stepSize;
-    
+
             // Prepare the steps dictionary similar to the Python version
             const dimsAndSteps = {
                 [1 + selectedGrid * 2]: s1 * stepSize * 0.25,
                 [0 + selectedGrid * 2]: s0 * stepSize * 0.25,
             };
-    
-            
+
+
             // Send the dimensions and steps
             this.sendDimsAndSteps(dimsAndSteps);
         } catch (error) {
             console.error("Error in stepInSelectedGrid:", error);
         }
     }
-    
+
 
     _rotateVector(x, y, angleDeg) {
         const angleRad = (Math.PI / 180) * angleDeg; // Convert angle to radians

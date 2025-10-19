@@ -1,7 +1,6 @@
 import logging
 import math
 import os
-import pickle
 import time
 from dataclasses import dataclass
 from time import sleep
@@ -20,7 +19,6 @@ from hudes.websocket_client import (
 
 
 class ClientState:
-
     def __init__(self, step_size_resolution, initial_step_size_idx, help_screen_idx=0):
         self.best_score = math.inf
         self.sgd_steps = 0
@@ -273,7 +271,6 @@ class HudesClient:
     def process_common_keys(self, event):
         ct = pg.time.get_ticks()
         if event.type == pg.KEYDOWN:
-
             if self.check_cooldown_time(
                 event=event, key=pg.K_x, ct=ct, cool_down_time=0.5
             ):

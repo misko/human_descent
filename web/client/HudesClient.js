@@ -177,21 +177,21 @@ export default class HudesClient {
                     if (!message.meshGridResults || !message.meshGridShape) {
                         throw new Error("meshGridResults or meshGridShape field missing");
                     }
-    
+
                     //log("hudes_client: received message: mesh grid results");
-    
+
                     // Parse the mesh grid results and reshape to the original dimensions
                     const meshGridResultsFlattened = message.meshGridResults;
                     const meshGridShape = message.meshGridShape;
-    
+
                     // Reshape the flattened results into a 3D array using meshGridShape
                     const meshGridResults = this._reshapeArray(
                         meshGridResultsFlattened,
                         meshGridShape
                     );
-    
+
                     //log(`Mesh grid results received:`, meshGridResults);
-    
+
                     // Update the view with the reshaped mesh grid results
                     this.view.updateMeshGrids(meshGridResults);
                     break;
@@ -420,7 +420,7 @@ export default class HudesClient {
         const checkInterval = 50; // Check every 50ms
         const maxWaitTime = 5000; // Maximum wait time of 5 seconds
         let elapsedTime = 0;
-    
+
         // Quick check if the WebSocket is already open
         if (this.socket.readyState === WebSocket.OPEN) {
             callback();
@@ -555,7 +555,7 @@ export default class HudesClient {
                 console.error("Proto definitions not loaded. Cannot send dims and steps.");
                 return;
             }
-    
+
             // Construct the payload
             const payload = {
                 type: this.ControlType.values.CONTROL_DIMS,
@@ -565,36 +565,36 @@ export default class HudesClient {
                 })),
                 requestIdx: this.requestIdx,
             };
-    
+
             // Debug: Log the payload before sending
             //console.log("sendDimsAndSteps - Payload:", payload);
-    
+
             // Use sendQ to handle message creation and sending
             this.sendQ(payload);
-    
+
             // Simulate delay for synchronization
             await sleep(10);
-    
+
             // Update local state
             for (const [dim, step] of Object.entries(dimsAndSteps)) {
                 this.dimsAndStepsOnCurrentDims[dim] =
                     (this.dimsAndStepsOnCurrentDims[dim] || 0) + step;
             }
-    
+
             // Debug: Log the updated dimsAndStepsOnCurrentDims state
             //console.log("Updated dimsAndStepsOnCurrentDims:", this.dimsAndStepsOnCurrentDims);
-    
+
             // Update the UI or internal state to reflect the changes
             this.dimsAndStepsUpdated();
-    
+
             // Increment the request index
             this.requestIdx++;
-    
+
         } catch (error) {
             console.error("Error in sendDimsAndSteps:", error);
         }
     }
-    
+
 
     async sendConfig() {
         if (!this.Control || !this.ControlType) {

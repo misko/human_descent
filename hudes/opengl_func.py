@@ -5,7 +5,6 @@ import numpy as np
 import pygame as pg
 from OpenGL.GL import *
 from OpenGL.GLU import *  # Import GLU for perspective functions
-from PIL import Image
 from pygame.locals import *
 
 """
@@ -83,9 +82,6 @@ def draw_red_sphere(z_position):
     gluDeleteQuadric(quadric)  # Delete the quadric object to clean up
     glPopMatrix()  # Restore the previous matrix state
     glColor3f(1.0, 1.0, 1.0)
-
-
-import numpy as np
 
 
 def create_grid_points(height_maps, spacing):
@@ -213,10 +209,6 @@ def create_texture_from_surface(surf):
     )
 
     return texture_id, width, height
-
-
-import pygame as pg
-from OpenGL.GL import *
 
 
 def load_texture(image_path, output_width, output_height):
@@ -426,7 +418,6 @@ def render_text_2d_to_data(text, font_size):
 
 
 def render_text_2d(text_data, text_width, text_height, screen_width, screen_height):
-
     # Calculate the position to center the text at the top
     x_position = (screen_width - text_width) // 2
     y_position = screen_height - text_height
@@ -512,11 +503,6 @@ def create_grid_points_with_colors(
 
     # Combine X, Y (heights), and Z coordinates into a single (n, H, W, 3) array
     points = np.stack([x_grid, height_maps, z_grid], axis=-1)  # Shape (n, H, W, 3)
-
-    # Normalize heights for color generation (assuming the height map has a wide range of values)
-    min_height = height_maps.min()
-    max_height = height_maps.max()
-    normalized_heights = (height_maps - min_height) / (max_height - min_height)
 
     # Generate colors based on height (blue for low, red for high)
     colors = get_color_matrix(n, H, grid_colors=grid_colors).copy()  # RGBA colors

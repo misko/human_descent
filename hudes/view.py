@@ -1,5 +1,4 @@
 import logging
-import math
 import os
 from typing import List
 
@@ -8,6 +7,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # also kinda works with Cairo , else its ?
 import matplotlib.pyplot as plt
+import matplotlib.style as mplstyle
 import numpy as np
 import pygame as pg
 import pygame.midi
@@ -32,11 +32,9 @@ from hudes.opengl_func import (
     update_grid_vbo,
 )
 
-plt_backend = matplotlib.get_backend()
-
-import matplotlib.style as mplstyle
-
 mplstyle.use("fast")
+
+plt_backend = matplotlib.get_backend()
 
 
 def norm_mesh(mesh_grid):
@@ -52,7 +50,6 @@ def norm_mesh(mesh_grid):
 
 class View:
     def __init__(self, use_midi=False):
-
         pg.midi.init()
 
         pg.key.set_repeat(100)
@@ -88,7 +85,12 @@ class View:
             ctx = cairo.Context(self.surface)  # pg.display.get_surface())
             self.renderer.set_context(ctx)
         self.fig.subplots_adjust(
-            left=0.07, right=0.95, hspace=0.8, top=0.92, bottom=0.07, wspace=0.5  # 0.5
+            left=0.07,
+            right=0.95,
+            hspace=0.8,
+            top=0.92,
+            bottom=0.07,
+            wspace=0.5,  # 0.5
         )
         self.axd = self.fig.subplot_mosaic(
             #    AAAAAA
@@ -267,11 +269,9 @@ class View:
             return
 
     def draw(self):
-
         logging.debug("hudes_client: redraw ")
         if self.client_state.help_screen_idx == -1:
             if "cairo" in plt_backend.lower():
-
                 self.draw_or_restore()
 
                 surf = pygame.image.frombuffer(
@@ -291,7 +291,6 @@ class View:
                 self.screen.blit(surf, (0, 0))
                 self.screen.blit(self.top_title_rendered, (0, 0))
         else:
-
             help_screen_fn = self.client_state.help_screen_fns[
                 self.client_state.help_screen_idx
             ]
@@ -313,7 +312,6 @@ def norm_deg(x):
 
 class OpenGLView:
     def __init__(self, grid_size, grids):
-
         # pg.init()
         pg.font.init()
         pg.key.set_repeat(70)
@@ -389,7 +387,6 @@ class OpenGLView:
         self.use_surface = False
 
         if self.use_surface:
-
             self.points = create_surface_grid_points(
                 np.zeros((self.effective_grids, grid_size, grid_size)), self.spacing
             )
@@ -443,7 +440,12 @@ class OpenGLView:
         plt.style.use("dark_background")
         self.fig = plt.figure(figsize=(12, 2), facecolor="none")
         self.fig.subplots_adjust(
-            left=0.07, right=0.95, hspace=0.8, top=0.80, bottom=0.1, wspace=0.5  # 0.5
+            left=0.07,
+            right=0.95,
+            hspace=0.8,
+            top=0.80,
+            bottom=0.1,
+            wspace=0.5,  # 0.5
         )
         self.axd = self.fig.subplot_mosaic(
             #    AAAAAA
@@ -561,9 +563,9 @@ class OpenGLView:
 
         start_idx = self.selected_grid * self.grid_size * self.grid_size
 
-        new_points[
-            start_idx : start_idx + self.grid_size * self.grid_size, [0, 2]
-        ] *= self.selected_grid_multiplier
+        new_points[start_idx : start_idx + self.grid_size * self.grid_size, [0, 2]] *= (
+            self.selected_grid_multiplier
+        )
 
         update_grid_vbo(self.vbo, new_points)
         update_grid_cbo(self.cbo, new_colors)
@@ -672,7 +674,6 @@ class OpenGLView:
             pg.time.wait(10)
 
     def draw_gl(self):
-
         # Rendering Loop
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
@@ -700,7 +701,6 @@ class OpenGLView:
         glColorPointer(4, GL_FLOAT, 0, ctypes.c_void_p(0))
         # Draw each grid individually by offsetting the points
         for k in range(self.effective_grids):
-
             # Save the current matrix state
             glPushMatrix()
 

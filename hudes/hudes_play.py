@@ -11,7 +11,6 @@ from hudes.view import OpenGLView, View
 
 
 def main(argv=None):
-
     pg.init()
 
     parser = argparse.ArgumentParser(description="Hudes: Keyboardclient")

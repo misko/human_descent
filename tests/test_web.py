@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from functools import partial
 
 import pytest
@@ -41,7 +40,6 @@ async def run_server_thread():
 
 @pytest_asyncio.fixture
 async def run_server_process():
-
     mad = mnist_model_data_and_subpace(
         model=MNISTFFNN(),
     )

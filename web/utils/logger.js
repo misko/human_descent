@@ -5,4 +5,3 @@ export function log(message) {
       logElem.textContent += `${message}\n`;
     }
   }
-  

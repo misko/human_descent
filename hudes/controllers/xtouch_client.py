@@ -48,7 +48,6 @@ class XTouchClient(KeyboardClient):
     def process_key_press(self, event):
         redraw = super().process_key_press(event)
         if event.type in [pygame.midi.MIDIIN]:
-
             if (
                 event.status != 186
                 and event.data2 == 127

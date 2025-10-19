@@ -40,7 +40,7 @@ message BatchExamples {
   repeated int32 train_labels_shape = 6; // Shape of the labels as a list of integers
 
   required int32 batch_idx = 8;
-  
+
 }
 
 message Control {

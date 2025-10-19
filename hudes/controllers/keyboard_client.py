@@ -1,5 +1,3 @@
-import logging
-
 import pygame as pg
 
 from hudes.hudes_client import HudesClient
@@ -7,7 +5,6 @@ from hudes.hudes_client import HudesClient
 
 class KeyboardClient(HudesClient):
     def init_input(self):
-
         self.paired_keys = [
             (pg.key.key_code(x), pg.key.key_code(y))
             for x, y in [
@@ -54,7 +51,7 @@ Use [ , ] to decrease/increase step size respectively
 Tap _space_ to get a new random projection
 Enter/Return , get a new training batch
 
-This keybord controller configuration controlls a random {self.n} 
+This keybord controller configuration controlls a random {self.n}
 dimensional subspace of target model
 
 To control each dimension use:

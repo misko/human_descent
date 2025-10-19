@@ -108,7 +108,6 @@ controllers = {
 
 class KeyboardClientGL(HudesClient):
     def init_input(self):
-
         self.joysticks = {}
         self.joystick_controller: JoyStickController = controllers[
             self.joystick_controller_key
@@ -270,9 +269,7 @@ class KeyboardClientGL(HudesClient):
         ct = pg.time.get_ticks()
         for joystick in self.joysticks.values():
             if (
-                joystick.get_button(
-                    self.joystick_controller.right_js_press_button
-                )
+                joystick.get_button(self.joystick_controller.right_js_press_button)
                 > 0.5
             ):
                 self.view.reset_angle()
@@ -282,18 +279,14 @@ class KeyboardClientGL(HudesClient):
                 self.client_state.step_size_decrease(2)
                 self.send_config()
 
-            if joystick.get_button(
-                self.joystick_controller.button_right
-            ) > 0.5:
+            if joystick.get_button(self.joystick_controller.button_right) > 0.5:
                 self.client_state.step_size_increase(2)
                 self.send_config()
 
             # use that axis that sometimes shows up?
             if (
                 self.joystick_controller.left_trig_axis >= 0
-                and joystick.get_axis(
-                    self.joystick_controller.left_trig_axis
-                ) > 0.5
+                and joystick.get_axis(self.joystick_controller.left_trig_axis) > 0.5
                 and (ct - self.last_select_press) > 0.2 * 1000
             ):
                 self.view.decrement_selected_grid()
@@ -302,9 +295,7 @@ class KeyboardClientGL(HudesClient):
                 self.last_select_press = ct
             if (
                 self.joystick_controller.right_trig_axis >= 0
-                and joystick.get_axis(
-                    self.joystick_controller.right_trig_axis
-                ) > 0.5
+                and joystick.get_axis(self.joystick_controller.right_trig_axis) > 0.5
                 and (ct - self.last_select_press) > 0.2 * 1000
             ):
                 self.view.increment_selected_grid()
@@ -317,9 +308,7 @@ class KeyboardClientGL(HudesClient):
                 joystick.get_axis(self.joystick_controller.left_js_down_axis),
             ).rotate(self.view.get_angles()[0])
             B = Vector2(
-                joystick.get_axis(
-                    self.joystick_controller.right_js_right_axis
-                ),
+                joystick.get_axis(self.joystick_controller.right_js_right_axis),
                 joystick.get_axis(self.joystick_controller.right_js_down_axis),
             )
 
@@ -329,7 +318,6 @@ class KeyboardClientGL(HudesClient):
 
             radius, angle = B.as_polar()
             if radius > 0.4:
-
                 adjustH = B[0] * 2 * self.joystick_controller.right_js_accel
                 adjustV = B[1] * self.joystick_controller.right_js_accel
                 redraw = True
@@ -337,12 +325,8 @@ class KeyboardClientGL(HudesClient):
 
             hats = joystick.get_numhats()
             if hats > 0:
-
                 hat = joystick.get_hat(0)
-                if (
-                    abs(hat[1]) > 0.5
-                    and (ct - self.last_batch_size_press) > 0.2 * 1000
-                ):
+                if abs(hat[1]) > 0.5 and (ct - self.last_batch_size_press) > 0.2 * 1000:
                     self.last_batch_size_press = ct
                     self.client_state.toggle_dtype()
                     self.send_config()
@@ -358,16 +342,12 @@ class KeyboardClientGL(HudesClient):
             if max_frames is not None and i >= max_frames:
                 self.quit()
                 break
-            if (
-                timeout_s is not None
-                and (time.time() - start_time) >= timeout_s
-            ):
+            if timeout_s is not None and (time.time() - start_time) >= timeout_s:
                 self.quit()
                 break
             # check and send local interactions(?)
             redraw = False
             for event in pg.event.get():
-
                 # Handle hotplugging
                 if event.type == pg.JOYDEVICEADDED:
                     # Event fires as pygame enumerates each joystick.

@@ -54,7 +54,7 @@ body {
 
 .example-cell {
     position: relative; /* Allow absolute positioning of children */
-    width: 100%; 
+    width: 100%;
     height: 25%; /* Adjusted for 4 cells in the side container */
     box-sizing: border-box;
 }

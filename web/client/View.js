@@ -566,7 +566,7 @@ export default class View {
                 vertexShader: `
                     attribute float alpha;
                     varying float vAlpha;
-    
+
                     void main() {
                         vAlpha = alpha;
                         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -575,7 +575,7 @@ export default class View {
                 fragmentShader: `
                     uniform vec3 color;
                     varying float vAlpha;
-    
+
                     void main() {
                         gl_FragColor = vec4(color, vAlpha);
                     }
@@ -778,15 +778,15 @@ export default class View {
     showImage(filename) {
         // Select the image container div
         const container = document.getElementById('imageContainer');
-    
+
         // Clear any previous image from the container
         container.innerHTML = '';
-    
+
         // Create a new img element
         const img = document.createElement('img');
         img.src = filename; // Set the source to the provided filename
         img.alt = 'Floating Image';
-    
+
         // Style the image
         img.style.position = 'absolute';
         img.style.top = '50%';
@@ -796,7 +796,7 @@ export default class View {
         img.style.pointerEvents = 'none'; // Allow clicks through the image
         img.style.height = '70vh'; // Set the image height to 70% of the window height
         img.style.width = 'auto'; // Maintain aspect ratio
-    
+
         // Append the image to the container
         container.appendChild(img);
     }
@@ -810,5 +810,3 @@ export default class View {
 
 
 }
-
-

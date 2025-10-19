@@ -6,6 +6,6 @@ python hudes/websocket_server.py --device mps --run-in thread --port 8765 &
 server_pid=$!
 python hudes/hudes_play.py --input keyboardGL
 python hudes/hudes_play.py --input keyboard
-#python hudes/hudes_play.py --input xtouch 
+#python hudes/hudes_play.py --input xtouch
 kill ${server_pid}
 kill -9 ${server_pid}

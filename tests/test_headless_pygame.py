@@ -14,9 +14,7 @@ from hudes.websocket_server import run_wrapper
 
 
 def _get_keyboard_client_gl():
-    module = importlib.import_module(
-        "hudes.controllers.keyboard_client_openGL"
-    )
+    module = importlib.import_module("hudes.controllers.keyboard_client_openGL")
     return module.KeyboardClientGL
 
 
@@ -24,12 +22,8 @@ def test_keyboard_client_gl_run_loop_signature_accepts_limits():
     KeyboardClientGL = _get_keyboard_client_gl()
     signature = inspect.signature(KeyboardClientGL.run_loop)
     params = signature.parameters
-    assert "max_frames" in params, (
-        "KeyboardClientGL.run_loop missing max_frames"
-    )
-    assert "timeout_s" in params, (
-        "KeyboardClientGL.run_loop missing timeout_s"
-    )
+    assert "max_frames" in params, "KeyboardClientGL.run_loop missing max_frames"
+    assert "timeout_s" in params, "KeyboardClientGL.run_loop missing timeout_s"
 
 
 def test_keyboard_client_gl_import_without_opengl(monkeypatch):
@@ -227,9 +221,7 @@ async def test_run_sh_headless_pygame():
     )
     loop = asyncio.get_running_loop()
     stop_future = loop.create_future()
-    server_task = asyncio.create_task(
-        run_wrapper(server_args, stop_future=stop_future)
-    )
+    server_task = asyncio.create_task(run_wrapper(server_args, stop_future=stop_future))
 
     try:
         await wait_for_server("localhost", port)

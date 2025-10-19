@@ -45,7 +45,7 @@ export default class KeyboardClient extends HudesClient {
       'help_screens/hudes_3.png',
       'help_screens/hudes_1d_keyboard_controls.png',
     ]);
-    
+
   }
 
   usageStr() {

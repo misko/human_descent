@@ -6,4 +6,3 @@ export async function loadProto(protoPath) {
     const ControlType = root.lookupEnum('hudes.Control.Type');
     return { Control, ControlType };
   }
-  

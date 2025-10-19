@@ -6,7 +6,6 @@ from hudes.models_and_datasets.mnist import MNISTCNN, MNISTCNNFlipped
 
 
 def test_linear_and_relu():
-
     in_channels = 3
     out_channels = 5
     batch_size = 7
