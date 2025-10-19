@@ -51,4 +51,4 @@ if __name__ == "__main__":
         ).mean(axis=[2, 3])
         x += loss.cpu().mean()
         print(predictions.shape, label.shape)
-    print(f"{(time.time()-start_time)/args.n:0.4e}s per iteration")
+    print(f"{(time.time() - start_time) / args.n:0.4e}s per iteration")

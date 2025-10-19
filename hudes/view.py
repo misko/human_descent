@@ -563,9 +563,9 @@ class OpenGLView:
 
         start_idx = self.selected_grid * self.grid_size * self.grid_size
 
-        new_points[
-            start_idx : start_idx + self.grid_size * self.grid_size, [0, 2]
-        ] *= self.selected_grid_multiplier
+        new_points[start_idx : start_idx + self.grid_size * self.grid_size, [0, 2]] *= (
+            self.selected_grid_multiplier
+        )
 
         update_grid_vbo(self.vbo, new_points)
         update_grid_cbo(self.cbo, new_colors)
@@ -623,7 +623,7 @@ class OpenGLView:
                 "bs:"
                 + f"{self.client_state.batch_size} "
                 + f"({self.client_state.dtype.replace('float', 'f')})",
-                f"t:{time/1000:.1f}s",
+                f"t:{time / 1000:.1f}s",
                 f"dims:{self.client_state.dims_used}",
                 f"sgd:{self.client_state.sgd_steps}",
             ]
