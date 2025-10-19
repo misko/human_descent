@@ -1,13 +1,47 @@
 import asyncio
+import importlib
+import inspect
 import os
+import sys
+import types
 from types import SimpleNamespace
 
 import pytest
 import websockets
 
 from hudes.controllers.keyboard_client import KeyboardClient
-from hudes.controllers.keyboard_client_openGL import KeyboardClientGL
 from hudes.websocket_server import run_wrapper
+
+
+def _get_keyboard_client_gl():
+    module = importlib.import_module(
+        "hudes.controllers.keyboard_client_openGL"
+    )
+    return module.KeyboardClientGL
+
+
+def test_keyboard_client_gl_run_loop_signature_accepts_limits():
+    KeyboardClientGL = _get_keyboard_client_gl()
+    signature = inspect.signature(KeyboardClientGL.run_loop)
+    params = signature.parameters
+    assert "max_frames" in params, (
+        "KeyboardClientGL.run_loop missing max_frames"
+    )
+    assert "timeout_s" in params, (
+        "KeyboardClientGL.run_loop missing timeout_s"
+    )
+
+
+def test_keyboard_client_gl_import_without_opengl(monkeypatch):
+    module_name = "hudes.controllers.keyboard_client_openGL"
+    sys.modules.pop(module_name, None)
+    monkeypatch.setitem(sys.modules, "OpenGL", types.ModuleType("OpenGL"))
+    try:
+        module = importlib.import_module(module_name)
+    finally:
+        sys.modules.pop(module_name, None)
+        sys.modules.pop("OpenGL", None)
+    assert hasattr(module, "KeyboardClientGL")
 
 
 class DummyViewBase:
@@ -95,11 +129,13 @@ async def wait_for_server(host: str, port: int, timeout: float = 20.0):
                 return
         except OSError:
             if asyncio.get_running_loop().time() > deadline:
-                raise TimeoutError(f"Server {host}:{port} did not become ready")
+                message = f"Server {host}:{port} did not become ready"
+                raise TimeoutError(message)
             await asyncio.sleep(0.1)
 
 
 def run_clients_sequence(port: int):
+    KeyboardClientGL = _get_keyboard_client_gl()
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
@@ -191,7 +227,9 @@ async def test_run_sh_headless_pygame():
     )
     loop = asyncio.get_running_loop()
     stop_future = loop.create_future()
-    server_task = asyncio.create_task(run_wrapper(server_args, stop_future=stop_future))
+    server_task = asyncio.create_task(
+        run_wrapper(server_args, stop_future=stop_future)
+    )
 
     try:
         await wait_for_server("localhost", port)
