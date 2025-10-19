@@ -2,6 +2,7 @@ import { Scene ,PerspectiveCamera ,MathUtils,WebGLRenderer,Color ,PlaneGeometry,
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Import OrbitControls
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'; // Import CSS2DRenderer for annotations
+import { CONTROL_GROUPS, formatHudMarkup } from './hud.js';
 
 //import Plotly from 'plotly.js-dist-min'; // Import Plotly
 
@@ -124,12 +125,15 @@ export default class View {
             window.addEventListener('resize', this.onWindowResize.bind(this), false);
         }
 
+
     }
     annotateBottomScreen(text, size = 20) {
         const bottomTextContainer = document.getElementById('bottomTextContainer');
         if (bottomTextContainer) {
-            bottomTextContainer.innerText = `Human Descent : MNIST\n${text}`;
-            bottomTextContainer.style.fontSize = `${size}px`;
+            bottomTextContainer.innerHTML = formatHudMarkup(
+                text ?? '',
+                CONTROL_GROUPS,
+            );
         }
     }
     // Function to handle window resizing

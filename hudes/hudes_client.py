@@ -337,10 +337,18 @@ class HudesClient:
                 self.get_next_batch()
         return False
 
-    def run_loop(self):
+    def run_loop(self, max_frames=None, timeout_s=None):
         self.before_first_loop()
         first_loop = True
+        start_time = time.time()
+        frames = 0
         while self.hudes_websocket_client.running:
+            if max_frames is not None and frames >= max_frames:
+                self.quit()
+                break
+            if timeout_s is not None and (time.time() - start_time) >= timeout_s:
+                self.quit()
+                break
             self.before_pg_event()
             redraw = False
             for event in pg.event.get():
@@ -354,6 +362,7 @@ class HudesClient:
                 first_loop = False
             else:
                 sleep(0.01)
+            frames += 1
 
     def receive_messages(self):
         received_message = False

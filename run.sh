@@ -2,7 +2,7 @@
 echo "Download MNIST"
 python hudes/websocket_server.py --run-in thread --download-dataset-and-exit
 echo "Done downloading MNIST"
-python hudes/websocket_server.py --device mps --run-in thread &
+python hudes/websocket_server.py --device mps --run-in thread --port 8765 &
 server_pid=$!
 python hudes/hudes_play.py --input keyboardGL
 python hudes/hudes_play.py --input keyboard

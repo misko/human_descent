@@ -16,6 +16,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *  # Import GLU for perspective functions
 from pygame.locals import *
 
+from hudes.hud_overlay import render_bottom_hud
 from hudes.opengl_func import (
     create_grid_indices,
     create_grid_points_with_colors,
@@ -26,7 +27,6 @@ from hudes.opengl_func import (
     draw_red_sphere,
     load_texture,
     render_text_2d,
-    render_text_2d_to_data,
     render_texture_rgba,
     update_grid_cbo,
     update_grid_vbo,
@@ -453,6 +453,10 @@ class OpenGLView:
                 """
         )
 
+        self.bottom_bar_data = None
+        self.bottom_bar_width = 0
+        self.bottom_bar_height = 0
+
         self.client_state = None
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -611,29 +615,36 @@ class OpenGLView:
                 self.old_dims_used = self.client_state.dims_used
                 self.old_best_score = self.client_state.best_score
                 self.old_sgd = self.client_state.sgd_steps
-            font_size = 20
             time = pg.time.get_ticks()
-            if (time - self.large_text_start) < 2000:
-                font_size = 50
-
-            text_str = (
-                f"val:{self.client_state.best_score:.3f} "
-                + f"bs:{self.client_state.batch_size} ({self.client_state.dtype.replace('float','f')})"
-                + f" t:{time/1000:.1f}s dims:{self.client_state.dims_used} sgd:{self.client_state.sgd_steps}"
-            )
-            if self.text_str != text_str:
+            text_parts = [
+                f"val:{self.client_state.best_score:.3f}",
+                "bs:"
+                + f"{self.client_state.batch_size} "
+                + f"({self.client_state.dtype.replace('float', 'f')})",
+                f"t:{time/1000:.1f}s",
+                f"dims:{self.client_state.dims_used}",
+                f"sgd:{self.client_state.sgd_steps}",
+            ]
+            text_str = " ".join(text_parts)
+            if self.text_str != text_str or self.bottom_bar_data is None:
                 self.text_str = text_str
-                self.text_data, self.text_width, self.text_height = (
-                    render_text_2d_to_data(text=text_str, font_size=font_size)
+                hud_surface = render_bottom_hud(text_str)
+                self.bottom_bar_data = pg.image.tostring(
+                    hud_surface,
+                    "RGBA",
+                    True,
                 )
+                self.bottom_bar_width = hud_surface.get_width()
+                self.bottom_bar_height = hud_surface.get_height()
 
-            render_text_2d(
-                text_data=self.text_data,
-                text_width=self.text_width,
-                text_height=self.text_height,
-                screen_width=self.window_size[0],
-                screen_height=self.window_size[1],
-            )
+            if self.bottom_bar_data is not None:
+                render_text_2d(
+                    text_data=self.bottom_bar_data,
+                    text_width=self.bottom_bar_width,
+                    text_height=self.bottom_bar_height,
+                    screen_width=self.window_size[0],
+                    screen_height=self.window_size[1],
+                )
 
     def next_help_screen(self):
         self.client_state.help_screen_idx += 1

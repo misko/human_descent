@@ -494,7 +494,7 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
         await stop
 
 
-async def run_wrapper(args):
+async def run_wrapper(args, stop_future=None):
     if args.device == "mps" and (
         not getattr(torch.backends, "mps", False)
         or not torch.backends.mps.is_available()
@@ -506,7 +506,10 @@ async def run_wrapper(args):
     ):
         logging.warning("CUDA device not found, using CPU")
         args.device = "cpu"
-    mp.set_start_method("spawn")
+    try:
+        mp.set_start_method("spawn")
+    except RuntimeError:
+        pass
     client_runner_q = mp.Queue()
     executor = ThreadPoolExecutor(max_workers=12)
     loop = asyncio.get_running_loop()
@@ -541,7 +544,7 @@ async def run_wrapper(args):
     )
     if args.download_dataset_and_exit:
         return
-    stop = asyncio.get_running_loop().create_future()
+    stop = stop_future or asyncio.get_running_loop().create_future()
     await asyncio.gather(
         run_server(stop, client_runner_q, args.port, args.ssl_pem),
         inference_runner(
