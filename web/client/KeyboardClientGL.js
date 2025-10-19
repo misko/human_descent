@@ -1,6 +1,15 @@
 import KeyboardClient from './KeyboardClient.js';
 import { log } from '../utils/logger.js';
 import View from './View.js';
+import { installMouseControls, computeStepVector } from './mouseControls.js';
+
+const DEBUG_MOUSE = false;
+
+const debugMouse = (message) => {
+    if (DEBUG_MOUSE) {
+        log(message);
+    }
+};
 
 export default class KeyboardClientGL extends KeyboardClient {
     constructor(addr, port) {
@@ -20,7 +29,84 @@ export default class KeyboardClientGL extends KeyboardClient {
         this.lastSelectPress = 0;
         this.keyCooldownMs = 200;
 
+        this.dragSensitivity = 0.3;
+        this._mouseControls = null;
+
         this.view.resetAngle(); // Set initial angles
+
+        const canvas = this.view.getCanvasElement?.();
+        if (canvas) {
+            debugMouse('[KeyboardClientGL] installing mouse controls');
+            this._mouseControls = installMouseControls(canvas, {
+                moveTarget: typeof window !== 'undefined' ? window : canvas,
+                onDrag: ({ deltaX, deltaY }) => {
+                    if (this.state.helpScreenIdx !== -1) {
+                        debugMouse('[KeyboardClientGL] drag ignored while help screen active');
+                        return;
+                    }
+                    const horizontal = deltaX * this.dragSensitivity;
+                    const vertical = -deltaY * this.dragSensitivity;
+
+                    const before = this.view.getAngles();
+                    debugMouse(
+                        `[KeyboardClientGL] drag deltaX=${deltaX} deltaY=${deltaY} horizontal=${horizontal.toFixed(2)} vertical=${vertical.toFixed(2)} angleH=${before.angleH.toFixed(2)} angleV=${before.angleV.toFixed(2)}`,
+                    );
+
+                    if (horizontal) {
+                        this.view.adjustAngles(horizontal, 0);
+                    }
+                    if (vertical) {
+                        this.view.adjustAngles(0, vertical);
+                    }
+
+                    const after = this.view.getAngles();
+                    debugMouse(
+                        `[KeyboardClientGL] updated angles angleH=${after.angleH.toFixed(2)} angleV=${after.angleV.toFixed(2)}`,
+                    );
+                },
+                onClick: ({ event }) => {
+                    if (this.state.helpScreenIdx !== -1) {
+                        debugMouse('[KeyboardClientGL] click ignored while help screen active');
+                        return;
+                    }
+                    const index = this.view.selectGridAt?.(event.clientX, event.clientY);
+                    if (typeof index === 'number') {
+                        debugMouse(`[KeyboardClientGL] click selected grid ${index}`);
+                    }
+                },
+                onScroll: ({ deltaY }) => {
+                    if (this.state.helpScreenIdx !== -1) {
+                        debugMouse('[KeyboardClientGL] scroll ignored while help screen active');
+                        return;
+                    }
+                    if (!deltaY) {
+                        debugMouse('[KeyboardClientGL] scroll with zero delta ignored');
+                        return;
+                    }
+
+                    const direction = deltaY < 0 ? 'backward' : 'forward';
+                    const { angleH } = this.view.getAngles();
+                    const rotated = computeStepVector(angleH, direction);
+                    debugMouse(
+                        `[KeyboardClientGL] scroll deltaY=${deltaY} direction=${direction} angleH=${angleH.toFixed(2)} stepX=${rotated.x.toFixed(3)} stepY=${rotated.y.toFixed(3)}`,
+                    );
+                    this.stepInSelectedGrid(rotated.x, rotated.y);
+                },
+                onContext: ({ event }) => {
+                    if (this.state.helpScreenIdx !== -1) {
+                        debugMouse('[KeyboardClientGL] context click ignored while help screen active');
+                        return;
+                    }
+                    debugMouse('[KeyboardClientGL] context click cycling grid');
+                    this.view.incrementSelectedGrid();
+                    this.view.updateMeshGrids();
+                    event.preventDefault?.();
+                },
+            });
+            debugMouse('[KeyboardClientGL] mouse controls installed');
+        } else {
+            log('[KeyboardClientGL] renderer canvas missing; mouse controls disabled');
+        }
 
         // Event listeners for keypresses
         //window.addEventListener('keydown', (event) => this.processKeyPress(event));

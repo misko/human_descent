@@ -57,3 +57,7 @@ jobs:
       - name: Run HUD markup test
         working-directory: web
         run: node tests/hud_markup.test.mjs
+
+      - name: Run mouse controls test
+        working-directory: web
+        run: node tests/mouse_controls.test.mjs

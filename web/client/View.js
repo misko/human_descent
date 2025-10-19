@@ -1,12 +1,33 @@
-import { Scene ,PerspectiveCamera ,MathUtils,WebGLRenderer,Color ,PlaneGeometry,BufferAttribute, ShaderMaterial, Mesh, SphereGeometry,MeshBasicMaterial} from 'three';
+import {
+    Scene,
+    PerspectiveCamera,
+    MathUtils,
+    WebGLRenderer,
+    Color,
+    PlaneGeometry,
+    BufferAttribute,
+    ShaderMaterial,
+    Mesh,
+    SphereGeometry,
+    MeshBasicMaterial,
+    Raycaster,
+    Vector2,
+} from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Import OrbitControls
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'; // Import CSS2DRenderer for annotations
 import { CONTROL_GROUPS, formatHudMarkup } from './hud.js';
+import { log } from '../utils/logger.js'; // Import your logging utility
+
+const DEBUG_SELECTION = false;
+
+const debugSelection = (message) => {
+    if (DEBUG_SELECTION) {
+        log(message);
+    }
+};
 
 //import Plotly from 'plotly.js-dist-min'; // Import Plotly
-
-import { log } from '../utils/logger.js'; // Import your logging utility
 import {
     Chart,
     CategoryScale,    // Register the category scale
@@ -73,11 +94,15 @@ export default class View {
             this.renderer.domElement.style.left = '0';
             this.renderer.domElement.style.width = '100%';
             this.renderer.domElement.style.height = '100%';
+            this.renderer.domElement.style.pointerEvents = 'auto';
             glContainer.appendChild(this.renderer.domElement);
             // Calculate camera position to fit all grids
             const fovRadians = (this.camera.fov * Math.PI) / 180;
             const totalWidth = (this.numGrids + this.selectedGridScale - 1.0) * this.gridSize + (this.numGrids - 1) * this.spacing;
             this.camera_distance = (totalWidth / 2) / Math.tan(fovRadians / 2);
+
+            this.raycaster = new Raycaster();
+            this.pointer = new Vector2();
 
             // Set the y-offset for the camera to position the grids 2/3 of the way down the view
             // The y offset is calculated as (1/3 of the totalHeight) since we want the grids to be 2/3 of the way down
@@ -602,6 +627,7 @@ export default class View {
             }
 
             mesh.position.set(xOffset, 0, 0);
+            mesh.userData.gridIndex = i;
 
             // Add new grid to scene and store it for later reference
             this.scene.add(mesh);
@@ -633,6 +659,10 @@ export default class View {
         return { angleH: this.angleH, angleV: this.angleV };
     }
 
+    getCanvasElement() {
+        return this.renderer?.domElement ?? null;
+    }
+
     // Function to get the selected grid index
     getSelectedGrid() {
         return this.selectedGridIndex;
@@ -661,6 +691,51 @@ export default class View {
     // Function to set the selected grid
     setSelectedGrid(gridIdx) {
         this.selectedGridIndex = gridIdx;
+    }
+
+    selectGridAt(clientX, clientY) {
+        const canvas = this.getCanvasElement();
+        if (!canvas || !this.camera || !this.raycaster || !this.pointer) {
+            return null;
+        }
+
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            return null;
+        }
+
+        const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+        this.pointer.set(ndcX, ndcY);
+        this.raycaster.setFromCamera(this.pointer, this.camera);
+
+        const intersections = this.raycaster.intersectObjects(this.gridObjects, false);
+        if (!intersections.length) {
+            debugSelection('[View] selectGridAt: no intersection');
+            return null;
+        }
+
+        const target = intersections[0].object;
+        const gridIndex =
+            typeof target.userData?.gridIndex === 'number'
+                ? target.userData.gridIndex
+                : this.gridObjects.indexOf(target);
+
+        if (gridIndex < 0) {
+            debugSelection('[View] selectGridAt: intersection missing grid index');
+            return null;
+        }
+
+        if (gridIndex !== this.selectedGridIndex) {
+            debugSelection(`[View] selectGridAt: selecting grid ${gridIndex}`);
+            this.setSelectedGrid(gridIndex);
+            this.updateMeshGrids();
+        } else {
+            debugSelection(`[View] selectGridAt: grid ${gridIndex} already selected`);
+        }
+
+        return gridIndex;
     }
     render() {
         requestAnimationFrame(() => this.render());

@@ -12,7 +12,7 @@ body {
     width: 90%; /* Set to 80% of width to make space for the side container */
     height: 100%;
     z-index: 1; /* Lower index to be behind the plotly and other containers */
-    pointer-events: none; /* Allow interactions to go through the GL container */
+    pointer-events: auto; /* Allow direct interaction with the GL canvas */
 }
 
 #sideContainer {
