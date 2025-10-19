@@ -1,14 +1,14 @@
 export const CONTROL_GROUPS = [
-  { icon: null, keys: ['W', 'A', 'S', 'D'], label: 'Move' },
-  { icon: null, keys: ['⬆️', '⬇️', '⬅️', '➡️'], label: 'Rotate' },
+  { icon: null, keys: ['W', 'A', 'S', 'D', 'Scroll'], label: 'Move' },
+  { icon: null, keys: ['⬆️', '⬇️', '⬅️', '➡️', '🐁'], label: 'Rotate' },
   { icon: null, keys: ['Spacebar'], label: 'New Dims' },
   { icon: null, keys: ['Enter'], label: 'New Batch' },
-  { icon: null, keys: ['⇧'], label: 'Cycle Plane' },
+  { icon: null, keys: ['⇧','🐁'], label: 'Cycle Plane' },
   { icon: null, keys: ['[', ']'], label: 'Step ±' },
   { icon: null, keys: [';'], label: 'Batch-size' },
   { icon: null, keys: ["'"], label: 'FP16/32' },
   { icon: null, keys: ['X'], label: 'Help' },
-  { icon: null, keys: ['Q'], label: 'Q: Hold to quit' },
+  { icon: null, keys: ['Q'], label: 'Hold to quit' },
 ];
 
 export const HUD_TITLE = '🧠 Human Descent: MNIST';
