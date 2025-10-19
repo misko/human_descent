@@ -563,9 +563,9 @@ class OpenGLView:
 
         start_idx = self.selected_grid * self.grid_size * self.grid_size
 
-        new_points[start_idx : start_idx + self.grid_size * self.grid_size, [0, 2]] *= (
-            self.selected_grid_multiplier
-        )
+        new_points[
+            start_idx : start_idx + self.grid_size * self.grid_size, [0, 2]
+        ] *= self.selected_grid_multiplier
 
         update_grid_vbo(self.vbo, new_points)
         update_grid_cbo(self.cbo, new_colors)
