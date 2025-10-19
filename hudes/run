@@ -1,0 +1,1 @@
+python websocket_server.py  --device cuda --model cnn3 --port 10000 --ssl-pem hudes.pem --run-in process

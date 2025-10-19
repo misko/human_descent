@@ -22,6 +22,7 @@ import websockets
 from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
+from hudes.high_scores import init_db, insert_high_score
 from hudes.model_data_and_subspace import ModelDataAndSubspace
 from hudes.models_and_datasets.mnist import (
     MNISTCNN,
@@ -33,6 +34,17 @@ from hudes.models_and_datasets.mnist import (
 
 client_idx = 0
 active_clients = {}
+SPEED_RUN_SECONDS = int(os.environ.get("HUDES_SPEED_RUN_SECONDS", "60"))
+
+
+def _pack_messages_len_prefixed(msgs: list[bytes]) -> bytes:
+    out = bytearray()
+    for m in msgs:
+        if not isinstance(m, (bytes, bytearray)):
+            continue
+        out += len(m).to_bytes(4, "big")
+        out += m
+    return bytes(out)
 
 
 # TODO
@@ -49,7 +61,10 @@ def prepare_batch_example_message(
     n: int = 4,
 ):
     batch = mad.get_batch(
-        batch_size=batch_size, batch_idx=batch_idx, dtype=dtype, train_or_val="train"
+        batch_size=batch_size,
+        batch_idx=batch_idx,
+        dtype=dtype,
+        train_or_val="train",
     )
 
     train_data = batch[0][:n]
@@ -87,7 +102,8 @@ def listen_and_run(
     mad.fuse()
     mad.init_param_model()
 
-    client_weights = {}  # TODO memory leak, but prevents continously copying models
+    client_weights = {}
+    # TODO memory leak, but prevents continuously copying models
 
     logging.info("listen_and_run: started")
     while True:
@@ -107,6 +123,15 @@ def listen_and_run(
             res = {}
             logging.debug(f"listen_and_run: got {mode}")
             if mode in ("train", "mesh"):
+                # reset per-client weights if requested (speed run start)
+                if client.force_reset_weights:
+                    if client.client_id in client_weights:
+                        logging.info(
+                            "listen_and_run: reset weights for client %s",
+                            client.client_id,
+                        )
+                        del client_weights[client.client_id]
+                    client.force_reset_weights = False
                 if client.client_id not in client_weights:
                     client_weights[client.client_id] = mad.saved_weights[
                         torch.float32
@@ -115,7 +140,8 @@ def listen_and_run(
                     client.current_step, dtype=torch.float32
                 )
                 logging.debug(
-                    f"listen_and_run: client checksum {client_weights[client.client_id].abs().mean()}"
+                    "listen_and_run: client checksum %s",
+                    client_weights[client.client_id].abs().mean(),
                 )
 
                 res["train"] = mad.train_model_inference_with_delta_weights(
@@ -182,11 +208,21 @@ class Client:
     batch_size: int = 32
     sgd: int = 0
     total_sgd_steps: int = 0
+    # Speed run state
+    speed_run_active: bool = False
+    speed_run_end_time: float = 0.0
+    speed_run_log: list = field(default_factory=list)
+    best_val_loss_during_run: float | None = None
+    high_score_logged: bool = False
+    # Signal to inference worker to drop/reset weights for this
+    # client on next op
+    force_reset_weights: bool = False
 
     def __getstate__(self):
         state = self.__dict__.copy()
         if "websocket" in state:
-            del state["websocket"]  # cant pickle this? who doesnt like pickles?
+            # cant pickle this? who doesnt like pickles?
+            del state["websocket"]
         return state
 
     def __setstate__(self, state):
@@ -242,9 +278,17 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
             if client.active_inference == 0 and client.sgd > 0:
                 client.active_inference += 1
                 inference_q.put(("sgd", copy.copy(client)))
+                # reset flag after sending to worker to avoid repeated resets
+                if client.force_reset_weights:
+                    logging.debug(
+                        "inference_runner_clients: clear reset flag "
+                        "after scheduling sgd"
+                    )
+                    client.force_reset_weights = False
                 client.sgd = 0
 
-                if client.mesh_grids > 0:  # if we have grids, step size changes mesh
+                # if we have grids, step size changes mesh
+                if client.mesh_grids > 0:
                     client.force_update = True
 
             if client.force_update or (
@@ -255,26 +299,49 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
 
                 if client.mesh_grids > 0:
                     logging.debug(
-                        f"inference_runner_clients: req mesh {client.force_update}"
+                        "inference_runner_clients: req mesh %s",
+                        client.force_update,
                     )
                     client.active_inference += 1
                     inference_q.put(("mesh", copy.copy(client)))
+                    if client.force_reset_weights:
+                        logging.debug(
+                            "inference_runner_clients: clear reset flag "
+                            "after scheduling mesh"
+                        )
+                        client.force_reset_weights = False
                 else:
                     logging.debug(
-                        f"inference_runner_clients: req train {client.force_update}"
+                        "inference_runner_clients: req train %s",
+                        client.force_update,
                     )
                     client.active_inference += 1
                     inference_q.put(("train", copy.copy(client)))
+                    if client.force_reset_weights:
+                        logging.debug(
+                            "inference_runner_clients: clear reset flag "
+                            "after scheduling train"
+                        )
+                        client.force_reset_weights = False
                 client.force_update = False
 
             if client.request_full_val:
                 # send weight vector for inference
                 logging.debug("inference_runner_clients: req inference")
                 client.active_inference += 1
-                inference_q.put(
-                    ("val", copy.copy(client)),
-                )
+                inference_q.put(("val", copy.copy(client)))
+                if client.force_reset_weights:
+                    logging.debug(
+                        "inference_runner_clients: clear reset flag "
+                        "after scheduling val"
+                    )
+                    client.force_reset_weights = False
                 client.request_full_val = False
+
+            # Note: Do not schedule periodic mesh updates here. Mesh requests
+            # are driven by user interactions (force_update/next_step) and
+            # initial config changes. The Speed Run countdown is handled on the
+            # client side to avoid unnecessary server-side work.
 
 
 async def inference_result_sender(results_q, stop):
@@ -298,6 +365,11 @@ async def inference_result_sender(results_q, stop):
             if train_or_val in ("train", "mesh", "sgd"):
                 # TODO need to be ok with getting errors here
                 logging.debug("inference_result_sender: sent train to client")
+                # compute remaining seconds to possibly flip state
+                if client.speed_run_active:
+                    remaining = max(0, int(client.speed_run_end_time - time.time()))
+                    if remaining <= 0:
+                        client.speed_run_active = False
                 msg = hudes_pb2.Control(
                     type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
                     train_loss_and_preds=hudes_pb2.TrainLossAndPreds(
@@ -324,6 +396,11 @@ async def inference_result_sender(results_q, stop):
                 logging.debug("inference_result_sender: sent train to client : done")
             if train_or_val == "val":
                 logging.debug("inference_result_sender: sent val to client")
+                # track best validation loss during speed run
+                if client.speed_run_active:
+                    remaining = max(0, int(client.speed_run_end_time - time.time()))
+                    if remaining <= 0:
+                        client.speed_run_active = False
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_VAL_LOSS,
@@ -333,6 +410,12 @@ async def inference_result_sender(results_q, stop):
                         request_idx=client.active_request_idx,
                     ).SerializeToString()
                 )
+                if client.best_val_loss_during_run is None:
+                    client.best_val_loss_during_run = res["val"]["val_loss"]
+                else:
+                    client.best_val_loss_during_run = min(
+                        client.best_val_loss_during_run, res["val"]["val_loss"]
+                    )
                 logging.debug("inference_result_sender: sent val to client : done")
             if train_or_val == "mesh":
                 logging.debug("inference_result_sender: sent mesh to client")
@@ -342,12 +425,20 @@ async def inference_result_sender(results_q, stop):
                 mesh_grid_results_list = mesh_tensor.numpy().flatten().tolist()
                 mesh_grid_shape = list(mesh_tensor.shape)
 
-                # Send the message using repeated float for data and repeated int32 for shape
+                # Send the message using repeated float and include shape
+                # compute remaining seconds and possibly flip active flag
+                srs = None
+                if client.speed_run_end_time:
+                    remaining = max(0, int(client.speed_run_end_time - time.time()))
+                    if getattr(client, "speed_run_active", False) and remaining <= 0:
+                        client.speed_run_active = False
+                    srs = remaining if client.speed_run_active else 0
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_MESHGRID_RESULTS,
                         mesh_grid_results=mesh_grid_results_list,
                         mesh_grid_shape=mesh_grid_shape,
+                        speed_run_seconds_remaining=srs,
                     ).SerializeToString()
                 )
                 logging.debug("inference_result_sender: sent mesh to client : done")
@@ -418,6 +509,12 @@ async def process_client(websocket, client_runner_q):
     async for message in websocket:
         msg = hudes_pb2.Control()
         msg.ParseFromString(message)
+        # Record incoming messages for speed run log if active
+        if client.speed_run_active:
+            client.speed_run_log.append(message)
+            # cutoff logging if time elapsed
+            if time.time() >= client.speed_run_end_time:
+                client.speed_run_active = False
         if msg.type == hudes_pb2.Control.CONTROL_DIMS:
             logging.debug(f"process_client: {client_idx} : control dims")
             for dim_and_step in msg.dims_and_steps:
@@ -464,9 +561,81 @@ async def process_client(websocket, client_runner_q):
             break
 
         elif msg.type == hudes_pb2.Control.CONTROL_SGD_STEP:
-            client.sgd += msg.sgd_steps
-            client.total_sgd_steps += msg.sgd_steps
-            client.request_idx = msg.request_idx
+            # Ignore SGD during active speed run
+            if client.speed_run_active:
+                logging.debug("process_client: ignoring SGD during speed run")
+            else:
+                client.sgd += msg.sgd_steps
+                client.total_sgd_steps += msg.sgd_steps
+                client.request_idx = msg.request_idx
+
+        elif msg.type == hudes_pb2.Control.CONTROL_SPEED_RUN_START:
+            logging.debug(f"process_client: {client_idx} : speed run start")
+            # reset per-client state
+            client.next_step = {}
+            client.current_step = None
+            client.batch_idx = 0
+            client.request_idx = 0
+            client.sent_batch = -1
+            client.request_full_val = True
+            client.dims_offset = 0
+            client.total_sgd_steps = 0
+            client.sgd = 0
+            client.best_val_loss_during_run = None
+            client.speed_run_log = []
+            client.high_score_logged = False
+            # Start timer (allow env override at runtime)
+            duration = int(
+                os.environ.get("HUDES_SPEED_RUN_SECONDS", str(SPEED_RUN_SECONDS))
+            )
+            client.speed_run_active = True
+            client.speed_run_end_time = time.time() + max(1, duration)
+            logging.info(
+                "Client %d Speed Run started for %d seconds",
+                client.client_id,
+                duration,
+            )
+            # Reset weights by signaling runner with force_update and
+            # empty step; inference worker re-initializes when missing.
+            # inference worker re-initializes weights when not present.
+            client.force_update = True
+            client.force_reset_weights = True
+
+        elif msg.type == hudes_pb2.Control.CONTROL_HIGH_SCORE_LOG:
+            logging.debug(f"process_client: {client_idx} : high score log")
+            if client.high_score_logged:
+                logging.debug("process_client: high score already logged; ignoring")
+            else:
+                # finalize run if still active
+                client.speed_run_active = False
+                client.high_score_logged = True
+                name = msg.high_score.name.strip().upper() if msg.high_score else "????"
+                if len(name) != 4 or not name.isalnum():
+                    name = "????"
+                duration = int(
+                    os.environ.get(
+                        "HUDES_SPEED_RUN_SECONDS",
+                        str(SPEED_RUN_SECONDS),
+                    )
+                )
+                score = (
+                    client.best_val_loss_during_run
+                    if client.best_val_loss_during_run is not None
+                    else float("inf")
+                )
+                # persist
+                try:
+                    init_db()
+                    insert_high_score(
+                        name=name,
+                        score=score,
+                        best_val_loss=score,
+                        duration=duration,
+                        request_idx=client.request_idx,
+                        log_bytes=_pack_messages_len_prefixed(client.speed_run_log),
+                    )
+                except Exception as e:
+                    logging.error(f"Failed to persist high score: {e}")
 
         else:
             logging.warning("received invalid type from client")
@@ -475,18 +644,61 @@ async def process_client(websocket, client_runner_q):
 
 
 async def run_server(stop, client_runner_q, server_port, ssl_pem):
+    # Standalone HTTP health server on a separate port to avoid interfering
+    # with the WebSocket handshake. Defaults to server_port + 1.
+    health_server = None
+    health_port = int(os.environ.get("HUDES_HEALTH_PORT", server_port + 1))
+
+    async def handle_health(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        try:
+            await reader.read(1024)
+            # Very small, permissive parser; always return 200
+            response = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/plain; charset=utf-8\r\n"
+                b"Content-Length: 2\r\n"
+                b"Connection: close\r\n"
+                b"Access-Control-Allow-Origin: *\r\n\r\nOK"
+            )
+            writer.write(response)
+            await writer.drain()
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+
     ssl_context = None
     if ssl_pem is not None:
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         localhost_pem = pathlib.Path(__file__).with_name(ssl_pem)
         ssl_context.load_cert_chain(localhost_pem)
+    # Start health HTTP server
+    try:
+        health_server = await asyncio.start_server(
+            handle_health, host="127.0.0.1", port=health_port
+        )
+        logging.info(
+            "Health server listening on http://127.0.0.1:%d/health",
+            health_port,
+        )
+    except OSError as e:
+        logging.warning("Failed to start health server on %d: %s", health_port, e)
+
     async with serve(
         partial(process_client, client_runner_q=client_runner_q),
         None,
         server_port,
         ssl=ssl_context,
+        # Do not intercept HTTP requests here; health server handles them
     ):
-        await stop
+        try:
+            await stop
+        finally:
+            if health_server is not None:
+                health_server.close()
+                await health_server.wait_closed()
 
 
 async def run_wrapper(args, stop_future=None):
@@ -539,6 +751,14 @@ async def run_wrapper(args, stop_future=None):
     )
     if args.download_dataset_and_exit:
         return
+    # Log configured Speed Run duration for this server
+    try:
+        configured_duration = int(
+            os.environ.get("HUDES_SPEED_RUN_SECONDS", str(SPEED_RUN_SECONDS))
+        )
+    except Exception:
+        configured_duration = SPEED_RUN_SECONDS
+    logging.info("Speed Run configured duration (seconds): %d", configured_duration)
     stop = stop_future or asyncio.get_running_loop().create_future()
     await asyncio.gather(
         run_server(stop, client_runner_q, args.port, args.ssl_pem),
@@ -575,7 +795,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--port",
         type=int,
-        default=10000,
+        default=8765,
     )
     parser.add_argument(
         "--max-grid-size",

@@ -10,6 +10,8 @@ export default class Controls {
         CONTROL_VAL_LOSS: this.ControlType.values.CONTROL_VAL_LOSS,
         CONTROL_BATCH_EXAMPLES: this.ControlType.values.CONTROL_BATCH_EXAMPLES,
         CONTROL_FULL_LOSS: this.ControlType.values.CONTROL_FULL_LOSS,
+        CONTROL_SPEED_RUN_START: this.ControlType.values.CONTROL_SPEED_RUN_START,
+        CONTROL_HIGH_SCORE_LOG: this.ControlType.values.CONTROL_HIGH_SCORE_LOG,
         CONTROL_NEXT_BATCH: this.ControlType.values.CONTROL_NEXT_BATCH,
         CONTROL_NEXT_DIMS: this.ControlType.values.CONTROL_NEXT_DIMS,
         CONTROL_CONFIG: this.ControlType.values.CONTROL_CONFIG,

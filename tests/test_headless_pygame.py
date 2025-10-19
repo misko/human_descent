@@ -193,7 +193,7 @@ def run_clients_sequence(port: int):
 @pytest.mark.asyncio
 @pytest.mark.timeout(120)
 async def test_run_sh_headless_pygame():
-    port = 8765
+    port = 8766
 
     download_args = SimpleNamespace(
         device="cpu",

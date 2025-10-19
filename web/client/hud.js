@@ -3,6 +3,7 @@ export const CONTROL_GROUPS = [
   { icon: null, keys: ['⬆️', '⬇️', '⬅️', '➡️', '🐁'], label: 'Rotate' },
   { icon: null, keys: ['Spacebar'], label: 'New Dims' },
   { icon: null, keys: ['Enter'], label: 'New Batch' },
+  { icon: null, keys: ['R'], label: 'Speed Run' },
   { icon: null, keys: ['⇧','🐁'], label: 'Cycle Plane' },
   { icon: null, keys: ['[', ']'], label: 'Step ±' },
   { icon: null, keys: [';'], label: 'Batch-size' },

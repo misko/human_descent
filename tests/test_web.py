@@ -28,7 +28,7 @@ async def run_server_thread():
     )
 
     async with websockets.serve(
-        partial(process_client, client_runner_q=client_runner_q), "localhost", 8765
+        partial(process_client, client_runner_q=client_runner_q), "localhost", 8767
     ):
         yield
 
@@ -51,7 +51,7 @@ async def run_server_process():
         )
     )
     async with websockets.serve(
-        partial(process_client, client_runner_q=client_runner_q), "localhost", 8765
+        partial(process_client, client_runner_q=client_runner_q), "localhost", 8767
     ):
         yield
     stop.set_result(True)

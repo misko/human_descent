@@ -50,6 +50,8 @@ message Control {
     CONTROL_VAL_LOSS = 2;
     CONTROL_BATCH_EXAMPLES = 3;
     CONTROL_FULL_LOSS = 4;
+    CONTROL_SPEED_RUN_START = 10;
+    CONTROL_HIGH_SCORE_LOG = 11;
     CONTROL_NEXT_BATCH = 101;
     CONTROL_NEXT_DIMS = 102;
     CONTROL_CONFIG = 103;
@@ -71,5 +73,16 @@ message Control {
   repeated int32 mesh_grid_shape = 208;    // Add the shape information
   optional int32 sgd_steps = 209;
   optional int32 total_sgd_steps = 210;
+  // Remaining seconds in Speed Run. Present in CONTROL_MESHGRID_RESULTS
+  // while a run is active (or 0 when the run just finished).
+  optional int32 speed_run_seconds_remaining = 212;
+  // High score submission (one per run)
+  message HighScore {
+    required string name = 1; // 4-char uppercase
+    optional double score = 2; // equals best_val_loss (lower is better)
+    optional int32 duration_seconds = 3;
+    optional int32 request_idx = 4;
+  }
+  optional HighScore high_score = 211; // used with CONTROL_HIGH_SCORE_LOG
 
 }

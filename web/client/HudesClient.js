@@ -6,22 +6,54 @@ import View from './View.js';
 
 export default class HudesClient {
     constructor(addr, port) {
-        this.socket = new WebSocket(`wss://${addr}:${port}`);
+        // Allow ws/wss based on environment and accept absolute URL or host/port
+        try {
+            // Allow overriding via URL: ?host=...&port=... (useful in tests)
+            if (typeof window !== 'undefined' && window.location && window.location.search) {
+                const params = new URLSearchParams(window.location.search);
+                const qpHost = params.get('host');
+                const qpPort = params.get('port');
+                if (qpHost) addr = qpHost;
+                if (qpPort) port = Number(qpPort);
+            }
+        } catch {}
+
+        const isHttps = (typeof window !== 'undefined' && window.location?.protocol === 'https:');
+        const scheme = isHttps ? 'wss' : 'ws';
+        const url = addr?.startsWith('ws') ? addr : `${scheme}://${addr}:${port}`;
+        log(`[HudesClient] Connecting WebSocket to ${url}`);
+        this.socket = new WebSocket(url);
         this.socket.binaryType = "arraybuffer";
         this.requestIdx = 0;
         this.running = true;
 
         this.state = new ClientState(-0.05, 6);
-        this.grids=3;
+        // Optional: allow skipping help screens via URL query, e.g., ?help=off
+        try {
+            if (typeof window !== 'undefined' && window.location && window.location.search) {
+                const params = new URLSearchParams(window.location.search);
+                const help = params.get('help');
+                if (help && /^(off|0|false|no)$/i.test(help)) {
+                    this.state.helpScreenIdx = -1;
+                }
+            }
+        } catch {}
+    this.grids=3;
         this.grid_size=31;
         this.view = new View(this.grid_size,this.grids, this.state); // Add a View instance
-        this.view.initializeCharts(); // Initialize charts
+    this.view.initializeCharts(); // Initialize charts
         this.Control = null;
         this.ControlType = null;
         this.keyHolds = {};
         this.cooldownTimeMs = 200;
         this.keySecondsPressed = 200; // ms
         this.stepSizeMultiplier = 1;
+
+    // Speed run state (frontend)
+    this.speedRunActive = false;
+    this.speedRunSecondsRemaining = 0;
+    this._srsInterval = null; // local countdown ticker (started on first server reply)
+    this.highScoreSubmitted = false;
 
 
         // Initialize loss and step tracking arrays
@@ -39,12 +71,23 @@ export default class HudesClient {
         const { Control, ControlType } = await loadProto('hudes.proto');
         this.Control = Control;
         this.ControlType = ControlType;
-        log("Proto file and enums loaded successfully.");
+        log("[HudesClient] Proto file and enums loaded successfully.");
     }
     _handleMessage(event) {
         try {
             const buffer = new Uint8Array(event.data);
             const message = this.Control.decode(buffer); // Decode the protobuf message
+            // Instrument message counters for tests/debugging
+            try {
+                if (typeof window !== 'undefined') {
+                    window.__hudesMsgCounts = window.__hudesMsgCounts || {};
+                    const t = Object.keys(this.ControlType.values).find(
+                        k => this.ControlType.values[k] === message.type
+                    ) || `type_${message.type}`;
+                    window.__hudesMsgCounts[t] = (window.__hudesMsgCounts[t] || 0) + 1;
+                }
+            } catch {}
+
             //log("Decoded Message:", message);
 
             switch (message.type) {
@@ -53,7 +96,9 @@ export default class HudesClient {
                         throw new Error("trainLossAndPreds field missing");
                     }
 
-                    //log("hudes_client: receive message: loss and preds");
+                    log(`[HudesClient] recv TRAIN_LOSS_AND_PREDS reqIdx=${message.requestIdx}`);
+
+                    // Countdown is carried on Control-level (mesh) messages now.
 
                     // Parse train predictions and reshape
                     const trainPredsFlattened = message.trainLossAndPreds.preds;
@@ -101,7 +146,7 @@ export default class HudesClient {
                         throw new Error("valLoss field missing");
                     }
 
-                    //log(`Validation loss: ${message.valLoss.valLoss}`);
+                    log(`[HudesClient] recv VAL_LOSS reqIdx=${message.requestIdx} val=${message.valLoss.valLoss}`);
 
                     // Update validation loss
                     while (this.valLosses.length<this.trainSteps.length) {
@@ -128,13 +173,13 @@ export default class HudesClient {
                         this.trainSteps
                     );
 
-                    //og("hudes_client: receive message: val loss: done");
+                          //og("hudes_client: receive message: val loss: done");
                     break;
                 case this.ControlType.values.CONTROL_BATCH_EXAMPLES:
                     if (message.batchExamples) {
-                       // log(
+                              // log(
                         //    `Batch received. Index: ${message.batchExamples.batchIdx}, N: ${message.batchExamples.n}, Train Data Length: ${message.batchExamples.trainData.length}`
-                       //);
+                              //);
 
                         // Extract train data and labels from the message
                         const trainDataFlattened = message.batchExamples.trainData;
@@ -167,6 +212,7 @@ export default class HudesClient {
 
                         // Update the view with the new train data and labels
                         this.view.updateExamples(trainData, trainLabels);
+                        log(`[HudesClient] recv BATCH_EXAMPLES idx=${message.batchExamples.batchIdx}`);
                     } else {
                         //log("Batch example missing in message.");
                     }
@@ -194,18 +240,88 @@ export default class HudesClient {
 
                     // Update the view with the reshaped mesh grid results
                     this.view.updateMeshGrids(meshGridResults);
+
+                    // If server provided countdown at Control level, track it
+                    if (
+                        Object.prototype.hasOwnProperty.call(
+                            message,
+                            'speedRunSecondsRemaining',
+                        )
+                    ) {
+                        const srs = message.speedRunSecondsRemaining ?? 0;
+                        const prev = this.speedRunSecondsRemaining;
+                        // Timer starts only after first server reply; no fallback timeout to cancel
+                        this.speedRunSecondsRemaining = srs;
+                        this.speedRunActive = srs > 0;
+                        this.state.speedRunActive = this.speedRunActive;
+                        this.state.speedRunSecondsRemaining = srs;
+                        log(`[HudesClient] (mesh) speedRunSecondsRemaining=${srs} active=${this.speedRunActive}`);
+                        // Start or adjust local countdown ticker
+                        try {
+                            if (this._srsInterval) {
+                                clearInterval(this._srsInterval);
+                                this._srsInterval = null;
+                            }
+                            if (srs > 0) {
+                                const startTs = Date.now();
+                                let lastShown = srs;
+                                this._srsInterval = setInterval(() => {
+                                    if (!this.speedRunActive) return;
+                                    const elapsedSec = Math.floor((Date.now() - startTs) / 1000);
+                                    const remain = Math.max(0, srs - elapsedSec);
+                                    if (remain !== lastShown) {
+                                        lastShown = remain;
+                                        this.speedRunSecondsRemaining = remain;
+                                        this.state.speedRunSecondsRemaining = remain;
+                                    }
+                                    if (remain === 0) {
+                                        try { clearInterval(this._srsInterval); } catch {}
+                                        this._srsInterval = null;
+                                        this.speedRunActive = false;
+                                        this.state.speedRunActive = false;
+                                        // No grid changes during Speed Run; nothing to restore here
+                                        if (!this.highScoreSubmitted) {
+                                            this._promptAndSubmitHighScore();
+                                        }
+                                    }
+                                }, 250);
+                            }
+                        } catch {}
+
+                        if (srs === 0 && !this.highScoreSubmitted) {
+                            try { if (this._srsInterval) { clearInterval(this._srsInterval); this._srsInterval = null; } } catch {}
+                            // No grid changes during Speed Run; nothing to restore here
+                            this._promptAndSubmitHighScore();
+                        }
+                    }
                     break;
 
 
                 case this.ControlType.values.CONTROL_SGD_STEP:
-                    log(`SGD step acknowledged. Steps: ${message.sgdSteps}`);
+                    log(`[HudesClient] recv SGD_STEP ack steps=${message.sgdSteps}`);
                     break;
                 default:
-                    log(`Unknown message type: ${message.type}`);
+                    log(`[HudesClient] Unknown message type: ${message.type}`);
             }
         } catch (error) {
-            log(`Failed to handle message: ${error}`);
+            log(`[HudesClient] Failed to handle message: ${error}`);
             log(error);
+        }
+    }
+    _promptAndSubmitHighScore() {
+        // Avoid double prompts
+        if (this.highScoreSubmitted) return;
+        try {
+            const def = 'USER';
+            const name = typeof window !== 'undefined'
+                ? window.prompt('Speed Run complete! Enter 4-letter name for leaderboard:', def)
+                : null;
+            if (!name) return;
+            const trimmed = (name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+            if (trimmed.length !== 4) return;
+            this.submitHighScore(trimmed);
+        } catch (e) {
+            // ignore prompt errors in non-browser envs
         }
     }
     _reshapeArray(flatArray, shape) {
@@ -238,13 +354,13 @@ export default class HudesClient {
 
 
     setupSocket() {
-        this.socket.onopen = () => log("WebSocket connected.");
+        this.socket.onopen = () => log("[HudesClient] WebSocket connected.");
         this.socket.onclose = () => {
-            log("WebSocket disconnected.");
+            log("[HudesClient] WebSocket disconnected.");
             this.running = false;
         };
         this.socket.onmessage = (event) => this._handleMessage(event);
-        this.socket.onerror = (error) => log(`WebSocket error: ${error}`);
+        this.socket.onerror = (error) => log(`[HudesClient] WebSocket error: ${error}`);
     }
 
     initKeys() {
@@ -342,6 +458,11 @@ export default class HudesClient {
 
         if (event.type === "keydown") {
             switch (event.code) {
+                case "KeyR":
+                    // Start a speed run
+                    log('[HudesClient] KeyR pressed: starting speed run');
+                    this.startSpeedRun();
+                    break;
                 case "KeyX":
                     //log("Next help screen.");
                     this.state.nextHelpScreen();
@@ -367,43 +488,47 @@ export default class HudesClient {
 
                 case "Backspace":
                 case "Delete":
-                    log("Performing SGD step.");
-                    this.getSGDStep();
+                    if (this.speedRunActive || this.state.speedRunActive) {
+                        log("SGD disabled during Speed Run.");
+                    } else {
+                        log("[HudesClient] Performing SGD step.");
+                        this.getSGDStep();
+                    }
                     break;
 
                 case "Space":
                     if (currentTime - keyInfo.lastExec > this.keySecondsPressed) {
-                        log("Getting next dimensions.");
+                        log("[HudesClient] Getting next dimensions.");
                         this.getNextDims();
                     }
                     break;
 
                 case "BracketLeft":
-                    log("Increasing step size.");
+                    log("[HudesClient] Increasing step size.");
                     this.state.increaseStepSize(this.stepSizeMultiplier);
                     this.sendConfig();
                     break;
 
                 case "BracketRight":
-                    log("Decreasing step size.");
+                    log("[HudesClient] Decreasing step size.");
                     this.state.decreaseStepSize(this.stepSizeMultiplier);
                     this.sendConfig();
                     break;
 
                 case "Quote":
-                    log("Toggling dtype.");
+                    log("[HudesClient] Toggling dtype.");
                     this.state.toggleDtype();
                     this.sendConfig();
                     break;
 
                 case "Semicolon":
-                    log("Toggling batch size.");
+                    log("[HudesClient] Toggling batch size.");
                     this.state.toggleBatchSize();
                     this.sendConfig();
                     break;
 
                 case "Enter":
-                    log("Getting next batch.");
+                    log("[HudesClient] Getting next batch.");
                     this.getNextBatch();
                     break;
 
@@ -459,11 +584,13 @@ export default class HudesClient {
         const buffer = this.Control.encode(message).finish();
 
         // Send the message over WebSocket
-        //this.socket.send(buffer);
-
-        // Increment the request index
-        //this.requestIdx++;
         this.waitForWebSocket(() => {
+            try {
+                const t = Object.keys(this.ControlType.values).find(
+                    k => this.ControlType.values[k] === payload.type
+                );
+                log(`[HudesClient] send ${t ?? payload.type} reqIdx=${payload.requestIdx ?? this.requestIdx}`);
+            } catch {}
             this.socket.send(buffer);
             this.requestIdx++;
         });
@@ -489,13 +616,18 @@ export default class HudesClient {
             return;
         }
 
+        if (this.speedRunActive || this.state.speedRunActive) {
+            // Client-side guard; server also ignores
+            return;
+        }
+
         const payload = {
             type: this.ControlType.values.CONTROL_SGD_STEP,
             sgdSteps: 1,
         };
 
         this.sendQ(payload);
-        console.log("SGD step message sent.");
+        console.log("[HudesClient] SGD step message sent.");
     }
 
 
@@ -510,7 +642,7 @@ export default class HudesClient {
         };
 
         this.sendQ(payload);
-        console.log("Next batch message sent.");
+        console.log("[HudesClient] Next batch message sent.");
     }
 
 
@@ -534,6 +666,48 @@ export default class HudesClient {
         this.state.dimsUsed += this.state.n;
 
         //console.log("Next dimensions requested and steps reset.");
+    }
+
+    startSpeedRun() {
+        if (!this.Control || !this.ControlType) {
+            console.error("Proto definitions not loaded. Cannot start Speed Run.");
+            return;
+        }
+        this.highScoreSubmitted = false;
+        if (this._srsInterval) {
+            clearInterval(this._srsInterval);
+            this._srsInterval = null;
+        }
+        this.speedRunActive = true;
+        this.state.speedRunActive = true;
+        this.state.speedRunSecondsRemaining = 0;
+        this.state.bestScore = Infinity;
+        // Do not change mesh grid configuration during Speed Run.
+        const payload = {
+            type: this.ControlType.values.CONTROL_SPEED_RUN_START,
+        };
+        this.sendQ(payload);
+        log("[HudesClient] Speed Run started.");
+        // No fallback timer; countdown will start on first server reply with speedRunSecondsRemaining
+    }
+
+    submitHighScore(name) {
+        if (!this.Control || !this.ControlType) {
+            console.error("Proto definitions not loaded. Cannot submit High Score.");
+            return;
+        }
+        if (this.highScoreSubmitted) return;
+        const clean = (name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+        if (clean.length !== 4) return;
+        const payload = {
+            type: this.ControlType.values.CONTROL_HIGH_SCORE_LOG,
+            highScore: {
+                name: clean,
+            },
+        };
+        this.sendQ(payload);
+        this.highScoreSubmitted = true;
+        log(`[HudesClient] High Score submitted for ${clean}`);
     }
 
 
@@ -567,7 +741,7 @@ export default class HudesClient {
             };
 
             // Debug: Log the payload before sending
-            //console.log("sendDimsAndSteps - Payload:", payload);
+            log(`[HudesClient] send DIMS dims=${payload.dimsAndSteps.map(x=>`(${x.dim}:${x.step.toFixed?.(3) ?? x.step})`).join(', ')}`);
 
             // Use sendQ to handle message creation and sending
             this.sendQ(payload);
@@ -619,7 +793,7 @@ export default class HudesClient {
         // Use sendQ to send the message
         this.sendQ(payload);
 
-        //console.log("Config sent.");
+        log(`[HudesClient] Config sent: grids=${this.grids} size=${this.grid_size} step=${this.state.stepSize} batch=${this.state.batchSize} dtype=${this.state.dtype}`);
     }
 
 
@@ -632,6 +806,6 @@ export default class HudesClient {
         while (this.running) {
             await sleep(10);
         }
-        log("Exiting run loop...");
+        log("[HudesClient] Exiting run loop...");
     }
 }

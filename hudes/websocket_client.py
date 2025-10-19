@@ -129,7 +129,8 @@ class HudesWebsocketClient:
                     if len(dims_and_steps) != 0:
                         websocket.send(
                             dims_and_steps_to_control_message(
-                                dims_and_steps=dims_and_steps, request_idx=request_idx
+                                dims_and_steps=dims_and_steps,
+                                request_idx=request_idx,
                             ).SerializeToString()
                         )
                         dims_and_steps = {}
@@ -158,7 +159,7 @@ class HudesWebsocketClient:
 
 
 async def send_dims(n: int = 10):
-    async with connect("ws://localhost:8765") as websocket:
+    async with connect("ws://localhost:8767") as websocket:
         for _ in range(n):
             msg = hudes_pb2.Control(
                 type=hudes_pb2.Control.CONTROL_DIMS,
