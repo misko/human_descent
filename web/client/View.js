@@ -2,6 +2,7 @@ import { Scene ,PerspectiveCamera ,MathUtils,WebGLRenderer,Color ,PlaneGeometry,
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Import OrbitControls
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'; // Import CSS2DRenderer for annotations
+import { CONTROL_GROUPS, formatHudMarkup } from './hud.js';
 
 //import Plotly from 'plotly.js-dist-min'; // Import Plotly
 
@@ -21,21 +22,6 @@ import {
 } from 'chart.js';
 
 import { MatrixController, MatrixElement } from 'chartjs-chart-matrix';
-
-const CONTROL_HINT =
-    "[Space] new dirs | WASD move | Arrows rotate | [,] step size | Shift switch plane | ; batch | ' dtype | X help | hold Q quit";
-
-const escapeHtml = (value) => {
-    if (typeof value !== 'string') {
-        return '';
-    }
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-};
 
 // Register all necessary components
 Chart.register(
@@ -139,19 +125,15 @@ export default class View {
             window.addEventListener('resize', this.onWindowResize.bind(this), false);
         }
 
-        this.controlsHint = escapeHtml(CONTROL_HINT);
 
     }
     annotateBottomScreen(text, size = 20) {
         const bottomTextContainer = document.getElementById('bottomTextContainer');
         if (bottomTextContainer) {
-            const escapedStatus = escapeHtml(text ?? '');
-            bottomTextContainer.style.fontSize = `${size}px`;
-            bottomTextContainer.innerHTML = `
-                <div class="status-line">Human Descent : MNIST</div>
-                <div class="status-line">${escapedStatus}</div>
-                <div class="controls-help">${this.controlsHint}</div>
-            `;
+            bottomTextContainer.innerHTML = formatHudMarkup(
+                text ?? '',
+                CONTROL_GROUPS,
+            );
         }
     }
     // Function to handle window resizing

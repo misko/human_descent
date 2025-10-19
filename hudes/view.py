@@ -16,6 +16,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *  # Import GLU for perspective functions
 from pygame.locals import *
 
+from hudes.hud_overlay import render_bottom_hud
 from hudes.opengl_func import (
     create_grid_indices,
     create_grid_points_with_colors,
@@ -452,19 +453,6 @@ class OpenGLView:
                 """
         )
 
-        controls_msg = (
-            "[Space] new dirs | WASD move | Arrows rotate | [,] step size | "
-            "Shift switch plane | ; batch | ' dtype | X help | hold Q quit"
-        )
-        controls_font = pg.font.SysFont("Arial", 18)
-        self.controls_surface = controls_font.render(
-            controls_msg,
-            True,
-            (255, 255, 255),
-        )
-        self.controls_surface_width = self.controls_surface.get_width()
-        self.controls_surface_height = self.controls_surface.get_height()
-        self.controls_gap = 6
         self.bottom_bar_data = None
         self.bottom_bar_width = 0
         self.bottom_bar_height = 0
@@ -627,55 +615,27 @@ class OpenGLView:
                 self.old_dims_used = self.client_state.dims_used
                 self.old_best_score = self.client_state.best_score
                 self.old_sgd = self.client_state.sgd_steps
-            font_size = 20
             time = pg.time.get_ticks()
-            if (time - self.large_text_start) < 2000:
-                font_size = 50
-
-            text_str = (
-                f"val:{self.client_state.best_score:.3f} "
-                + f"bs:{self.client_state.batch_size} ({self.client_state.dtype.replace('float','f')})"
-                + f" t:{time/1000:.1f}s dims:{self.client_state.dims_used} sgd:{self.client_state.sgd_steps}"
-            )
+            text_parts = [
+                f"val:{self.client_state.best_score:.3f}",
+                "bs:"
+                + f"{self.client_state.batch_size} "
+                + f"({self.client_state.dtype.replace('float', 'f')})",
+                f"t:{time/1000:.1f}s",
+                f"dims:{self.client_state.dims_used}",
+                f"sgd:{self.client_state.sgd_steps}",
+            ]
+            text_str = " ".join(text_parts)
             if self.text_str != text_str or self.bottom_bar_data is None:
                 self.text_str = text_str
-                score_font = pg.font.SysFont("Arial", font_size)
-                score_surface = score_font.render(
-                    text_str,
-                    True,
-                    (255, 255, 255),
-                )
-                combined_width = max(
-                    score_surface.get_width(),
-                    self.controls_surface_width,
-                )
-                combined_height = (
-                    score_surface.get_height()
-                    + self.controls_surface_height
-                    + self.controls_gap
-                )
-                combined_surface = pg.Surface(
-                    (combined_width, combined_height),
-                    pg.SRCALPHA,
-                )
-                combined_surface.blit(
-                    score_surface,
-                    ((combined_width - score_surface.get_width()) // 2, 0),
-                )
-                combined_surface.blit(
-                    self.controls_surface,
-                    (
-                        (combined_width - self.controls_surface_width) // 2,
-                        score_surface.get_height() + self.controls_gap,
-                    ),
-                )
+                hud_surface = render_bottom_hud(text_str)
                 self.bottom_bar_data = pg.image.tostring(
-                    combined_surface,
+                    hud_surface,
                     "RGBA",
                     True,
                 )
-                self.bottom_bar_width = combined_width
-                self.bottom_bar_height = combined_height
+                self.bottom_bar_width = hud_surface.get_width()
+                self.bottom_bar_height = hud_surface.get_height()
 
             if self.bottom_bar_data is not None:
                 render_text_2d(
