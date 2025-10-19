@@ -88,14 +88,34 @@ body {
 
 #bottomTextContainer {
     position: fixed;
-    bottom: 30px; /* Position at the bottom 10% of the window */
+    bottom: 24px;
     width: 100%;
     text-align: center;
-    z-index: 5; /* Higher index to ensure it is on top of everything */
-    color: white; /* White text for visibility on black background */
+    z-index: 5;
+    color: white;
     font-size: 20px;
-    pointer-events: none; /* Ensure it does not block interactions with the 3D view */
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 16px;
+    box-sizing: border-box;
+    line-height: 1.2;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
+
+#bottomTextContainer .status-line {
+    font-weight: 600;
+}
+
+#bottomTextContainer .controls-help {
+    font-size: 0.85em;
+    opacity: 0.85;
+    letter-spacing: 0.02em;
+    max-width: 90vw;
+}
+
 .floating-text {
-    background: transparent; /* Transparent background to not obstruct view */
+    background: transparent;
 }

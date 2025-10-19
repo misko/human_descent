@@ -10,7 +10,7 @@ from hudes.controllers.xtouch_client import XTouchClient
 from hudes.view import OpenGLView, View
 
 
-def main():
+def main(argv=None):
 
     pg.init()
 
@@ -26,9 +26,12 @@ def main():
         "--skip-help",
         action="store_true",
     )
+    parser.add_argument("--max-loop-iterations", type=int, default=None)
+    parser.add_argument("--max-seconds", type=float, default=None)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
+    controller = None
     if args.input == "keyboard":
         controller = KeyboardClient(
             addr=args.addr,
@@ -62,8 +65,17 @@ def main():
         view = View(use_midi=True)
     else:
         raise ValueError
-    controller.attach_view(view)
-    controller.run_loop()
+    try:
+        controller.attach_view(view)
+        controller.run_loop(
+            max_frames=args.max_loop_iterations,
+            timeout_s=args.max_seconds,
+        )
+    finally:
+        if controller is not None:
+            controller.quit()
+            controller.hudes_websocket_client.thread.join(timeout=2.0)
+        pg.quit()
 
 
 if __name__ == "__main__":

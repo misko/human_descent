@@ -22,6 +22,21 @@ import {
 
 import { MatrixController, MatrixElement } from 'chartjs-chart-matrix';
 
+const CONTROL_HINT =
+    "[Space] new dirs | WASD move | Arrows rotate | [,] step size | Shift switch plane | ; batch | ' dtype | X help | hold Q quit";
+
+const escapeHtml = (value) => {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+};
+
 // Register all necessary components
 Chart.register(
     CategoryScale,
@@ -124,12 +139,19 @@ export default class View {
             window.addEventListener('resize', this.onWindowResize.bind(this), false);
         }
 
+        this.controlsHint = escapeHtml(CONTROL_HINT);
+
     }
     annotateBottomScreen(text, size = 20) {
         const bottomTextContainer = document.getElementById('bottomTextContainer');
         if (bottomTextContainer) {
-            bottomTextContainer.innerText = `Human Descent : MNIST\n${text}`;
+            const escapedStatus = escapeHtml(text ?? '');
             bottomTextContainer.style.fontSize = `${size}px`;
+            bottomTextContainer.innerHTML = `
+                <div class="status-line">Human Descent : MNIST</div>
+                <div class="status-line">${escapedStatus}</div>
+                <div class="controls-help">${this.controlsHint}</div>
+            `;
         }
     }
     // Function to handle window resizing

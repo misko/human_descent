@@ -340,11 +340,18 @@ class KeyboardClientGL(HudesClient):
 
         return redraw
 
-    def run_loop(self):
+    def run_loop(self, max_frames=None, timeout_s=None):
         self.before_first_loop()
         i = 0
+        start_time = time.time()
 
         while self.hudes_websocket_client.running:
+            if max_frames is not None and i >= max_frames:
+                self.quit()
+                break
+            if timeout_s is not None and (time.time() - start_time) >= timeout_s:
+                self.quit()
+                break
             # check and send local interactions(?)
             redraw = False
             for event in pg.event.get():
