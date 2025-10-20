@@ -45,7 +45,9 @@ client_idx = 0
 active_clients = {}
 # Track scheduled timeout tasks per client to finalize Speed Runs
 active_speedrun_tasks: dict[int, asyncio.Task] = {}
-SPEED_RUN_SECONDS = int(os.environ.get("HUDES_SPEED_RUN_SECONDS", "100"))
+# Default Speed Run duration in seconds
+# (overridable via HUDES_SPEED_RUN_SECONDS)
+SPEED_RUN_SECONDS = int(os.environ.get("HUDES_SPEED_RUN_SECONDS", "120"))
 
 
 def _pack_messages_len_prefixed(msgs: list[bytes]) -> bytes:
