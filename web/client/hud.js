@@ -8,6 +8,7 @@ export const CONTROL_GROUPS = [
   { icon: null, keys: ['[', ']'], label: 'Step ±' },
   { icon: null, keys: [';'], label: 'Batch-size' },
   { icon: null, keys: ["'"], label: 'FP16/32' },
+  { icon: null, keys: ['Y'], label: 'Top 10' },
   { icon: null, keys: ['X'], label: 'Help' },
   { icon: null, keys: ['Q'], label: 'Hold to quit' },
 ];

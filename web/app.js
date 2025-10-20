@@ -13,6 +13,18 @@ async function detectBackendHostPort() {
 	const host = qpHost || window.location.hostname || 'localhost';
 	if (qpPort) return { host, port: Number(qpPort) };
 
+	// Build-time override via Vite env vars (inlined at build)
+	// Example: VITE_WS_PORT=10000 VITE_HTTP_PORT=10001 npm run build
+	try {
+		const wsEnv = Number(import.meta.env?.VITE_WS_PORT);
+		const httpEnv = Number(import.meta.env?.VITE_HTTP_PORT);
+		if (Number.isFinite(wsEnv) && wsEnv > 0) {
+			// If only WS port is provided, assume health is WS+1 unless HTTP override set
+			const http = Number.isFinite(httpEnv) && httpEnv > 0 ? httpEnv : (wsEnv + 1);
+			return { host, port: wsEnv, httpPort: http };
+		}
+	} catch {}
+
 	// Probe API health endpoints to auto-pick between 10001/10002 and 8765/8766
 	const proto = window.location.protocol === 'https:' ? 'https' : 'http';
 	const candidates = [

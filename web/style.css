@@ -78,6 +78,18 @@ body {
 .glass-card .top10-list {
     margin: 8px 0 0;
     padding-left: 18px;
+    list-style: none;
+}
+.glass-card .scroll-wrap {
+    max-height: 50vh;
+    overflow-y: auto;
+    margin: 8px 0;
+    padding-right: 6px;
+}
+.glass-card .top100-list { /* legacy selector; keep behavior sane */
+    margin: 0;
+    padding-left: 18px;
+    list-style: none;
 }
 #glContainer {
     position: absolute;

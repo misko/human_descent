@@ -45,7 +45,7 @@ client_idx = 0
 active_clients = {}
 # Track scheduled timeout tasks per client to finalize Speed Runs
 active_speedrun_tasks: dict[int, asyncio.Task] = {}
-SPEED_RUN_SECONDS = int(os.environ.get("HUDES_SPEED_RUN_SECONDS", "60"))
+SPEED_RUN_SECONDS = int(os.environ.get("HUDES_SPEED_RUN_SECONDS", "100"))
 
 
 def _pack_messages_len_prefixed(msgs: list[bytes]) -> bytes:
@@ -698,6 +698,22 @@ async def process_client(websocket, client_runner_q):
                 except Exception as e:
                     logging.error(f"Failed to persist high score: {e}")
 
+        elif msg.type == hudes_pb2.Control.CONTROL_LEADERBOARD_REQUEST:
+            logging.debug("process_client: %d : leaderboard request", client_idx)
+            try:
+                init_db()
+                rows = get_top_scores(limit=10)
+                names = [str(r[0]) for r in rows]
+                scores = [float(r[1]) for r in rows]
+                resp = hudes_pb2.Control(
+                    type=hudes_pb2.Control.CONTROL_LEADERBOARD_RESPONSE,
+                    leaderboard_names=names,
+                    leaderboard_scores=scores,
+                ).SerializeToString()
+                await client.websocket.send(resp)
+            except Exception as e:
+                logging.error("Failed to fetch leaderboard: %s", e)
+
         else:
             logging.warning("received invalid type from client")
 
@@ -733,7 +749,7 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
             except Exception:
                 pass
 
-    async def handle_api(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def handle_api(reader, writer):
         req = await reader.read(4096)
         first = (req or b"GET / HTTP/1.1\r\n").split(b"\r\n", 1)[0]
         parts = first.split()

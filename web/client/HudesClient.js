@@ -258,6 +258,17 @@ export default class HudesClient {
                 case this.ControlType.values.CONTROL_SGD_STEP:
                     log(`[HudesClient] recv SGD_STEP ack steps=${message.sgdSteps}`);
                     break;
+                case this.ControlType.values.CONTROL_LEADERBOARD_RESPONSE:
+                    try {
+                        const names = message.leaderboardNames || [];
+                        const scores = message.leaderboardScores || [];
+                        const rows = names.map((n, i) => ({ name: n, score: scores[i] }))
+                            .filter(r => r && typeof r.name === 'string');
+                        this._showTop100Modal(rows);
+                    } catch (e) {
+                        log('[HudesClient] Failed to render leaderboard modal', e);
+                    }
+                    break;
                 default:
                     log(`[HudesClient] Unknown message type: ${message.type}`);
             }
@@ -344,6 +355,16 @@ export default class HudesClient {
         if (this.highScoreSubmitted) return;
         try {
             this._showNameModal(finalValLoss);
+        } catch {}
+    }
+
+    requestLeaderboard() {
+        try {
+            if (!this.Control || !this.ControlType) return;
+            const payload = {
+                type: this.ControlType.values.CONTROL_LEADERBOARD_REQUEST,
+            };
+            this.sendQ(payload);
         } catch {}
     }
 
@@ -440,10 +461,11 @@ export default class HudesClient {
 
         const list = document.createElement('ol');
         list.className = 'top10-list';
-        (top10 || []).forEach((row) => {
+        (top10 || []).forEach((row, idx) => {
             const li = document.createElement('li');
+            const rank = (idx + 1);
             const s = (typeof row.score === 'number') ? row.score.toFixed(4) : row.score;
-            li.textContent = `${row.name} — ${s}`;
+            li.textContent = `${rank} ${row.name} — ${s}`;
             list.appendChild(li);
         });
 
@@ -454,11 +476,12 @@ export default class HudesClient {
         closeBtn.addEventListener('click', () => {
             overlay.classList.remove('open');
         });
-    const viewBtn = document.createElement('a');
-        viewBtn.textContent = 'View all scores';
-    // Preserve current query params (host/port) if present
-    viewBtn.href = '/highscores' + (window.location.search || '');
+        const viewBtn = document.createElement('button');
+        viewBtn.textContent = 'View Top 10';
         viewBtn.className = 'link-btn';
+        viewBtn.addEventListener('click', () => {
+            try { this.requestLeaderboard?.(); } catch {}
+        });
         actions.appendChild(viewBtn);
         actions.appendChild(closeBtn);
 
@@ -623,6 +646,10 @@ export default class HudesClient {
                     log('[HudesClient] KeyR pressed: starting speed run');
                     this.startSpeedRun();
                     break;
+                case "KeyY":
+                    // Request Top 10 leaderboard over WebSocket
+                    this.requestLeaderboard();
+                    break;
                 case "KeyX":
                     //log("Next help screen.");
                     this.state.nextHelpScreen();
@@ -699,6 +726,38 @@ export default class HudesClient {
                 this.keyHolds[event.code].lastExec = currentTime;
             }
         }
+    }
+    _showTop100Modal(rows) {
+        const overlay = this._createOverlay();
+        overlay.innerHTML = '';
+        const card = document.createElement('div');
+        card.className = 'glass-card';
+        const title = document.createElement('h2');
+    title.textContent = 'Top 10 Leaderboard';
+        const listWrap = document.createElement('div');
+        listWrap.className = 'scroll-wrap';
+        const list = document.createElement('ol');
+        list.className = 'top10-list';
+        (rows || []).forEach((r, idx) => {
+            const li = document.createElement('li');
+            const rank = (idx + 1);
+            const s = (typeof r.score === 'number') ? r.score.toFixed(4) : (r.score ?? '—');
+            // Render explicit numbering to avoid browser marker inconsistencies
+            li.textContent = `${rank} ${r.name} — ${s}`;
+            list.appendChild(li);
+        });
+        listWrap.appendChild(list);
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+        actions.appendChild(closeBtn);
+        card.appendChild(title);
+        card.appendChild(listWrap);
+        card.appendChild(actions);
+        overlay.appendChild(card);
+        overlay.classList.add('open');
     }
 
     waitForWebSocket(callback) {
