@@ -1,5 +1,10 @@
 # HUman DEScent
 
+## Featured videos
+
+- [Human Descent speed run — October 20, 2025](https://youtu.be/PIFJnmvqMIk)
+- [Human Descent — How to play](https://youtu.be/tspa15Ei3KI)
+
 **Live server:** The web version runs at [humandescent.net](https://humandescent.net) on an RTX 4090 GPU. Expect instability if many people connect simultaneously.
 
 Human Descent opens the door for you to explore neural network optimization in high-dimensional weight space using the MNIST dataset. Manipulate everyday controllers (keyboard, xbox, DJ MIDI), each corresponding to a random direction in high dimensional weight space, to gain intuitive insights into the dynamics and complexities of neural network training.
