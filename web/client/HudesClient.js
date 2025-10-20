@@ -412,28 +412,9 @@ export default class HudesClient {
                 return;
             }
             this.submitHighScore(clean);
-            // Fetch leaderboard and show next modal
-            try {
-                const { host, port } = this._detectBackend();
-                const apiBase = this._apiBase(host, port);
-                const [topResp, rankResp] = await Promise.all([
-                    fetch(`${apiBase}/top10`).then(r=>r.json()),
-                    fetch(`${apiBase}/rank?score=${encodeURIComponent(this.state.bestScore)}`).then(r=>r.json()),
-                ]);
-                this._showLeaderboardModal(topResp, {
-                    score: this.state.bestScore,
-                    rank: rankResp.rank,
-                    total: rankResp.total,
-                    name: clean,
-                });
-            } catch (_) {
-                this._showLeaderboardModal([], {
-                    score: this.state.bestScore,
-                    rank: 0,
-                    total: 0,
-                    name: clean,
-                });
-            }
+            // In production we use only WebSocket. Request the Top 10 over WS
+            // and let CONTROL_LEADERBOARD_RESPONSE render the modal.
+            try { this.requestLeaderboard(); } catch {}
         });
 
         card.appendChild(title);
