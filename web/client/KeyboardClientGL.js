@@ -24,6 +24,12 @@ export default class KeyboardClientGL extends KeyboardClient {
     initInput() {
         super.initInput();
 
+        // Disable 1D paired key controls (e/d, r/f, etc.) in GL mode.
+        // GL uses its own controls (WASD, arrows, mouse drag/scroll),
+        // so we clear the base mapping to avoid accidental dimension steps.
+        this.pairedKeys = [];
+        this.keyToParamAndSign = {};
+
         // Additional state setup for GL
         this.stepSizeKeyboardMultiplier = 2.5;
         this.lastSelectPress = 0;
@@ -112,7 +118,7 @@ export default class KeyboardClientGL extends KeyboardClient {
         //window.addEventListener('keydown', (event) => this.processKeyPress(event));
         //window.addEventListener('keyup', (event) => this.updateKeyHolds());
 
-        this.state.setHelpScreenFns([
+                this.state.setHelpScreenFns([
             "help_screens/hudes_help_start.png",
             "help_screens/hudes_1.png",
             "help_screens/hudes_2.png",
