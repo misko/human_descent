@@ -72,7 +72,11 @@ export function installMouseControls(
       debugLog(
         `[mouseControls] ${source} start id=${event.pointerId ?? 'n/a'} x=${event.clientX} y=${event.clientY}`,
       );
-      element.setPointerCapture?.(event.pointerId);
+      // In some browsers/environments, calling setPointerCapture with an
+      // inactive/undefined pointerId throws NotFoundError. Guard it.
+      if (typeof event.pointerId === 'number' && event.pointerId >= 0 && element.setPointerCapture) {
+        try { element.setPointerCapture(event.pointerId); } catch (_) { /* ignore */ }
+      }
       return;
     }
   };
@@ -103,7 +107,9 @@ export function installMouseControls(
     debugLog(
       `[mouseControls] ${source} end id=${event.pointerId ?? 'n/a'} x=${event.clientX} y=${event.clientY}`,
     );
-    element.releasePointerCapture?.(event.pointerId);
+    if (typeof event.pointerId === 'number' && event.pointerId >= 0 && element.releasePointerCapture) {
+      try { element.releasePointerCapture(event.pointerId); } catch (_) { /* ignore */ }
+    }
   };
 
   const handlePointerDown = (event) => beginDrag(event, 'pointerdown');

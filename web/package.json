@@ -5,9 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-  "proto:sync": "cp -f ../hudes/hudes.proto public/hudes.proto",
-  "prebuild": "npm run -s proto:sync",
-  "build": "VITE_WS_PORT=${VITE_WS_PORT:-10000} VITE_HTTP_PORT=${VITE_HTTP_PORT:-10001} vite build",
+  "build": "VITE_BUILD_ID=${VITE_BUILD_ID:-$(date +%s)} VITE_WS_PORT=${VITE_WS_PORT:-10000} VITE_HTTP_PORT=${VITE_HTTP_PORT:-10001} vite build",
     "build:port10000": "VITE_WS_PORT=10000 VITE_HTTP_PORT=10001 vite build",
     "predev": "npm run -s proto:sync",
     "dev": "vite --host 0.0.0.0",
