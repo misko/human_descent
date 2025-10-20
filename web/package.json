@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+  "build": "VITE_WS_PORT=${VITE_WS_PORT:-10000} VITE_HTTP_PORT=${VITE_HTTP_PORT:-10001} vite build",
     "build:port10000": "VITE_WS_PORT=10000 VITE_HTTP_PORT=10001 vite build",
     "dev": "vite --host 0.0.0.0",
     "preview": "vite preview",
