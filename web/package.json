@@ -5,8 +5,11 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+  "proto:sync": "cp -f ../hudes/hudes.proto public/hudes.proto",
+  "prebuild": "npm run -s proto:sync",
   "build": "VITE_WS_PORT=${VITE_WS_PORT:-10000} VITE_HTTP_PORT=${VITE_HTTP_PORT:-10001} vite build",
     "build:port10000": "VITE_WS_PORT=10000 VITE_HTTP_PORT=10001 vite build",
+    "predev": "npm run -s proto:sync",
     "dev": "vite --host 0.0.0.0",
     "preview": "vite preview",
     "server:kill": "bash -lc 'PORT=${HUDES_PORT:-10001}; PIDS=$(lsof -ti :$PORT || true); if [ -n \"$PIDS\" ]; then echo Killing stale PIDs on $PORT: $PIDS; kill -9 $PIDS || true; fi; sleep 0.5'",
