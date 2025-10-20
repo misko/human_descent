@@ -22,8 +22,9 @@ export default class ClientState {
     }
 
     toString() {
+    const secs = Number(this.speedRunSecondsRemaining ?? 0);
     const timer = this.speedRunActive
-        ? ` | SpeedRun: ${this.speedRunSecondsRemaining ?? 0}s`
+        ? ` | SpeedRun: ${secs.toFixed(1)}s`
         : '';
     return `Best-val-loss: ${this.bestScore.toFixed(3)}, Batch-size: ${this.batchSize}, StepSize: ${this.stepSize.toExponential(3)}, SGD-steps: ${this.sgdSteps} , Dtype: ${this.dtype}${timer}`
     }

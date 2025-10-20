@@ -1,8 +1,11 @@
 #!/usr/bin/env python
+# noqa: E501
 
 import argparse
 import asyncio
 import copy
+import json
+import math
 import logging
 import os
 import pathlib
@@ -22,7 +25,13 @@ import websockets
 from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
-from hudes.high_scores import init_db, insert_high_score
+from hudes.high_scores import (
+    get_all_scores,
+    get_rank,
+    get_top_scores,
+    init_db,
+    insert_high_score,
+)
 from hudes.model_data_and_subspace import ModelDataAndSubspace
 from hudes.models_and_datasets.mnist import (
     MNISTCNN,
@@ -34,6 +43,8 @@ from hudes.models_and_datasets.mnist import (
 
 client_idx = 0
 active_clients = {}
+# Track scheduled timeout tasks per client to finalize Speed Runs
+active_speedrun_tasks: dict[int, asyncio.Task] = {}
 SPEED_RUN_SECONDS = int(os.environ.get("HUDES_SPEED_RUN_SECONDS", "60"))
 
 
@@ -45,6 +56,18 @@ def _pack_messages_len_prefixed(msgs: list[bytes]) -> bytes:
         out += len(m).to_bytes(4, "big")
         out += m
     return bytes(out)
+
+
+def _countdown_kwargs(client) -> dict:
+    """Build kwargs for speed_run_seconds_remaining, or empty if N/A.
+
+    Returns a dict that can be splatted into a Control constructor.
+    """
+    if not getattr(client, "speed_run_end_time", 0):
+        return {}
+    remaining = max(0, int(client.speed_run_end_time - time.time()))
+    srs = remaining if getattr(client, "speed_run_active", False) else 0
+    return {"speed_run_seconds_remaining": srs}
 
 
 # TODO
@@ -211,6 +234,7 @@ class Client:
     # Speed run state
     speed_run_active: bool = False
     speed_run_end_time: float = 0.0
+    speed_run_seq: int = 0  # increments each time a Speed Run starts
     speed_run_log: list = field(default_factory=list)
     best_val_loss_during_run: float | None = None
     high_score_logged: bool = False
@@ -365,11 +389,6 @@ async def inference_result_sender(results_q, stop):
             if train_or_val in ("train", "mesh", "sgd"):
                 # TODO need to be ok with getting errors here
                 logging.debug("inference_result_sender: sent train to client")
-                # compute remaining seconds to possibly flip state
-                if client.speed_run_active:
-                    remaining = max(0, int(client.speed_run_end_time - time.time()))
-                    if remaining <= 0:
-                        client.speed_run_active = False
                 msg = hudes_pb2.Control(
                     type=hudes_pb2.Control.CONTROL_TRAIN_LOSS_AND_PREDS,
                     train_loss_and_preds=hudes_pb2.TrainLossAndPreds(
@@ -391,16 +410,20 @@ async def inference_result_sender(results_q, stop):
                     ),
                     request_idx=client.active_request_idx,
                     total_sgd_steps=client.total_sgd_steps,
+                    **_countdown_kwargs(client),
                 ).SerializeToString()
                 await client.websocket.send(msg)
                 logging.debug("inference_result_sender: sent train to client : done")
             if train_or_val == "val":
                 logging.debug("inference_result_sender: sent val to client")
-                # track best validation loss during speed run
-                if client.speed_run_active:
+                # If a speed run is active but time elapsed, flip off and
+                # mark finished
+                speed_finished = False
+                if getattr(client, "speed_run_active", False):
                     remaining = max(0, int(client.speed_run_end_time - time.time()))
                     if remaining <= 0:
                         client.speed_run_active = False
+                        speed_finished = True
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_VAL_LOSS,
@@ -408,6 +431,8 @@ async def inference_result_sender(results_q, stop):
                             val_loss=res["val"]["val_loss"],
                         ),
                         request_idx=client.active_request_idx,
+                        speed_run_finished=speed_finished,
+                        **_countdown_kwargs(client),
                     ).SerializeToString()
                 )
                 if client.best_val_loss_during_run is None:
@@ -416,6 +441,8 @@ async def inference_result_sender(results_q, stop):
                     client.best_val_loss_during_run = min(
                         client.best_val_loss_during_run, res["val"]["val_loss"]
                     )
+                # No special full-loss message; timeout schedules a regular
+                # VAL which the client can treat as final when countdown hit 0
                 logging.debug("inference_result_sender: sent val to client : done")
             if train_or_val == "mesh":
                 logging.debug("inference_result_sender: sent mesh to client")
@@ -426,19 +453,12 @@ async def inference_result_sender(results_q, stop):
                 mesh_grid_shape = list(mesh_tensor.shape)
 
                 # Send the message using repeated float and include shape
-                # compute remaining seconds and possibly flip active flag
-                srs = None
-                if client.speed_run_end_time:
-                    remaining = max(0, int(client.speed_run_end_time - time.time()))
-                    if getattr(client, "speed_run_active", False) and remaining <= 0:
-                        client.speed_run_active = False
-                    srs = remaining if client.speed_run_active else 0
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_MESHGRID_RESULTS,
                         mesh_grid_results=mesh_grid_results_list,
                         mesh_grid_shape=mesh_grid_shape,
-                        speed_run_seconds_remaining=srs,
+                        **_countdown_kwargs(client),
                     ).SerializeToString()
                 )
                 logging.debug("inference_result_sender: sent mesh to client : done")
@@ -457,6 +477,35 @@ async def wait_for_stop(inference_q, results_q, stop, client_runner_q):
     results_q.put(None)
     inference_q.put(None)
     client_runner_q.put(True)
+
+
+def _schedule_speedrun_timeout(client_id: int, duration_sec: int, client_runner_q):
+    async def _timeout_then_eval():
+        try:
+            await asyncio.sleep(max(0, duration_sec))
+            # Verify client still exists and the run sequence matches
+            client = active_clients.get(client_id)
+            if client is None:
+                return
+            # If a newer speed run started, ignore this timeout
+            if time.time() < client.speed_run_end_time:
+                return
+            # Request a normal validation at run end; client will use it
+            # as the final score
+            client.request_full_val = True
+            client_runner_q.put(True)
+        except Exception as e:
+            logging.error("Speed Run timeout scheduling error: %s", e)
+
+    # Cancel previous task if any
+    old_task = active_speedrun_tasks.get(client_id)
+    if old_task and not old_task.done():
+        try:
+            old_task.cancel()
+        except Exception:
+            pass
+    task = asyncio.create_task(_timeout_then_eval())
+    active_speedrun_tasks[client_id] = task
 
 
 async def inference_runner(
@@ -509,11 +558,12 @@ async def process_client(websocket, client_runner_q):
     async for message in websocket:
         msg = hudes_pb2.Control()
         msg.ParseFromString(message)
-        # Record incoming messages for speed run log if active
+        # Strict cutoff: only log messages received before expiry
         if client.speed_run_active:
-            client.speed_run_log.append(message)
-            # cutoff logging if time elapsed
-            if time.time() >= client.speed_run_end_time:
+            now = time.time()
+            if now < client.speed_run_end_time:
+                client.speed_run_log.append(message)
+            else:
                 client.speed_run_active = False
         if msg.type == hudes_pb2.Control.CONTROL_DIMS:
             logging.debug(f"process_client: {client_idx} : control dims")
@@ -586,15 +636,22 @@ async def process_client(websocket, client_runner_q):
             client.high_score_logged = False
             # Start timer (allow env override at runtime)
             duration = int(
-                os.environ.get("HUDES_SPEED_RUN_SECONDS", str(SPEED_RUN_SECONDS))
+                os.environ.get(
+                    "HUDES_SPEED_RUN_SECONDS",
+                    str(SPEED_RUN_SECONDS),
+                )
             )
             client.speed_run_active = True
+            client.speed_run_seq += 1
             client.speed_run_end_time = time.time() + max(1, duration)
             logging.info(
                 "Client %d Speed Run started for %d seconds",
                 client.client_id,
                 duration,
             )
+            # Schedule a final evaluation once the timer elapses for this
+            # run sequence
+            _schedule_speedrun_timeout(current_client, duration, client_runner_q)
             # Reset weights by signaling runner with force_update and
             # empty step; inference worker re-initializes when missing.
             # inference worker re-initializes weights when not present.
@@ -606,12 +663,15 @@ async def process_client(websocket, client_runner_q):
             if client.high_score_logged:
                 logging.debug("process_client: high score already logged; ignoring")
             else:
-                # finalize run if still active
-                client.speed_run_active = False
-                client.high_score_logged = True
                 name = msg.high_score.name.strip().upper() if msg.high_score else "????"
+                # Strict validation: reject invalid names (do not persist)
                 if len(name) != 4 or not name.isalnum():
-                    name = "????"
+                    logging.info(
+                        "Invalid high score name submitted; ignoring run" " persistence"
+                    )
+                    # Do not set high_score_logged; allow client to re-submit
+                    client_runner_q.put(True)
+                    continue
                 duration = int(
                     os.environ.get(
                         "HUDES_SPEED_RUN_SECONDS",
@@ -634,6 +694,7 @@ async def process_client(websocket, client_runner_q):
                         request_idx=client.request_idx,
                         log_bytes=_pack_messages_len_prefixed(client.speed_run_log),
                     )
+                    client.high_score_logged = True
                 except Exception as e:
                     logging.error(f"Failed to persist high score: {e}")
 
@@ -649,7 +710,10 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
     health_server = None
     health_port = int(os.environ.get("HUDES_HEALTH_PORT", server_port + 1))
 
-    async def handle_health(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def handle_health(
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ):
         try:
             await reader.read(1024)
             # Very small, permissive parser; always return 200
@@ -669,6 +733,121 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
             except Exception:
                 pass
 
+    async def handle_api(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        req = await reader.read(4096)
+        first = (req or b"GET / HTTP/1.1\r\n").split(b"\r\n", 1)[0]
+        parts = first.split()
+        path = parts[1].decode("utf-8") if len(parts) >= 2 else "/health"
+
+        def send_json(payload: str, status: str = "200 OK"):
+            body = payload.encode("utf-8")
+            headers = (
+                f"HTTP/1.1 {status}\r\n"
+                "Content-Type: application/json; charset=utf-8\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "Connection: close\r\n"
+                "Access-Control-Allow-Origin: *\r\n"
+                "Access-Control-Allow-Methods: GET, OPTIONS\r\n"
+                "Access-Control-Allow-Headers: *\r\n\r\n"
+            ).encode("utf-8")
+            writer.write(headers + body)
+
+        if path == "/health":
+            response = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/plain; charset=utf-8\r\n"
+                b"Content-Length: 2\r\n"
+                b"Connection: close\r\n"
+                b"Access-Control-Allow-Origin: *\r\n\r\nOK"
+            )
+            writer.write(response)
+        elif path == "/api/top10":
+            try:
+                init_db()
+                rows = get_top_scores()
+
+                def _sf(x):
+                    try:
+                        fx = float(x)
+                        return fx if math.isfinite(fx) else None
+                    except Exception:
+                        return None
+
+                data = []
+                for n, s, ts in rows:
+                    data.append({"name": n, "score": _sf(s), "ts": ts})
+                payload = json.dumps(data)
+                send_json(payload)
+            except Exception:
+                send_json(
+                    '{"error": "failed"}',
+                    status="500 Internal Server Error",
+                )
+        elif path.startswith("/api/highscores"):
+            try:
+                import urllib.parse as _url
+
+                qs = ""
+                if "?" in path:
+                    _, qs = path.split("?", 1)
+                params = _url.parse_qs(qs)
+                offset = int(params.get("offset", [0])[0])
+                limit = int(params.get("limit", [10000])[0])
+                limit = max(1, min(limit, 10000))
+                init_db()
+                rows = get_all_scores(offset=offset, limit=limit)
+
+                def _sf(x):
+                    try:
+                        fx = float(x)
+                        return fx if math.isfinite(fx) else None
+                    except Exception:
+                        return None
+
+                data = []
+                for r in rows:
+                    data.append(
+                        {
+                            "id": r[0],
+                            "ts": r[1],
+                            "name": r[2],
+                            "score": _sf(r[3]),
+                            "bestValLoss": _sf(r[4]),
+                            "duration": r[5],
+                            "requestIdx": r[6],
+                        }
+                    )
+                payload = json.dumps(data)
+                send_json(payload)
+            except Exception:
+                send_json(
+                    '{"error": "failed"}',
+                    status="500 Internal Server Error",
+                )
+        elif path.startswith("/api/rank"):
+            try:
+                import urllib.parse as _url
+
+                qs = path.split("?", 1)[1] if "?" in path else ""
+                params = _url.parse_qs(qs)
+                score = float(params.get("score", ["nan"])[0])
+                init_db()
+                rank, total = get_rank(score)
+                payload = json.dumps({"rank": rank, "total": total})
+                send_json(payload)
+            except Exception:
+                send_json(
+                    '{"error": "failed"}',
+                    status="500 Internal Server Error",
+                )
+        else:
+            writer.write(
+                b"HTTP/1.1 404 Not Found\r\n"
+                b"Content-Length: 0\r\n"
+                b"Connection: close\r\n"
+                b"Access-Control-Allow-Origin: *\r\n\r\n"
+            )
+
     ssl_context = None
     if ssl_pem is not None:
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -676,15 +855,20 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
         ssl_context.load_cert_chain(localhost_pem)
     # Start health HTTP server
     try:
+        # Listen on all IPv4 addresses; for IPv6, consider also binding to '::'
         health_server = await asyncio.start_server(
-            handle_health, host="127.0.0.1", port=health_port
+            handle_api, host="0.0.0.0", port=health_port
         )
         logging.info(
-            "Health server listening on http://127.0.0.1:%d/health",
+            "API server listening on 0.0.0.0:%d (health at /health)",
             health_port,
         )
     except OSError as e:
-        logging.warning("Failed to start health server on %d: %s", health_port, e)
+        logging.warning(
+            "Failed to start health server on %d: %s",
+            health_port,
+            e,
+        )
 
     async with serve(
         partial(process_client, client_runner_q=client_runner_q),
@@ -758,7 +942,10 @@ async def run_wrapper(args, stop_future=None):
         )
     except Exception:
         configured_duration = SPEED_RUN_SECONDS
-    logging.info("Speed Run configured duration (seconds): %d", configured_duration)
+    logging.info(
+        "Speed Run configured duration (seconds): %d",
+        configured_duration,
+    )
     stop = stop_future or asyncio.get_running_loop().create_future()
     await asyncio.gather(
         run_server(stop, client_runner_q, args.port, args.ssl_pem),

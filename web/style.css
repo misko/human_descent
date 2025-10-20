@@ -5,6 +5,80 @@ body {
     background-color: #000; /* Set the background color to black */
     color: #fff; /* Optional: Set the text color to white for better contrast */
 }
+
+/* Modal overlay and glass card */
+#modalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 20, 0.45);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+#modalOverlay.open { display: flex; }
+
+.glass-card {
+    width: min(92vw, 560px);
+    padding: 20px 22px;
+    border-radius: 16px;
+    background: rgba(12, 18, 30, 0.78);
+    border: 1px solid rgba(86, 198, 255, 0.35);
+    box-shadow: 0 18px 48px rgba(10, 18, 40, 0.55),
+        inset 0 0 18px rgba(86, 198, 255, 0.12);
+    color: #e9f6ff;
+}
+
+.glass-card h2 {
+    margin: 0 0 6px;
+    font-size: 1.25rem;
+}
+.glass-card .muted {
+    margin: 0 0 14px;
+    opacity: 0.85;
+}
+.glass-card .name-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.glass-card label { font-size: 0.9rem; opacity: 0.9; }
+.glass-card input {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(86, 198, 255, 0.35);
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    outline: none;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+.glass-card input.invalid { border-color: #ff4d4d; }
+.glass-card .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+}
+.glass-card button, .glass-card .link-btn {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(86, 198, 255, 0.35);
+    background: rgba(40, 90, 140, 0.35);
+    color: #e9f6ff;
+    cursor: pointer;
+    text-decoration: none;
+}
+.glass-card button:hover, .glass-card .link-btn:hover {
+    background: rgba(40, 90, 140, 0.5);
+}
+.glass-card .top10-list {
+    margin: 8px 0 0;
+    padding-left: 18px;
+}
 #glContainer {
     position: absolute;
     top: 0;
@@ -164,6 +238,13 @@ body {
     white-space: nowrap;
     letter-spacing: 0.03em;
     text-shadow: 0 0 5px rgba(120, 200, 255, 0.4);
+}
+
+/* Special styling for SPEED RUN label */
+#bottomTextContainer .control-group .label .speed-run-label {
+    color: #ff4d4d; /* red */
+    font-weight: 800; /* bold */
+    font-style: italic; /* italic */
 }
 
 #bottomTextContainer .key-pill {

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Human Descent — High Scores</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="page" style="padding: 16px; color: #e9f6ff; font-family: Arial, sans-serif;">
+    <h1 style="margin: 8px 0 12px;">🏆 High Scores</h1>
+    <p class="muted">Top 10,000 scores. Lower is better.</p>
+    <div id="controls" style="margin: 10px 0 16px; display:flex; gap:10px; flex-wrap:wrap;">
+      <label>Offset <input id="offset" type="number" min="0" value="0" style="width:120px;"/></label>
+      <label>Limit <input id="limit" type="number" min="1" max="10000" value="1000" style="width:120px;"/></label>
+      <button id="loadBtn">Load</button>
+      <a href="/" class="link-btn">Back to app</a>
+    </div>
+    <div id="status"></div>
+    <table id="scoresTable" style="width:100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th align="left">Rank</th>
+          <th align="left">Name</th>
+          <th align="left">Score</th>
+          <th align="left">Timestamp</th>
+          <th align="left">Duration</th>
+          <th align="left">Request Idx</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <script type="module" src="./highscores.js"></script>
+</body>
+</html>

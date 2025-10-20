@@ -18,9 +18,12 @@ export default class HudesClient {
             }
         } catch {}
 
-        const isHttps = (typeof window !== 'undefined' && window.location?.protocol === 'https:');
-        const scheme = isHttps ? 'wss' : 'ws';
-        const url = addr?.startsWith('ws') ? addr : `${scheme}://${addr}:${port}`;
+    // Remember backend for API calls
+    this.backendHost = addr;
+    this.backendPort = port;
+    const isHttps = (typeof window !== 'undefined' && window.location?.protocol === 'https:');
+    const scheme = isHttps ? 'wss' : 'ws';
+    const url = addr?.startsWith('ws') ? addr : `${scheme}://${this.backendHost}:${this.backendPort}`;
         log(`[HudesClient] Connecting WebSocket to ${url}`);
         this.socket = new WebSocket(url);
         this.socket.binaryType = "arraybuffer";
@@ -53,6 +56,7 @@ export default class HudesClient {
     this.speedRunActive = false;
     this.speedRunSecondsRemaining = 0;
     this._srsInterval = null; // local countdown ticker (started on first server reply)
+    this._srsEndAt = null; // timestamp (ms) when local countdown should end
     this.highScoreSubmitted = false;
 
 
@@ -98,7 +102,8 @@ export default class HudesClient {
 
                     log(`[HudesClient] recv TRAIN_LOSS_AND_PREDS reqIdx=${message.requestIdx}`);
 
-                    // Countdown is carried on Control-level (mesh) messages now.
+                    // Update local countdown but do not end until server signals finish
+                    this._updateSpeedRunFromMessage(message);
 
                     // Parse train predictions and reshape
                     const trainPredsFlattened = message.trainLossAndPreds.preds;
@@ -145,6 +150,8 @@ export default class HudesClient {
                     if (!message.valLoss) {
                         throw new Error("valLoss field missing");
                     }
+                    // VAL may carry speed_run_finished which is authoritative for ending
+                    this._updateSpeedRunFromMessage(message);
 
                     log(`[HudesClient] recv VAL_LOSS reqIdx=${message.requestIdx} val=${message.valLoss.valLoss}`);
 
@@ -241,60 +248,11 @@ export default class HudesClient {
                     // Update the view with the reshaped mesh grid results
                     this.view.updateMeshGrids(meshGridResults);
 
-                    // If server provided countdown at Control level, track it
-                    if (
-                        Object.prototype.hasOwnProperty.call(
-                            message,
-                            'speedRunSecondsRemaining',
-                        )
-                    ) {
-                        const srs = message.speedRunSecondsRemaining ?? 0;
-                        const prev = this.speedRunSecondsRemaining;
-                        // Timer starts only after first server reply; no fallback timeout to cancel
-                        this.speedRunSecondsRemaining = srs;
-                        this.speedRunActive = srs > 0;
-                        this.state.speedRunActive = this.speedRunActive;
-                        this.state.speedRunSecondsRemaining = srs;
-                        log(`[HudesClient] (mesh) speedRunSecondsRemaining=${srs} active=${this.speedRunActive}`);
-                        // Start or adjust local countdown ticker
-                        try {
-                            if (this._srsInterval) {
-                                clearInterval(this._srsInterval);
-                                this._srsInterval = null;
-                            }
-                            if (srs > 0) {
-                                const startTs = Date.now();
-                                let lastShown = srs;
-                                this._srsInterval = setInterval(() => {
-                                    if (!this.speedRunActive) return;
-                                    const elapsedSec = Math.floor((Date.now() - startTs) / 1000);
-                                    const remain = Math.max(0, srs - elapsedSec);
-                                    if (remain !== lastShown) {
-                                        lastShown = remain;
-                                        this.speedRunSecondsRemaining = remain;
-                                        this.state.speedRunSecondsRemaining = remain;
-                                    }
-                                    if (remain === 0) {
-                                        try { clearInterval(this._srsInterval); } catch {}
-                                        this._srsInterval = null;
-                                        this.speedRunActive = false;
-                                        this.state.speedRunActive = false;
-                                        // No grid changes during Speed Run; nothing to restore here
-                                        if (!this.highScoreSubmitted) {
-                                            this._promptAndSubmitHighScore();
-                                        }
-                                    }
-                                }, 250);
-                            }
-                        } catch {}
-
-                        if (srs === 0 && !this.highScoreSubmitted) {
-                            try { if (this._srsInterval) { clearInterval(this._srsInterval); this._srsInterval = null; } } catch {}
-                            // No grid changes during Speed Run; nothing to restore here
-                            this._promptAndSubmitHighScore();
-                        }
-                    }
+                    // Update local countdown but do not end until server signals finish
+                    this._updateSpeedRunFromMessage(message);
                     break;
+
+                // No CONTROL_FULL_LOSS handling (removed)
 
 
                 case this.ControlType.values.CONTROL_SGD_STEP:
@@ -308,21 +266,223 @@ export default class HudesClient {
             log(error);
         }
     }
-    _promptAndSubmitHighScore() {
-        // Avoid double prompts
+    _updateSpeedRunFromMessage(message) {
+        try {
+            const hasFinished = Object.prototype.hasOwnProperty.call(
+                message,
+                'speedRunFinished',
+            );
+            if (hasFinished && message.speedRunFinished) {
+                // Authoritative end-of-run signal from server
+                if (this._srsInterval) { try { clearInterval(this._srsInterval); } catch {} this._srsInterval = null; }
+                this._srsEndAt = null;
+                this.speedRunSecondsRemaining = 0;
+                this.state.speedRunSecondsRemaining = 0;
+                this.speedRunActive = false;
+                this.state.speedRunActive = false;
+                // Capture achieved final val loss if present
+                if (message.valLoss && typeof message.valLoss.valLoss === 'number') {
+                    this._lastFinalValLoss = message.valLoss.valLoss;
+                }
+                if (!this.highScoreSubmitted) {
+                    this._promptAndSubmitHighScore(this._lastFinalValLoss);
+                }
+                return;
+            }
+
+            const hasSrs = Object.prototype.hasOwnProperty.call(
+                message,
+                'speedRunSecondsRemaining',
+            );
+            if (!hasSrs) return;
+            const srs = message.speedRunSecondsRemaining ?? 0;
+
+            // Start local timer on first srs > 0 after Speed Run starts
+            if (srs > 0) {
+                this.speedRunActive = true;
+                this.state.speedRunActive = true;
+                if (!this._srsInterval) {
+                    this._srsEndAt = Date.now() + srs * 1000;
+                    this.speedRunSecondsRemaining = srs;
+                    this.state.speedRunSecondsRemaining = srs;
+                    let lastShown = srs;
+                    this._srsInterval = setInterval(() => {
+                        const now = Date.now();
+                        const remainMs = Math.max(0, (this._srsEndAt ?? now) - now);
+                        const remain = Math.max(0, Math.floor(remainMs / 1000));
+                        const remainFrac = Math.max(0, Math.round(remainMs / 100) / 10); // 0.1s resolution
+                        if (remain !== lastShown) {
+                            lastShown = remain;
+                            this.speedRunSecondsRemaining = remainFrac;
+                            this.state.speedRunSecondsRemaining = remainFrac;
+                            try { this.view?.annotateBottomScreen?.(this.state.toString()); } catch {}
+                        }
+                        if (remain === 0) {
+                            // Stop ticking locally, but keep run active until
+                            // server sends VAL with speed_run_finished=true
+                            try { clearInterval(this._srsInterval); } catch {}
+                            this._srsInterval = null;
+                            this._srsEndAt = null;
+                            this.speedRunSecondsRemaining = 0;
+                            this.state.speedRunSecondsRemaining = 0;
+                            try { this.view?.annotateBottomScreen?.(this.state.toString()); } catch {}
+                        }
+                    }, 300);
+                }
+            } else {
+                // srs==0: if we haven't started local timer yet, reflect zero
+                if (!this._srsInterval) {
+                    this.speedRunSecondsRemaining = 0;
+                    this.state.speedRunSecondsRemaining = 0;
+                    // Do not flip active here; end only on server finish
+                    try { this.view?.annotateBottomScreen?.(this.state.toString()); } catch {}
+                }
+            }
+        } catch {}
+    }
+    _promptAndSubmitHighScore(finalValLoss) {
         if (this.highScoreSubmitted) return;
         try {
-            const def = 'USER';
-            const name = typeof window !== 'undefined'
-                ? window.prompt('Speed Run complete! Enter 4-letter name for leaderboard:', def)
-                : null;
-            if (!name) return;
-            const trimmed = (name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-            if (trimmed.length !== 4) return;
-            this.submitHighScore(trimmed);
-        } catch (e) {
-            // ignore prompt errors in non-browser envs
+            this._showNameModal(finalValLoss);
+        } catch {}
+    }
+
+    _createOverlay() {
+        let overlay = document.getElementById('modalOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'modalOverlay';
+            document.body.appendChild(overlay);
         }
+        return overlay;
+    }
+
+    _showNameModal(finalValLoss) {
+        const overlay = this._createOverlay();
+        overlay.innerHTML = '';
+
+        const card = document.createElement('div');
+        card.className = 'glass-card';
+        const title = document.createElement('h2');
+        title.textContent = 'Speed Run complete!';
+        const subtitle = document.createElement('p');
+        subtitle.className = 'muted';
+        const scoreTxt = (typeof finalValLoss === 'number')
+            ? `Your final validation loss: ${finalValLoss.toFixed(4)}`
+            : 'Great job!';
+        subtitle.textContent = scoreTxt;
+
+        const form = document.createElement('form');
+        form.className = 'name-form';
+        form.innerHTML = `
+          <label for="nameInput">Enter a 4-character name</label>
+          <input id="nameInput" maxlength="4" placeholder="USER" autocomplete="off" />
+          <div class="actions">
+            <button type="submit">Submit</button>
+          </div>
+        `;
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const el = form.querySelector('#nameInput');
+            const clean = (el.value || 'USER').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+            if (clean.length !== 4) {
+                el.classList.add('invalid');
+                return;
+            }
+            this.submitHighScore(clean);
+            // Fetch leaderboard and show next modal
+            try {
+                const { host, port } = this._detectBackend();
+                const apiBase = this._apiBase(host, port);
+                const [topResp, rankResp] = await Promise.all([
+                    fetch(`${apiBase}/top10`).then(r=>r.json()),
+                    fetch(`${apiBase}/rank?score=${encodeURIComponent(this.state.bestScore)}`).then(r=>r.json()),
+                ]);
+                this._showLeaderboardModal(topResp, {
+                    score: this.state.bestScore,
+                    rank: rankResp.rank,
+                    total: rankResp.total,
+                    name: clean,
+                });
+            } catch (_) {
+                this._showLeaderboardModal([], {
+                    score: this.state.bestScore,
+                    rank: 0,
+                    total: 0,
+                    name: clean,
+                });
+            }
+        });
+
+        card.appendChild(title);
+        card.appendChild(subtitle);
+        card.appendChild(form);
+        overlay.appendChild(card);
+        overlay.classList.add('open');
+
+        const input = form.querySelector('#nameInput');
+        if (input) { input.focus(); }
+    }
+
+    _showLeaderboardModal(top10, me) {
+        const overlay = this._createOverlay();
+        overlay.innerHTML = '';
+        const card = document.createElement('div');
+        card.className = 'glass-card';
+        const title = document.createElement('h2');
+        title.textContent = 'Leaderboard';
+        const you = document.createElement('p');
+        you.className = 'muted';
+        const score = (typeof me.score === 'number' && isFinite(me.score)) ? me.score.toFixed(4) : '—';
+        const rankText = (me.rank && me.total) ? `#${me.rank} of ${me.total}` : '#—';
+        you.textContent = `${me.name ?? 'YOU'} • Score: ${score} • Rank: ${rankText}`;
+
+        const list = document.createElement('ol');
+        list.className = 'top10-list';
+        (top10 || []).forEach((row) => {
+            const li = document.createElement('li');
+            const s = (typeof row.score === 'number') ? row.score.toFixed(4) : row.score;
+            li.textContent = `${row.name} — ${s}`;
+            list.appendChild(li);
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.addEventListener('click', () => {
+            overlay.classList.remove('open');
+        });
+    const viewBtn = document.createElement('a');
+        viewBtn.textContent = 'View all scores';
+    // Preserve current query params (host/port) if present
+    viewBtn.href = '/highscores' + (window.location.search || '');
+        viewBtn.className = 'link-btn';
+        actions.appendChild(viewBtn);
+        actions.appendChild(closeBtn);
+
+        card.appendChild(title);
+        card.appendChild(you);
+        card.appendChild(list);
+        card.appendChild(actions);
+        overlay.appendChild(card);
+        overlay.classList.add('open');
+    }
+
+    _detectBackend() {
+        const params = new URLSearchParams(window.location.search);
+        const host = params.get('host') || this.backendHost || window.location.hostname || 'localhost';
+        // Prefer provided query param; else use the port used for WebSocket; default to 10001
+        const port = params.get('port') ? Number(params.get('port'))
+            : (this.backendPort || 10001);
+        return { host, port };
+    }
+
+    _apiBase(host, port) {
+        const httpPort = (Number(port) + 1);
+        const proto = window.location.protocol === 'https:' ? 'https' : 'http';
+        return `${proto}://${host}:${httpPort}/api`;
     }
     _reshapeArray(flatArray, shape) {
         // Helper function to recursively reshape the flattened array
@@ -674,10 +834,8 @@ export default class HudesClient {
             return;
         }
         this.highScoreSubmitted = false;
-        if (this._srsInterval) {
-            clearInterval(this._srsInterval);
-            this._srsInterval = null;
-        }
+        if (this._srsInterval) { try { clearInterval(this._srsInterval); } catch {} this._srsInterval = null; }
+        this._srsEndAt = null;
         this.speedRunActive = true;
         this.state.speedRunActive = true;
         this.state.speedRunSecondsRemaining = 0;

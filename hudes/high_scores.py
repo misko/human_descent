@@ -109,3 +109,20 @@ def get_log_by_id(row_id: int, path: str | None = None) -> bytes | None:
         cur = conn.execute("SELECT log FROM high_scores WHERE id=?", (row_id,))
         row = cur.fetchone()
         return row[0] if row else None
+
+
+def get_rank(score: float, path: str | None = None) -> tuple[int, int]:
+    """Return (rank, total) for a given score.
+
+    Rank is 1-based and defined as 1 + number of rows with a strictly lower
+    score. Ties share the same rank bucket.
+    """
+    with _conn(path) as conn:
+        cur = conn.execute("SELECT COUNT(*) FROM high_scores")
+        total = int(cur.fetchone()[0])
+        cur = conn.execute(
+            "SELECT COUNT(*) FROM high_scores WHERE score < ?",
+            (float(score),),
+        )
+        less = int(cur.fetchone()[0])
+        return less + 1 if total > 0 else 0, total

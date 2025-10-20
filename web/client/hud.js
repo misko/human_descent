@@ -3,7 +3,7 @@ export const CONTROL_GROUPS = [
   { icon: null, keys: ['⬆️', '⬇️', '⬅️', '➡️', '🐁'], label: 'Rotate' },
   { icon: null, keys: ['Spacebar'], label: 'New Dims' },
   { icon: null, keys: ['Enter'], label: 'New Batch' },
-  { icon: null, keys: ['R'], label: 'Speed Run' },
+  { icon: null, keys: ['R'], label: '<span class="speed-run-label">SPEED RUN</span>' },
   { icon: null, keys: ['⇧','🐁'], label: 'Cycle Plane' },
   { icon: null, keys: ['[', ']'], label: 'Step ±' },
   { icon: null, keys: [';'], label: 'Batch-size' },
@@ -34,7 +34,9 @@ const formatControlGroup = (group) => {
     ? `<span class="group-icon" role="presentation">${escapeHtml(group.icon)}</span>`
     : '';
   const keys = (group.keys || []).map(formatKeyPill).join('');
-  const label = escapeHtml(group.label || '');
+  const label = group.label && group.label.includes('<span')
+    ? group.label
+    : escapeHtml(group.label || '');
   return `
     <div class="control-group">
       ${icon}
