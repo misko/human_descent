@@ -75,6 +75,8 @@ export default class View {
         this.dimsAndStepsChart = null;
         this.exampleImagesContainer = document.getElementById('exampleImages');
         this.confusionMatrixContainer = document.getElementById('confusionMatrixChart');
+        this.helpOverlay = null;
+        this.helpImageEl = null;
 
 
         // Grid properties
@@ -851,35 +853,76 @@ export default class View {
     }
 
     showImage(filename) {
-        // Select the image container div
         const container = document.getElementById('imageContainer');
+        if (!container) {
+            return;
+        }
 
-        // Clear any previous image from the container
-        container.innerHTML = '';
+        if (!this.helpOverlay) {
+            const overlay = document.createElement('div');
+            overlay.className = 'help-overlay';
 
-        // Create a new img element
-        const img = document.createElement('img');
-        img.src = filename; // Set the source to the provided filename
-        img.alt = 'Floating Image';
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'help-overlay__close';
+            closeBtn.setAttribute('aria-label', 'Close help screens');
+            closeBtn.innerHTML = '&times;';
+            closeBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (this.state) {
+                    if (typeof this.state.closeHelpScreens === 'function') {
+                        this.state.closeHelpScreens();
+                    } else {
+                        this.state.helpScreenIdx = -1;
+                    }
+                }
+                this.hideImage();
+            });
 
-        // Style the image
-        img.style.position = 'absolute';
-        img.style.top = '50%';
-        img.style.left = '50%';
-        img.style.transform = 'translate(-50%, -50%)'; // Center the image in the container
-        img.style.zIndex = '9999'; // Ensure it appears above everything else
-        img.style.pointerEvents = 'none'; // Allow clicks through the image
-        img.style.height = '70vh'; // Set the image height to 70% of the window height
-        img.style.width = 'auto'; // Maintain aspect ratio
+            const img = document.createElement('img');
+            img.className = 'help-overlay__image';
+            img.alt = 'Help screen';
 
-        // Append the image to the container
-        container.appendChild(img);
+            overlay.appendChild(closeBtn);
+            overlay.appendChild(img);
+            container.appendChild(overlay);
+
+            this.helpOverlay = overlay;
+            this.helpImageEl = img;
+        }
+
+        const overlay = this.helpOverlay;
+        const img = this.helpImageEl;
+        if (!overlay || !img) {
+            return;
+        }
+
+        container.classList.add('help-open');
+        overlay.classList.add('visible');
+
+        if (img.dataset.currentSrc === filename) {
+            return;
+        }
+
+        img.dataset.currentSrc = filename;
+        img.src = filename;
     }
 
     hideImage() {
         const container = document.getElementById('imageContainer');
-        if (container) {
-            container.innerHTML = ''; // Clear the container
+        if (!container) {
+            return;
+        }
+        container.classList.remove('help-open');
+
+        if (this.helpOverlay) {
+            this.helpOverlay.classList.remove('visible');
+        } else {
+            const overlay = container.querySelector('.help-overlay');
+            if (overlay) {
+                overlay.classList.remove('visible');
+            }
         }
     }
 

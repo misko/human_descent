@@ -14,6 +14,16 @@ Human Descent opens the door for you to explore neural network optimization in h
 ### Older demo
 [Demo video](https://youtu.be/mqAmaBP3-Q4)
 
+## Batch-parameterized PyTorch layers
+
+The visualizations in this project rely on a custom set of layers found in `hudes/model_first/model_first_nn.py`. These helpers wrap familiar PyTorch modules (linear, convolution, pooling, flatten, sequential) so that every forward pass accepts not just a minibatch of data, but also a *batch of parameter tensors*. Key pieces include:
+
+- `get_param_module` and `MFSequential`, which convert a standard model definition into its batch-parameterized twin.
+- `MFConv2d` and `MFLinear`, which reshape weights and biases on the fly to evaluate many parameter sets in parallel using grouped convolutions and batched einsum calls.
+- Lightweight utilities like `MFMaxPool2d` and `Unsqueeze` that preserve the extra parameter dimension without copying data.
+
+Because these modules keep the parameter batch dimension throughout the network, we can sweep across hundreds of points on the loss surface with a single forward pass. That efficiency is what makes the interactive loss-landscape exploration in the browser viable.
+
 ## Installation
 
 ```

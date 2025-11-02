@@ -1,9 +1,126 @@
+:root {
+    --header-height: 25px;
+}
+
 body {
     margin: 0;
     padding: 0;
     font-family: Arial, sans-serif;
     background-color: #000; /* Set the background color to black */
     color: #fff; /* Optional: Set the text color to white for better contrast */
+}
+
+.site-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--header-height);
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.site-logo {
+    max-height: calc(var(--header-height) - 4px);
+    width: auto;
+    display: block;
+    object-fit: contain;
+    image-rendering: auto;
+}
+
+#imageContainer {
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    width: 100%;
+    height: calc(100vh - var(--header-height));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 400;
+    overflow: hidden;
+}
+
+#imageContainer::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(18, 12, 0, 0.65), rgba(0, 0, 0, 0.85));
+    opacity: 0;
+    transition: opacity 180ms ease;
+}
+
+#imageContainer.help-open {
+    pointer-events: auto;
+}
+
+#imageContainer.help-open::before {
+    opacity: 1;
+}
+
+.help-overlay {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: min(92vw, 960px);
+    max-height: min(80vh, 720px);
+    padding: clamp(12px, 3vw, 28px);
+    border-radius: 14px;
+    background: rgba(18, 10, 0, 0.88);
+    border: 1px solid rgba(255, 190, 80, 0.45);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65);
+    opacity: 0;
+    transform: scale(0.97);
+    transition: opacity 200ms ease, transform 200ms ease;
+    pointer-events: none;
+}
+
+.help-overlay.visible {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
+.help-overlay__image {
+    max-width: min(86vw, 900px);
+    max-height: min(74vh, 620px);
+    width: auto;
+    height: auto;
+}
+
+.help-overlay__close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 210, 120, 0.6);
+    background: rgba(0, 0, 0, 0.7);
+    color: #ffd666;
+    font-size: 20px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.help-overlay__close:hover {
+    transform: scale(1.06);
+    background: rgba(255, 200, 40, 0.18);
+    border-color: rgba(255, 215, 120, 0.9);
+}
+
+.help-overlay__close:focus-visible {
+    outline: 2px solid rgba(255, 215, 120, 0.9);
+    outline-offset: 2px;
 }
 
 /* Modal overlay and glass card */
@@ -93,20 +210,20 @@ body {
 }
 #glContainer {
     position: absolute;
-    top: 0;
+    top: var(--header-height);
     left: 0;
     width: 90%; /* Set to 80% of width to make space for the side container */
-    height: 100%;
+    height: calc(100% - var(--header-height));
     z-index: 1; /* Lower index to be behind the plotly and other containers */
     pointer-events: auto; /* Allow direct interaction with the GL canvas */
 }
 
 #sideContainer {
     position: absolute;
-    top: 20vh;
+    top: calc(var(--header-height) + 20vh);
     right: 0;
     width: 17%; /* The container should take up the right 20% */
-    height: 80%; /* Full height of the viewport */
+    height: calc(80% - var(--header-height)); /* Adjust to account for header space */
     pointer-events: auto; /* Ensure the side container can be interacted with */
     z-index: 3; /* Higher index to be on top of the GL container */
     background: transparent; /* Transparent background */
@@ -119,7 +236,7 @@ body {
 
 .container {
     position: absolute;
-    top: 0;
+    top: calc(var(--header-height) + 10px);
     left: 0;
     width: 100%; /* Make sure it also matches the GL container width */
     height: 25vh; /* Set to 33% of the viewport height */

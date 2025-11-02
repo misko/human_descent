@@ -81,6 +81,10 @@ export default class ClientState {
         this.helpScreenFns = helpScreenFns;
     }
 
+    closeHelpScreens() {
+        this.helpScreenIdx = -1;
+    }
+
     nextHelpScreen() {
         this.helpScreenIdx +=1;
         if (this.helpScreenIdx ==this.helpScreenFns.length) {
