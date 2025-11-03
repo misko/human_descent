@@ -31,6 +31,26 @@ body {
     image-rendering: auto;
 }
 
+.site-source-link {
+    position: absolute;
+    left: clamp(10px, 3vw, 28px);
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #ffd666;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 140ms ease;
+}
+
+.site-source-link:hover,
+.site-source-link:focus-visible {
+    color: #ffe59c;
+    text-decoration: underline;
+}
+
 .view-toggle {
     position: absolute;
     right: clamp(12px, 4vw, 28px);

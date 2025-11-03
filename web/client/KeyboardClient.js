@@ -8,7 +8,7 @@ export default class KeyboardClient extends HudesClient {
     this.pairedKeys = [];
     this.keyToParamAndSign = {};
     this.activeRepeats = new Map();
-    this.keyRepeatIntervalMs = options.repeatIntervalMs ?? 45;
+    this.keyRepeatIntervalMs = options.repeatIntervalMs ?? 100;
     this.keyRepeatDelayMs = options.repeatDelayMs ?? 100;
     this._handleKeyUpOverride = this._handleKeyUpOverride.bind(this);
     this.initInput();
