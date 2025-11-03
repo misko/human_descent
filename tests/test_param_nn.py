@@ -3,6 +3,7 @@ import torch
 from hudes.model_data_and_subspace import param_nn_from_sequential
 from hudes.model_first.model_first_nn import MFLinear, MFSequential
 from hudes.models_and_datasets.mnist import MNISTCNN, MNISTCNNFlipped
+from hudes.models_and_datasets.mnist import MNISTFFNN, mnist_model_data_and_subpace
 
 
 def test_linear_and_relu():
@@ -139,3 +140,49 @@ def test_mnistcnn_flipped_multimodel():
     assert out[1][0].isclose(_out, atol=1e-5).all()
     assert not out[1][1].isclose(_out, atol=1e-5).all()
     assert out[1][2].isclose(_out, atol=1e-5).all()
+
+
+def test_loss_lines_matches_grid_slice():
+    torch.manual_seed(0)
+    mnist_net = MNISTFFNN()
+    mad = mnist_model_data_and_subpace(model=mnist_net, max_grids=3, max_grid_size=21)
+    mad.move_to_device()
+    mad.fuse()
+    mad.init_param_model()
+
+    base_weights = mad.saved_weights[torch.float32]
+    grid_size = 9
+    step_size = 0.05
+    batch_size = 16
+
+    grid = mad.get_loss_grid(
+        base_weights=base_weights,
+        batch_idx=0,
+        dims_offset=0,
+        grids=1,
+        grid_size=grid_size,
+        step_size=step_size,
+        batch_size=batch_size,
+        dtype=torch.float32,
+    )
+
+    lines = mad.get_loss_lines(
+        base_weights=base_weights,
+        batch_idx=0,
+        dims_offset=0,
+        lines=2,
+        grid_size=grid_size,
+        step_size=step_size,
+        batch_size=batch_size,
+        dtype=torch.float32,
+    )
+
+    center = grid_size // 2
+    expected = torch.stack(
+        [grid[0, center, :], grid[0, :, center]],
+        dim=0,
+    )
+
+    assert torch.allclose(lines, expected, atol=1e-5) or torch.allclose(
+        lines, expected.flip(0), atol=1e-5
+    )

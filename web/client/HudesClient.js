@@ -5,7 +5,7 @@ import { log } from '../utils/logger.js';
 import View from './View.js';
 
 export default class HudesClient {
-    constructor(addr, port) {
+    constructor(addr, port, options = {}) {
         // Allow ws/wss based on environment and accept absolute URL or host/port
         try {
             // Allow overriding via URL: ?host=...&port=... (useful in tests)
@@ -13,8 +13,10 @@ export default class HudesClient {
                 const params = new URLSearchParams(window.location.search);
                 const qpHost = params.get('host');
                 const qpPort = params.get('port');
+                const qpMode = params.get('mode');
                 if (qpHost) addr = qpHost;
                 if (qpPort) port = Number(qpPort);
+                if (qpMode) options.renderMode = qpMode.toLowerCase();
             }
         } catch {}
 
@@ -30,6 +32,12 @@ export default class HudesClient {
         this.requestIdx = 0;
         this.running = true;
 
+        const renderMode = (options.renderMode || '3d').toLowerCase();
+        this.debug = Boolean(options.debug);
+        this.renderMode = renderMode === '1d' ? '1d' : '3d';
+        this.meshEnabled = this.renderMode !== '1d';
+        this.lossLines = this.renderMode === '1d' ? (options.lossLines ?? 6) : 0;
+
         this.state = new ClientState(-0.05, 6);
         // Optional: allow skipping help screens via URL query, e.g., ?help=off
         try {
@@ -41,14 +49,26 @@ export default class HudesClient {
                 }
             }
         } catch {}
-    this.grids=3;
-        this.grid_size=31;
-        this.view = new View(this.grid_size,this.grids, this.state); // Add a View instance
+    this.grids = this.meshEnabled ? (options.meshGrids ?? 3) : 0;
+        this.grid_size = options.gridSize ?? 31;
+        this.rowSpacing = options.rowSpacing;
+        this.depthStep = options.depthStep;
+        this.cameraDistance = options.cameraDistance;
+        this.dimsOffset = 0;
+        this.view = new View(this.grid_size, this.grids, this.state, {
+            mode: this.renderMode,
+            lossLines: this.lossLines,
+            debug: this.debug,
+            rowSpacing: this.rowSpacing,
+            depthStep: this.depthStep,
+            cameraDistance: this.cameraDistance,
+        });
     this.view.initializeCharts(); // Initialize charts
         this.Control = null;
         this.ControlType = null;
+        this.lossLineLabels = [];
         this.keyHolds = {};
-        this.cooldownTimeMs = 200;
+        this.cooldownTimeMs = 10;
         this.keySecondsPressed = 200; // ms
         this.stepSizeMultiplier = 1;
 
@@ -251,6 +271,22 @@ export default class HudesClient {
                     // Update local countdown but do not end until server signals finish
                     this._updateSpeedRunFromMessage(message);
                     break;
+
+                case this.ControlType.values.CONTROL_LOSS_LINE_RESULTS: {
+                    if (!message.lossLineResults || !message.lossLineShape) {
+                        throw new Error("lossLineResults or lossLineShape field missing");
+                    }
+                    const lossLines = this._reshapeArray(
+                        message.lossLineResults,
+                        message.lossLineShape
+                    );
+                    const labels = this._buildLossLineLabels(lossLines.length);
+                    const stepSpacing = (this.state?.stepSize ?? 1) / 2;
+                    this.view.updateLossLines?.(lossLines, { stepSpacing, labels });
+                    this.view.annotateBottomScreen?.(this.state.toString());
+                    this._updateSpeedRunFromMessage(message);
+                    break;
+                }
 
                 // No CONTROL_FULL_LOSS handling (removed)
 
@@ -487,6 +523,13 @@ export default class HudesClient {
         const httpPort = (Number(port) + 1);
         const proto = window.location.protocol === 'https:' ? 'https' : 'http';
         return `${proto}://${host}:${httpPort}/api`;
+    }
+    _buildLossLineLabels(count) {
+        this.lossLineLabels = Array.from({ length: count }, (_, idx) => {
+            const dimNumber = this.dimsOffset + idx + 1;
+            return `dim ${dimNumber}`;
+        });
+        return this.lossLineLabels;
     }
     _reshapeArray(flatArray, shape) {
         // Helper function to recursively reshape the flattened array
@@ -864,6 +907,7 @@ export default class HudesClient {
         this.zeroDimsAndStepsOnCurrentDims();
         this.dimsAndStepsUpdated();
         this.state.dimsUsed += this.state.n;
+        this.dimsOffset += this.state.n;
 
         //console.log("Next dimensions requested and steps reset.");
     }
@@ -974,7 +1018,9 @@ export default class HudesClient {
             return;
         }
 
-        // Create config payload
+        this.dimsOffset = 0;
+        this.lossLineLabels = [];
+
         const payload = {
             type: this.ControlType.values.CONTROL_CONFIG,
             config: {
@@ -982,16 +1028,18 @@ export default class HudesClient {
                 dimsAtATime: this.state.n,
                 meshGridSize: this.grid_size,
                 meshStepSize: this.state.stepSize,
-                meshGrids: this.grids,
+                meshGrids: this.meshEnabled ? this.grids : 0,
                 batchSize: this.state.batchSize,
                 dtype: this.state.dtype,
+                meshEnabled: this.meshEnabled,
+                lossLines: this.renderMode === '1d' ? this.lossLines : 0,
             },
         };
 
         // Use sendQ to send the message
         this.sendQ(payload);
 
-        log(`[HudesClient] Config sent: grids=${this.grids} size=${this.grid_size} step=${this.state.stepSize} batch=${this.state.batchSize} dtype=${this.state.dtype}`);
+        log(`[HudesClient] Config sent: mode=${this.renderMode} grids=${this.grids} lossLines=${this.lossLines} size=${this.grid_size} step=${this.state.stepSize} batch=${this.state.batchSize} dtype=${this.state.dtype} meshEnabled=${this.meshEnabled}`);
     }
 
 

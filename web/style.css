@@ -31,6 +31,29 @@ body {
     image-rendering: auto;
 }
 
+.view-toggle {
+    position: absolute;
+    right: clamp(12px, 4vw, 28px);
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 210, 140, 0.42);
+    background: rgba(0, 0, 0, 0.68);
+    color: #ffd666;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.view-toggle:hover {
+    border-color: rgba(255, 225, 160, 0.9);
+    background: rgba(255, 200, 80, 0.2);
+    transform: translateY(-50%) scale(1.05);
+}
+
 #imageContainer {
     position: fixed;
     top: var(--header-height);

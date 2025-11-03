@@ -1,6 +1,5 @@
 import KeyboardClient from './KeyboardClient.js';
 import { log } from '../utils/logger.js';
-import View from './View.js';
 import { installMouseControls, computeStepVector } from './mouseControls.js';
 
 const DEBUG_MOUSE = false;
@@ -12,8 +11,8 @@ const debugMouse = (message) => {
 };
 
 export default class KeyboardClientGL extends KeyboardClient {
-    constructor(addr, port) {
-        super(addr, port);
+    constructor(addr, port, options = {}) {
+        super(addr, port, { ...options, renderMode: '3d' });
         this.initInput();
 
     if (this.state.helpScreenIdx != -1) {
@@ -34,6 +33,8 @@ export default class KeyboardClientGL extends KeyboardClient {
         this.stepSizeKeyboardMultiplier = 2.5;
         this.lastSelectPress = 0;
         this.keyCooldownMs = 200;
+        this.directionalKeys = new Set(['w', 's', 'a', 'd']);
+        this.angleKeys = new Set(['arrowleft', 'arrowright', 'arrowup', 'arrowdown']);
 
         this.dragSensitivity = 0.3;
         this._mouseControls = null;
@@ -168,6 +169,30 @@ export default class KeyboardClientGL extends KeyboardClient {
         };
     }
 
+    _performDirectionalStep(baseX, baseY) {
+        if (this.state.helpScreenIdx !== -1) {
+            return;
+        }
+        const { angleH } = this.view.getAngles();
+        const rotated = this._rotateVector(baseX, baseY, -angleH);
+        this.stepInSelectedGrid(rotated.x, rotated.y);
+    }
+
+    _startDirectionalRepeat(key, baseX, baseY) {
+        this._startRepeat(key, () => this._performDirectionalStep(baseX, baseY));
+    }
+
+    _performAngleAdjust(deltaH, deltaV) {
+        if (this.state.helpScreenIdx !== -1) {
+            return;
+        }
+        this.view.adjustAngles(deltaH, deltaV);
+    }
+
+    _startAngleRepeat(key, deltaH, deltaV) {
+        this._startRepeat(key, () => this._performAngleAdjust(deltaH, deltaV));
+    }
+
     processKeyPress(event) {
         const currentTime = performance.now();
         let redraw = this.processCommonKeys(event);
@@ -178,55 +203,57 @@ export default class KeyboardClientGL extends KeyboardClient {
           }
           this.view.hideImage();
 
-
         if (event.type === 'keydown') {
             const key = event.key.toLowerCase();
-            const { angleH } = this.view.getAngles(); // Get the current horizontal and vertical angles
+            if ((this.directionalKeys.has(key) || this.angleKeys.has(key)) && event.repeat) {
+                event.preventDefault?.();
+                return true;
+            }
 
 
             switch (event.code) {
                 case 'KeyW': {
-                    // Rotate vector (0, -1) by angleH
-                    const rotated = this._rotateVector( -1,0, -angleH);
-                    this.stepInSelectedGrid(rotated.x, rotated.y);
+                    this._performDirectionalStep(-1, 0);
+                    this._startDirectionalRepeat(key, -1, 0);
                     redraw = true;
                     break;
                 }
                 case 'KeyS': {
-                    // Rotate vector (0, 1) by angleH
-                    const rotated = this._rotateVector(1,0, -angleH);
-                    this.stepInSelectedGrid(rotated.x, rotated.y);
+                    this._performDirectionalStep(1, 0);
+                    this._startDirectionalRepeat(key, 1, 0);
                     redraw = true;
                     break;
                 }
                 case 'KeyA': {
-                    // Rotate vector (-1, 0) by angleH
-                    const rotated = this._rotateVector(0,-1, -angleH);
-                    this.stepInSelectedGrid(rotated.x, rotated.y);
+                    this._performDirectionalStep(0, -1);
+                    this._startDirectionalRepeat(key, 0, -1);
                     redraw = true;
                     break;
                 }
                 case 'KeyD': {
-                    // Rotate vector (1, 0) by angleH
-                    const rotated = this._rotateVector(0,1,-angleH);
-                    this.stepInSelectedGrid(rotated.x, rotated.y);
+                    this._performDirectionalStep(0, 1);
+                    this._startDirectionalRepeat(key, 0, 1);
                     redraw = true;
                     break;
                 }
                 case 'ArrowLeft':
-                    this.view.adjustAngles(-5, 0);
+                    this._performAngleAdjust(-5, 0);
+                    this._startAngleRepeat(key, -5, 0);
                     redraw = true;
                     break;
                 case 'ArrowRight':
-                    this.view.adjustAngles(5, 0);
+                    this._performAngleAdjust(5, 0);
+                    this._startAngleRepeat(key, 5, 0);
                     redraw = true;
                     break;
                 case 'ArrowUp':
-                    this.view.adjustAngles(0, 2.5);
+                    this._performAngleAdjust(0, 2.5);
+                    this._startAngleRepeat(key, 0, 2.5);
                     redraw = true;
                     break;
                 case 'ArrowDown':
-                    this.view.adjustAngles(0, -2.5);
+                    this._performAngleAdjust(0, -2.5);
+                    this._startAngleRepeat(key, 0, -2.5);
                     redraw = true;
                     break;
                 case 'ShiftRight':

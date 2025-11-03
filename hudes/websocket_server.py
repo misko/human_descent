@@ -147,7 +147,7 @@ def listen_and_run(
 
             res = {}
             logging.debug(f"listen_and_run: got {mode}")
-            if mode in ("train", "mesh"):
+            if mode in ("train", "mesh", "loss_line"):
                 # reset per-client weights if requested (speed run start)
                 if client.force_reset_weights:
                     if client.client_id in client_weights:
@@ -190,6 +190,20 @@ def listen_and_run(
                     batch_size=min(client.batch_size, mad.max_batch_size),
                     dtype=client.dtype,
                 )
+            if mode == "loss_line":
+                res["loss_line"] = mad.get_loss_lines(
+                    base_weights=client_weights[client.client_id].to(client.dtype),
+                    grid_size=min(client.mesh_grid_size, mad.max_grid_size),
+                    step_size=client.mesh_step_size / 2,
+                    lines=min(
+                        client.loss_lines,
+                        client.dims_at_a_time or client.loss_lines,
+                    ),
+                    dims_offset=client.dims_offset,
+                    batch_idx=client.batch_idx,
+                    batch_size=min(client.batch_size, mad.max_batch_size),
+                    dtype=client.dtype,
+                )
             if mode == "sgd":
                 res["train"], model_weights = mad.sgd_step(
                     client_weights[client.client_id].to(client.dtype),
@@ -202,7 +216,7 @@ def listen_and_run(
                     client_weights[client.client_id].data.copy_(
                         model_weights.to(torch.float32)
                     )
-            if mode not in ("train", "mesh", "val", "sgd"):
+            if mode not in ("train", "mesh", "loss_line", "val", "sgd"):
                 raise ValueError
 
             logging.debug(f"listen_and_run: return {mode}")
@@ -225,6 +239,8 @@ class Client:
     mesh_grid_size: int = -1
     mesh_grids: int = 0
     mesh_step_size: float = 0.0
+    mesh_enabled: bool = True
+    loss_lines: int = 0
     force_update: bool = False
     dims_offset: int = 0
     dims_at_a_time: int = 0
@@ -314,7 +330,9 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                 client.sgd = 0
 
                 # if we have grids, step size changes mesh
-                if client.mesh_grids > 0:
+                if (
+                    client.mesh_enabled and client.mesh_grids > 0
+                ) or client.loss_lines > 0:
                     client.force_update = True
 
             if client.force_update or (
@@ -323,32 +341,26 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                 client.current_step = client.next_step
                 client.next_step = {}
 
-                if client.mesh_grids > 0:
+                next_mode = "train"
+                if client.mesh_enabled and client.mesh_grids > 0:
+                    next_mode = "mesh"
+                elif client.loss_lines > 0:
+                    next_mode = "loss_line"
+
+                logging.debug(
+                    "inference_runner_clients: req %s %s",
+                    next_mode,
+                    client.force_update,
+                )
+                client.active_inference += 1
+                inference_q.put((next_mode, copy.copy(client)))
+                if client.force_reset_weights:
                     logging.debug(
-                        "inference_runner_clients: req mesh %s",
-                        client.force_update,
+                        "inference_runner_clients: clear reset flag "
+                        "after scheduling %s",
+                        next_mode,
                     )
-                    client.active_inference += 1
-                    inference_q.put(("mesh", copy.copy(client)))
-                    if client.force_reset_weights:
-                        logging.debug(
-                            "inference_runner_clients: clear reset flag "
-                            "after scheduling mesh"
-                        )
-                        client.force_reset_weights = False
-                else:
-                    logging.debug(
-                        "inference_runner_clients: req train %s",
-                        client.force_update,
-                    )
-                    client.active_inference += 1
-                    inference_q.put(("train", copy.copy(client)))
-                    if client.force_reset_weights:
-                        logging.debug(
-                            "inference_runner_clients: clear reset flag "
-                            "after scheduling train"
-                        )
-                        client.force_reset_weights = False
+                    client.force_reset_weights = False
                 client.force_update = False
 
             if client.request_full_val:
@@ -388,7 +400,7 @@ async def inference_result_sender(results_q, stop):
         client.active_inference -= 1  # allow next thing to run
         # asyncio.sleep(0.00001)
         try:
-            if train_or_val in ("train", "mesh", "sgd"):
+            if train_or_val in ("train", "mesh", "loss_line", "sgd"):
                 # TODO need to be ok with getting errors here
                 logging.debug("inference_result_sender: sent train to client")
                 msg = hudes_pb2.Control(
@@ -464,7 +476,21 @@ async def inference_result_sender(results_q, stop):
                     ).SerializeToString()
                 )
                 logging.debug("inference_result_sender: sent mesh to client : done")
-            if train_or_val not in ("train", "val", "mesh", "sgd"):
+            if train_or_val == "loss_line":
+                logging.debug("inference_result_sender: sent loss line to client")
+                loss_tensor = res["loss_line"]
+                await client.websocket.send(
+                    hudes_pb2.Control(
+                        type=hudes_pb2.Control.CONTROL_LOSS_LINE_RESULTS,
+                        loss_line_results=loss_tensor.flatten().tolist(),
+                        loss_line_shape=list(loss_tensor.shape),
+                        **_countdown_kwargs(client),
+                    ).SerializeToString()
+                )
+                logging.debug(
+                    "inference_result_sender: sent loss line to client : done"
+                )
+            if train_or_val not in ("train", "val", "mesh", "loss_line", "sgd"):
                 raise ValueError
         except (
             websockets.exceptions.ConnectionClosedOK,
@@ -591,6 +617,9 @@ async def process_client(websocket, client_runner_q):
             logging.debug(f"process_client: {client_idx} : control config")
             old_batch_size = client.batch_size
             old_dtype = client.dtype
+            old_mesh_enabled = client.mesh_enabled
+            old_mesh_grids = client.mesh_grids
+            old_loss_lines = client.loss_lines
 
             client.dims_at_a_time = msg.config.dims_at_a_time
             client.seed = msg.config.seed
@@ -599,11 +628,18 @@ async def process_client(websocket, client_runner_q):
             client.mesh_step_size = msg.config.mesh_step_size
             client.batch_size = msg.config.batch_size
             client.dtype = getattr(torch, msg.config.dtype)
+            client.mesh_enabled = msg.config.mesh_enabled
+            client.loss_lines = msg.config.loss_lines
 
             if (
-                client.mesh_grids > 0
+                client.mesh_enabled
+                and client.mesh_grids > 0
+                or client.loss_lines > 0
                 or old_batch_size != client.batch_size
                 or old_dtype != client.dtype
+                or old_mesh_enabled != client.mesh_enabled
+                or old_mesh_grids != client.mesh_grids
+                or old_loss_lines != client.loss_lines
             ):  # if we have grids, step size changes mesh
                 client.force_update = True
 

@@ -15,6 +15,8 @@ message Config {
   required int32 mesh_grids = 5;
   required int32 batch_size = 6;
   required string dtype = 7;
+  optional bool mesh_enabled = 8 [default = true];
+  optional int32 loss_lines = 9;
 }
 
 message TrainLossAndPreds {
@@ -60,6 +62,7 @@ message Control {
     CONTROL_CONFIG = 103;
     CONTROL_MESHGRID_RESULTS= 104;
     CONTROL_SGD_STEP = 105;
+    CONTROL_LOSS_LINE_RESULTS = 108;
     CONTROL_QUIT = 901;
   }
   required Type type = 1;
@@ -94,5 +97,7 @@ message Control {
     optional int32 request_idx = 4;
   }
   optional HighScore high_score = 211; // used with CONTROL_HIGH_SCORE_LOG
+  repeated float loss_line_results = 216;
+  repeated int32 loss_line_shape = 217;
 
 }

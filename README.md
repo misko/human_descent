@@ -14,6 +14,11 @@ Human Descent opens the door for you to explore neural network optimization in h
 ### Older demo
 [Demo video](https://youtu.be/mqAmaBP3-Q4)
 
+## Game modes
+
+- **3D landscape (default):** renders three coupled loss surfaces that update in real time while you explore six random directions.
+- **1D slices (experimental):** renders six fast-updating loss curves, one per dimension. Launch with `?mode=1d` (e.g. `http://localhost:5173/?mode=1d`) or use the View toggle in the header to switch between modes.
+
 ## Batch-parameterized PyTorch layers
 
 The visualizations in this project rely on a custom set of layers found in `hudes/model_first/model_first_nn.py`. These helpers wrap familiar PyTorch modules (linear, convolution, pooling, flatten, sequential) so that every forward pass accepts not just a minibatch of data, but also a *batch of parameter tensors*. Key pieces include:

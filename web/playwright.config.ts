@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:6173',
     trace: 'on-first-retry',
   },
   // Start both the Vite dev server (frontend) and the Python WebSocket backend
@@ -14,7 +14,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'npm run dev',
-      url: 'http://localhost:5173',
+      url: 'http://localhost:6173',
       reuseExistingServer: true,
       timeout: 60_000,
     },
