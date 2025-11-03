@@ -3,10 +3,11 @@ import { test, expect } from '@playwright/test';
 
 const SERVER_HOST = process.env.HUDES_HOST || 'localhost';
 const SERVER_PORT = Number(process.env.HUDES_PORT || '10001');
+const APP_ORIGIN = process.env.HUDES_APP_ORIGIN || 'http://localhost:6173';
 
 test.describe('Leaderboard over WebSocket', () => {
   test('press Y shows top 100 modal', async ({ page }) => {
-    await page.goto(`http://localhost:5173/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
+    await page.goto(`${APP_ORIGIN}/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
     await page.waitForFunction(() => window.__hudesClient && window.__hudesClient.ControlType);
 
     // Press Y to request leaderboard

@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 const SERVER_HOST = process.env.HUDES_HOST || 'localhost';
 const SERVER_PORT = Number(process.env.HUDES_PORT || '10001');
 const SPEED_SECONDS = Number(process.env.HUDES_SPEED_RUN_SECONDS || '5');
+const APP_ORIGIN = process.env.HUDES_APP_ORIGIN || 'http://localhost:6173';
 
 function makeName() {
   // Generate a unique 4-char uppercase A-Z0-9 name
@@ -21,7 +22,7 @@ test.describe('Highscores API insertion', () => {
     const apiBase = `${apiProto}://${apiHost}:${apiPort}/api`;
 
     // Load app and start a speed run
-    await page.goto(`http://localhost:5173/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
+    await page.goto(`${APP_ORIGIN}/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
     await page.waitForFunction(() => window.__hudesClient && window.__hudesClient.ControlType);
     await page.keyboard.press('KeyR');
 

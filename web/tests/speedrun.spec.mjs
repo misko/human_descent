@@ -4,11 +4,12 @@ import { test, expect } from '@playwright/test';
 const SERVER_HOST = process.env.HUDES_HOST || 'localhost';
 const SERVER_PORT = Number(process.env.HUDES_PORT || '10001');
 const SPEED_SECONDS = Number(process.env.HUDES_SPEED_RUN_SECONDS || '5');
+const APP_ORIGIN = process.env.HUDES_APP_ORIGIN || 'http://localhost:6173';
 
 test.describe('Speed Run flow', () => {
   test('starts, counts down, and UI stays responsive', async ({ page }) => {
     // Serve the app via Vite preview or static; here we load index.html directly
-    await page.goto(`http://localhost:5173/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
+    await page.goto(`${APP_ORIGIN}/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
 
     // Wait for the client to be ready and WebSocket connected
     await page.waitForFunction(() => window.__hudesClient && window.__hudesClient.ControlType);
