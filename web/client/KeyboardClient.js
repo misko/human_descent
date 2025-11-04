@@ -49,15 +49,17 @@ export default class KeyboardClient extends HudesClient {
     this.setN(this.pairedKeys.length);
 
     // Map paired keys to actions
+    const firstKeySign = 1;
+
     this.pairedKeys.forEach(([upKey, downKey], index) => {
       this.addKeyToWatch(upKey);
       this.addKeyToWatch(downKey);
 
-      this.keyToParamAndSign[upKey] = { dim: index, sign: 1 };
-      this.keyToParamAndSign[downKey] = { dim: index, sign: -1 };
+      this.keyToParamAndSign[upKey] = { dim: index, sign: firstKeySign };
+      this.keyToParamAndSign[downKey] = { dim: index, sign: -firstKeySign };
     });
 
-    this.state.setBatchSize(256);
+    this.state.setBatchSize(this.renderMode === '1d' ? 512 : 256);
     this.state.setDtype('float16');
 
     this.state.setHelpScreenFns([
@@ -103,6 +105,10 @@ GOOD LUCK!
     const keyLower = event.key?.toLowerCase?.();
     const mapping = keyLower ? this.keyToParamAndSign[keyLower] : undefined;
     const isHelpActive = this.state.helpScreenIdx !== -1;
+
+    if (event.metaKey || event.ctrlKey) {
+      return this.processCommonKeys(event);
+    }
 
     if (mapping && !isHelpActive) {
       if (event.type === 'keydown') {

@@ -37,6 +37,8 @@ export default class HudesClient {
         this.renderMode = renderMode === '1d' ? '1d' : '3d';
         this.meshEnabled = this.renderMode !== '1d';
         this.lossLines = this.renderMode === '1d' ? (options.lossLines ?? 6) : 0;
+        this.alt1d = this.renderMode === '1d' && Boolean(options.alt1d);
+        this.altKeys = Boolean(options.altKeys);
 
         this.state = new ClientState(-0.05, 6);
         // Optional: allow skipping help screens via URL query, e.g., ?help=off
@@ -62,6 +64,8 @@ export default class HudesClient {
             rowSpacing: this.rowSpacing,
             depthStep: this.depthStep,
             cameraDistance: this.cameraDistance,
+            alt1d: this.alt1d,
+            altKeys: this.altKeys,
         });
     this.view.initializeCharts(); // Initialize charts
         this.Control = null;
@@ -71,6 +75,7 @@ export default class HudesClient {
         this.cooldownTimeMs = 10;
         this.keySecondsPressed = 200; // ms
         this.stepSizeMultiplier = 1;
+        this._textCaptureActive = false;
 
     // Speed run state (frontend)
     this.speedRunActive = false;
@@ -319,6 +324,11 @@ export default class HudesClient {
                 message,
                 'speedRunFinished',
             );
+            log(
+                `[HudesClient] speed-run update: finishFlag=${hasFinished ? message.speedRunFinished : 'n/a'} ` +
+                    `srs=${Object.prototype.hasOwnProperty.call(message, 'speedRunSecondsRemaining') ? message.speedRunSecondsRemaining : 'n/a'} ` +
+                    `reqIdx=${message.requestIdx ?? 'n/a'}`,
+            );
             if (hasFinished && message.speedRunFinished) {
                 // Authoritative end-of-run signal from server
                 if (this._srsInterval) { try { clearInterval(this._srsInterval); } catch {} this._srsInterval = null; }
@@ -330,8 +340,10 @@ export default class HudesClient {
                 // Capture achieved final val loss if present
                 if (message.valLoss && typeof message.valLoss.valLoss === 'number') {
                     this._lastFinalValLoss = message.valLoss.valLoss;
+                    log(`[HudesClient] final val loss recorded: ${this._lastFinalValLoss}`);
                 }
                 if (!this.highScoreSubmitted) {
+                    log('[HudesClient] prompting for high score submission');
                     this._promptAndSubmitHighScore(this._lastFinalValLoss);
                 }
                 return;
@@ -349,6 +361,7 @@ export default class HudesClient {
                 this.speedRunActive = true;
                 this.state.speedRunActive = true;
                 if (!this._srsInterval) {
+                    log(`[HudesClient] starting local speed-run countdown at ${srs}s`);
                     this._srsEndAt = Date.now() + srs * 1000;
                     this.speedRunSecondsRemaining = srs;
                     this.state.speedRunSecondsRemaining = srs;
@@ -363,6 +376,7 @@ export default class HudesClient {
                             this.speedRunSecondsRemaining = remainFrac;
                             this.state.speedRunSecondsRemaining = remainFrac;
                             try { this.view?.annotateBottomScreen?.(this.state.toString()); } catch {}
+                            log(`[HudesClient] speed-run countdown tick: ${remainFrac.toFixed?.(1) ?? remainFrac}s remaining`);
                         }
                         if (remain === 0) {
                             // Stop ticking locally, but keep run active until
@@ -373,6 +387,7 @@ export default class HudesClient {
                             this.speedRunSecondsRemaining = 0;
                             this.state.speedRunSecondsRemaining = 0;
                             try { this.view?.annotateBottomScreen?.(this.state.toString()); } catch {}
+                            log('[HudesClient] local countdown reached zero waiting for server finish');
                         }
                     }, 300);
                 }
@@ -388,6 +403,7 @@ export default class HudesClient {
         } catch {}
     }
     _promptAndSubmitHighScore(finalValLoss) {
+        log('[HudesClient] _promptAndSubmitHighScore invoked');
         if (this.highScoreSubmitted) return;
         try {
             this._showNameModal(finalValLoss);
@@ -415,6 +431,7 @@ export default class HudesClient {
     }
 
     _showNameModal(finalValLoss) {
+        this._setTextCaptureActive(true);
         const overlay = this._createOverlay();
         overlay.innerHTML = '';
 
@@ -461,9 +478,11 @@ export default class HudesClient {
 
         const input = form.querySelector('#nameInput');
         if (input) { input.focus(); }
+        log('[HudesClient] name entry modal shown');
     }
 
     _showLeaderboardModal(top10, me) {
+        this._setTextCaptureActive(false);
         const overlay = this._createOverlay();
         overlay.innerHTML = '';
         const card = document.createElement('div');
@@ -492,6 +511,7 @@ export default class HudesClient {
         closeBtn.textContent = 'Close';
         closeBtn.addEventListener('click', () => {
             overlay.classList.remove('open');
+            this._setTextCaptureActive(false);
         });
         const viewBtn = document.createElement('button');
         viewBtn.textContent = 'View Top 10';
@@ -578,6 +598,26 @@ export default class HudesClient {
         window.addEventListener("keyup", this._handleKeyUp);
     }
 
+    _setTextCaptureActive(active) {
+        this._textCaptureActive = Boolean(active);
+    }
+
+    _shouldIgnoreKeyEvent(event) {
+        if (this._textCaptureActive) {
+            return true;
+        }
+        const target = event?.target;
+        if (target && target instanceof HTMLElement) {
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                return true;
+            }
+            if (target.isContentEditable) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 
     // Utility to track key press timing
     updateKeyHolds(currentlyPressedKeys) {
@@ -627,6 +667,9 @@ export default class HudesClient {
         this.zeroDimsAndStepsOnCurrentDims();
     }
     _handleKeyDown(event) {
+        if (this._shouldIgnoreKeyEvent(event)) {
+            return;
+        }
         const currentTime = performance.now();
         if (!this.keyHolds[event.code]) {
             this.keyHolds[event.code] = { firstPress: currentTime, lastExec: 0 };
@@ -637,6 +680,9 @@ export default class HudesClient {
     }
 
     _handleKeyUp(event) {
+        if (this._shouldIgnoreKeyEvent(event)) {
+            return;
+        }
         if (this.keyHolds[event.code]) {
             this.keyHolds[event.code].firstPress = -1;
         }
@@ -655,6 +701,9 @@ export default class HudesClient {
     }
 
     processCommonKeys(event) {
+        if (event.metaKey || event.ctrlKey) {
+            return;
+        }
         const currentTime = Date.now();
 
         // Check cooldown
@@ -665,9 +714,9 @@ export default class HudesClient {
 
         if (event.type === "keydown") {
             switch (event.code) {
-                case "KeyR":
+                case "KeyZ":
                     // Start a speed run
-                    log('[HudesClient] KeyR pressed: starting speed run');
+                    log('[HudesClient] KeyZ pressed: starting speed run');
                     this.startSpeedRun();
                     break;
                 case "KeyY":

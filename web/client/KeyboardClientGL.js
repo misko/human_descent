@@ -194,6 +194,9 @@ export default class KeyboardClientGL extends KeyboardClient {
     }
 
     processKeyPress(event) {
+        if (event.metaKey || event.ctrlKey) {
+            return this.processCommonKeys(event);
+        }
         const currentTime = performance.now();
         let redraw = this.processCommonKeys(event);
 

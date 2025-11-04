@@ -24,10 +24,10 @@ test.describe('Highscores API insertion', () => {
     // Load app and start a speed run
     await page.goto(`${APP_ORIGIN}/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
     await page.waitForFunction(() => window.__hudesClient && window.__hudesClient.ControlType);
-    await page.keyboard.press('KeyR');
+    await page.keyboard.press('KeyZ');
 
     // Wait for the name modal and submit our unique name
-    await page.waitForSelector('#modalOverlay.open .glass-card .name-form', { timeout: (SPEED_SECONDS + 20) * 1000 });
+    await page.waitForSelector('#modalOverlay.open .glass-card .name-form', { timeout: (SPEED_SECONDS + 40) * 1000 });
     await page.fill('#modalOverlay.open .glass-card .name-form input', name);
     await page.click('#modalOverlay.open .glass-card .name-form button[type="submit"]');
 

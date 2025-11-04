@@ -293,6 +293,11 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
 
             # client still waiting for response just skip
             if client.active_inference > 0:
+                logging.debug(
+                    "inference_runner_clients: skip client %s active_inference=%s",
+                    client.client_id,
+                    client.active_inference,
+                )
                 continue
 
             client.active_request_idx = client.request_idx
@@ -365,7 +370,10 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
 
             if client.request_full_val:
                 # send weight vector for inference
-                logging.debug("inference_runner_clients: req inference")
+                logging.debug(
+                    "inference_runner_clients: req inference for client %s",
+                    client.client_id,
+                )
                 client.active_inference += 1
                 inference_q.put(("val", copy.copy(client)))
                 if client.force_reset_weights:
@@ -375,6 +383,10 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
                     )
                     client.force_reset_weights = False
                 client.request_full_val = False
+                logging.debug(
+                    "inference_runner_clients: client %s request_full_val cleared",
+                    client.client_id,
+                )
 
             # Note: Do not schedule periodic mesh updates here. Mesh requests
             # are driven by user interactions (force_update/next_step) and
@@ -438,6 +450,12 @@ async def inference_result_sender(results_q, stop):
                     if remaining <= 0:
                         client.speed_run_active = False
                         speed_finished = True
+                if speed_finished:
+                    logging.info(
+                        "Speed run finished for client %s; sending VAL loss %.6f",
+                        client.client_id,
+                        res["val"]["val_loss"],
+                    )
                 await client.websocket.send(
                     hudes_pb2.Control(
                         type=hudes_pb2.Control.CONTROL_VAL_LOSS,
@@ -508,20 +526,43 @@ async def wait_for_stop(inference_q, results_q, stop, client_runner_q):
 
 
 def _schedule_speedrun_timeout(client_id: int, duration_sec: int, client_runner_q):
+    logging.debug(
+        "Scheduling speed run timeout for client %s in %s seconds",
+        client_id,
+        duration_sec,
+    )
+
     async def _timeout_then_eval():
         try:
             await asyncio.sleep(max(0, duration_sec))
+            logging.debug("Speed run timeout fired for client %s", client_id)
             # Verify client still exists and the run sequence matches
             client = active_clients.get(client_id)
             if client is None:
+                logging.debug("Speed run timeout: client %s missing", client_id)
                 return
             # If a newer speed run started, ignore this timeout
             if time.time() < client.speed_run_end_time:
+                logging.debug(
+                    "Speed run timeout: client %s has newer run (end_time %.3f > now)",
+                    client_id,
+                    client.speed_run_end_time,
+                )
                 return
             # Request a normal validation at run end; client will use it
             # as the final score
             client.request_full_val = True
+            logging.debug(
+                "Speed run timeout: client=%s set request_full_val=True (active=%s, end_time=%.3f)",
+                client_id,
+                getattr(client, "speed_run_active", None),
+                getattr(client, "speed_run_end_time", 0.0),
+            )
             client_runner_q.put(True)
+            logging.debug(
+                "Speed run timeout enqueued final validation for client %s",
+                client_id,
+            )
         except Exception as e:
             logging.error("Speed Run timeout scheduling error: %s", e)
 
@@ -530,6 +571,9 @@ def _schedule_speedrun_timeout(client_id: int, duration_sec: int, client_runner_
     if old_task and not old_task.done():
         try:
             old_task.cancel()
+            logging.debug(
+                "Cancelled previous speed run timeout task for client %s", client_id
+            )
         except Exception:
             pass
     task = asyncio.create_task(_timeout_then_eval())
@@ -686,6 +730,12 @@ async def process_client(websocket, client_runner_q):
                 "Client %d Speed Run started for %d seconds",
                 client.client_id,
                 duration,
+            )
+            logging.debug(
+                "Speed run state: client=%s active=%s end_time=%.3f",
+                client.client_id,
+                client.speed_run_active,
+                client.speed_run_end_time,
             )
             # Schedule a final evaluation once the timer elapses for this
             # run sequence

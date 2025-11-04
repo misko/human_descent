@@ -6,7 +6,9 @@ const APP_ORIGIN = process.env.HUDES_APP_ORIGIN || 'http://localhost:6173';
 
 test.describe('1D plot scaling', () => {
   test('loss lines stay within frame at large step size', async ({ page }) => {
-    await page.goto(`${APP_ORIGIN}/?mode=1d&host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
+    await page.goto(
+      `${APP_ORIGIN}/?mode=1d&host=${SERVER_HOST}&port=${SERVER_PORT}&help=off&debug=1`,
+    );
 
     await page.waitForFunction(
       () => window.__hudesClient && window.__hudesClient.ControlType,

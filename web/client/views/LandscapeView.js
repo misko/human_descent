@@ -78,6 +78,8 @@ export default class LandscapeView {
         this.numGrids = numGrids;
         this.effectiveGrids = numGrids;
         this.debug = Boolean(options.debug);
+        this.alt1dMode = this.mode === '1d' && Boolean(options.alt1d);
+        this.altKeysMode = Boolean(options.altKeys);
 
         this.state=clientState;
         this.lossChart = null;
@@ -101,6 +103,13 @@ export default class LandscapeView {
         this.lineScaleCache = [];
         this.lineBaseColors = [];
         this.frameGlowState = [];
+        this.alt1dContainers = [];
+        this.alt1dFrames = [];
+        this.alt1dCenterLines = [];
+        this.alt1dHorizontalLines = [];
+        this.alt1dGlowStates = [];
+        this.alt1dFrameBaseColors = [];
+        this.alt1dLineToContainer = [];
         this.outlineSelection = new Set();
         this.glowDuration = 150;
         this.glowExpand = 0.05;
@@ -136,6 +145,9 @@ export default class LandscapeView {
             this.camera_distance = (totalWidth / 2) / Math.tan(fovRadians / 2);
             if (this.customCameraDistance != null) {
                 this.camera_distance = this.customCameraDistance;
+            }
+            if (this.alt1dMode) {
+                this.camera_distance *= 1.25;
             }
 
             this.raycaster = new Raycaster();
@@ -198,20 +210,481 @@ export default class LandscapeView {
             this.render();
             window.addEventListener('resize', this.onWindowResize.bind(this), false);
         }
-
-
     }
+
+    _updateAlt1dLossLines(lines, { stepSpacing, labels } = {}) {
+        if (!this.alt1dMode || !this.scene || !Array.isArray(lines) || !lines.length) {
+            return;
+        }
+        if (!this.lineGroup) {
+            this.lineGroup = new Group();
+            this.scene.add(this.lineGroup);
+        }
+
+        const count = lines.length;
+        const linesPerPlot = 3;
+        const containerCount = Math.max(1, Math.ceil(count / linesPerPlot));
+        this.effectiveGrids = containerCount;
+        const scaleFactor = 2;
+        const cellWidth = this.gridSize * 0.9 * scaleFactor;
+        const cellHeight = this.gridSize * 0.6 * scaleFactor;
+        const halfWidth = cellWidth / 2;
+        const halfHeight = cellHeight / 2;
+        const gapX = 1;
+
+        for (let idx = 0; idx < containerCount; idx += 1) {
+            this._ensureAlt1dScaffold(idx, {
+                cellWidth,
+                cellHeight,
+                halfWidth,
+                halfHeight,
+            });
+        }
+
+        while (this.alt1dContainers.length > containerCount) {
+            const container = this.alt1dContainers.pop();
+            const frame = this.alt1dFrames.pop();
+            const centerLine = this.alt1dCenterLines.pop();
+            const horizontalLine = this.alt1dHorizontalLines.pop();
+            this.alt1dFrameBaseColors.pop();
+            if (frame) {
+                this.outlineSelection.delete(frame);
+                frame.geometry?.dispose?.();
+                frame.material?.dispose?.();
+            }
+            centerLine?.geometry?.dispose?.();
+            centerLine?.material?.dispose?.();
+            horizontalLine?.geometry?.dispose?.();
+            horizontalLine?.material?.dispose?.();
+            if (container) {
+                container.children.slice().forEach((child) => {
+                    if (child instanceof Line || child instanceof LineSegments) {
+                        if (child !== frame && child !== centerLine && child !== horizontalLine) {
+                            container.remove(child);
+                        }
+                    }
+                });
+                this.lineGroup.remove(container);
+            }
+        }
+
+        for (let idx = 0; idx < this.alt1dContainers.length; idx += 1) {
+            const container = this.alt1dContainers[idx];
+            if (container) {
+                const offset = (idx - (this.alt1dContainers.length - 1) / 2) * (cellWidth + gapX);
+                container.position.set(offset, 0, 0);
+            }
+        }
+
+        while (this.lineObjects.length > count) {
+            const line = this.lineObjects.pop();
+            this.lineScaleCache.pop();
+            this.lineBaseColors.pop();
+            this.alt1dGlowStates.pop();
+            this.alt1dLineToContainer.pop();
+            if (line) {
+                line.parent?.remove(line);
+                line.geometry?.dispose?.();
+                line.material?.dispose?.();
+            }
+        }
+
+        while (this.lineObjects.length < count) {
+            const material = new LineBasicMaterial({
+                color: 0xffffff,
+                linewidth: 2.5,
+                transparent: true,
+                opacity: 1,
+            });
+            material.depthTest = false;
+            material.depthWrite = false;
+            const geometry = new BufferGeometry();
+            const line = new Line(geometry, material);
+            line.renderOrder = 2;
+            this.lineObjects.push(line);
+            this.lineScaleCache.push(0);
+            this.lineBaseColors.push(new Color(1, 1, 1));
+            this.alt1dGlowStates.push(null);
+            this.alt1dLineToContainer.push(0);
+        }
+
+        this.lineScaleCache.length = count;
+        this.lineBaseColors.length = count;
+        this.alt1dGlowStates.length = count;
+        this.alt1dLineToContainer.length = count;
+
+        const eps = 1e-6;
+        const lerpAlpha = 0.35;
+
+        for (let i = 0; i < count; i += 1) {
+            const data = lines[i];
+            const line = this.lineObjects[i];
+            if (!Array.isArray(data) || !line) {
+                continue;
+            }
+            if (this.alt1dGlowStates[i] === undefined) {
+                this.alt1dGlowStates[i] = null;
+            }
+
+            const containerIdx = Math.min(
+                this.alt1dContainers.length - 1,
+                Math.floor(i / linesPerPlot),
+            );
+            const container = this.alt1dContainers[containerIdx];
+            if (!container) {
+                continue;
+            }
+            if (line.parent !== container) {
+                line.parent?.remove(line);
+                container.add(line);
+            }
+            this.alt1dLineToContainer[i] = containerIdx;
+
+            const length = data.length;
+            if (!length) {
+                continue;
+            }
+
+            const mid = (length - 1) / 2;
+            const baseline = data[Math.max(0, Math.floor(mid))];
+            let maxAbs = 1e-6;
+            for (let j = 0; j < length; j += 1) {
+                maxAbs = Math.max(maxAbs, Math.abs(data[j] - baseline));
+            }
+
+            const scaleX = length > 1 ? cellWidth / (length - 1) : cellWidth;
+            let scaleY = 0;
+            if (maxAbs > eps) {
+                const targetScale = halfHeight / maxAbs;
+                const previous = this.lineScaleCache[i] ?? targetScale;
+                const lerped = MathUtils.lerp(previous, targetScale, lerpAlpha);
+                scaleY = Math.min(lerped, targetScale);
+                this.lineScaleCache[i] = scaleY;
+            } else {
+                this.lineScaleCache[i] = 0;
+            }
+
+            let geometry = line.geometry;
+            if (!(geometry instanceof BufferGeometry)) {
+                geometry = new BufferGeometry();
+                line.geometry = geometry;
+            }
+
+            let positionAttr = geometry.getAttribute('position');
+            if (!positionAttr || positionAttr.array.length !== length * 3) {
+                const positions = new Float32Array(length * 3);
+                positionAttr = new BufferAttribute(positions, 3);
+                geometry.setAttribute('position', positionAttr);
+            }
+
+            const positions = positionAttr.array;
+            for (let j = 0; j < length; j += 1) {
+                const idx = j * 3;
+                positions[idx] = (j - mid) * scaleX;
+                positions[idx + 1] = scaleY > 0 ? (data[j] - baseline) * scaleY : 0;
+                positions[idx + 2] = 0;
+            }
+
+            positionAttr.needsUpdate = true;
+            geometry.computeBoundingSphere();
+            geometry.setDrawRange(0, length);
+
+            const color = this.gridColors[i % this.gridColors.length];
+            const baseColor = color.clone();
+            this.lineBaseColors[i] = baseColor;
+            line.material.color.copy(color);
+            line.material.linewidth = 2.5;
+            line.material.opacity = 1;
+            line.material.needsUpdate = true;
+            line.material.depthTest = false;
+            line.material.depthWrite = false;
+        }
+
+        this.frameGlowState = [];
+        this.lineFrames = [];
+        this.centerLines = [];
+        this.horizontalLines = [];
+        this.lineContainers = [...this.alt1dContainers];
+    }
+
+    _ensureAlt1dScaffold(index, dims) {
+        const { cellWidth, cellHeight, halfWidth, halfHeight } = dims;
+        while (this.alt1dContainers.length <= index) {
+            this.alt1dContainers.push(null);
+            this.alt1dFrames.push(null);
+            this.alt1dCenterLines.push(null);
+            this.alt1dHorizontalLines.push(null);
+            this.alt1dFrameBaseColors.push(null);
+        }
+
+        let container = this.alt1dContainers[index];
+        if (!container) {
+            container = new Group();
+            container.position.set(0, 0, 0);
+            this.lineGroup.add(container);
+            this.alt1dContainers[index] = container;
+
+            const frameMaterial = new LineBasicMaterial({
+                color: 0xffffff,
+                linewidth: 1.6,
+                transparent: true,
+                opacity: 0.9,
+            });
+            frameMaterial.depthTest = false;
+            frameMaterial.depthWrite = false;
+            const frame = new LineSegments(new BufferGeometry(), frameMaterial);
+            frame.renderOrder = 1;
+            container.add(frame);
+            this.alt1dFrames[index] = frame;
+            this.alt1dFrameBaseColors[index] = frameMaterial.color.clone();
+
+            const centerMaterial = new LineDashedMaterial({
+                color: 0xffffff,
+                linewidth: 1,
+                dashSize: 1,
+                gapSize: 1,
+                transparent: true,
+                opacity: 0.5,
+                depthWrite: false,
+            });
+            centerMaterial.depthTest = false;
+            const centerLine = new Line(new BufferGeometry(), centerMaterial);
+            centerLine.renderOrder = 0;
+            container.add(centerLine);
+            this.alt1dCenterLines[index] = centerLine;
+
+            const horizontalMaterial = new LineDashedMaterial({
+                color: 0xffffff,
+                linewidth: 1,
+                dashSize: 1,
+                gapSize: 1,
+                transparent: true,
+                opacity: 0.5,
+                depthWrite: false,
+            });
+            horizontalMaterial.depthTest = false;
+            const horizontalLine = new Line(new BufferGeometry(), horizontalMaterial);
+            horizontalLine.renderOrder = 0;
+            container.add(horizontalLine);
+            this.alt1dHorizontalLines[index] = horizontalLine;
+        }
+
+        const frame = this.alt1dFrames[index];
+        if (frame) {
+            const framePositions = new Float32Array([
+                -halfWidth, halfHeight, 0,
+                halfWidth, halfHeight, 0,
+                halfWidth, halfHeight, 0,
+                halfWidth, -halfHeight, 0,
+                halfWidth, -halfHeight, 0,
+                -halfWidth, -halfHeight, 0,
+                -halfWidth, -halfHeight, 0,
+                -halfWidth, halfHeight, 0,
+            ]);
+            frame.geometry.setAttribute('position', new BufferAttribute(framePositions, 3));
+            frame.geometry.attributes.position.needsUpdate = true;
+            frame.geometry.computeBoundingSphere();
+            frame.geometry.setDrawRange(0, 8);
+        }
+
+        const centerLine = this.alt1dCenterLines[index];
+        if (centerLine) {
+            const centerPositions = new Float32Array([
+                0, halfHeight, 0,
+                0, -halfHeight, 0,
+            ]);
+            centerLine.geometry.setAttribute('position', new BufferAttribute(centerPositions, 3));
+            centerLine.geometry.attributes.position.needsUpdate = true;
+            centerLine.computeLineDistances();
+            const dashSize = Math.max(0.02 * cellWidth, 0.5);
+            centerLine.material.dashSize = dashSize;
+            centerLine.material.gapSize = Math.max(0.04 * cellWidth, dashSize * 2);
+            centerLine.material.needsUpdate = true;
+        }
+
+        const horizontalLine = this.alt1dHorizontalLines[index];
+        if (horizontalLine) {
+            const horizontalPositions = new Float32Array([
+                -halfWidth, 0, 0,
+                halfWidth, 0, 0,
+            ]);
+            horizontalLine.geometry.setAttribute(
+                'position',
+                new BufferAttribute(horizontalPositions, 3),
+            );
+            horizontalLine.geometry.attributes.position.needsUpdate = true;
+            horizontalLine.computeLineDistances();
+            const dashSize = Math.max(0.02 * cellWidth, 0.5);
+            horizontalLine.material.dashSize = dashSize;
+            horizontalLine.material.gapSize = Math.max(0.04 * cellWidth, dashSize * 2);
+            horizontalLine.material.needsUpdate = true;
+        }
+    }
+
+    _startAlt1dLineGlow(index, durationMs = this.glowDuration) {
+        if (!this.alt1dMode) {
+            return;
+        }
+        if (index == null || index < 0 || index >= this.lineObjects.length) {
+            return;
+        }
+        const line = this.lineObjects[index];
+        if (!line) {
+            return;
+        }
+        const duration = Math.max(30, durationMs || this.glowDuration);
+        const now = performance.now();
+        this.alt1dGlowStates[index] = {
+            startTime: now,
+            duration,
+        };
+    }
+
+    _renderAlt1dGlow(now) {
+        const containerIntensity = new Array(this.alt1dFrames.length).fill(0);
+
+        for (let i = 0; i < this.lineObjects.length; i += 1) {
+            const line = this.lineObjects[i];
+            const baseColor = this.lineBaseColors[i];
+            if (!line || !line.material || !baseColor) {
+                continue;
+            }
+            const state = this.alt1dGlowStates[i];
+            const containerIdx = this.alt1dLineToContainer[i] ?? 0;
+
+            if (!state) {
+                this._restoreAlt1dLineAppearance(line, baseColor);
+                continue;
+            }
+
+            const elapsed = now - state.startTime;
+            if (elapsed >= state.duration) {
+                this.alt1dGlowStates[i] = null;
+                this._restoreAlt1dLineAppearance(line, baseColor);
+                continue;
+            }
+
+            const intensity = 1 - elapsed / state.duration;
+            this._applyAlt1dLineAppearance(line, baseColor, intensity);
+            if (containerIdx >= 0 && containerIdx < containerIntensity.length) {
+                containerIntensity[containerIdx] = Math.max(
+                    containerIntensity[containerIdx],
+                    intensity,
+                );
+            }
+        }
+
+        let maxIntensity = 0;
+        let selectionDirty = false;
+
+        for (let idx = 0; idx < this.alt1dFrames.length; idx += 1) {
+            const frame = this.alt1dFrames[idx];
+            const base = this.alt1dFrameBaseColors[idx];
+            const intensity = containerIntensity[idx] ?? 0;
+            maxIntensity = Math.max(maxIntensity, intensity);
+
+            if (!frame || !frame.material || !base) {
+                continue;
+            }
+
+            if (intensity > 0) {
+                const blended = this.tempColor
+                    .copy(base)
+                    .lerp(this.highlightColor, Math.min(1, intensity * 0.5));
+                frame.material.color.copy(blended);
+                frame.material.needsUpdate = true;
+                if (!this.outlineSelection.has(frame)) {
+                    this.outlineSelection.add(frame);
+                    selectionDirty = true;
+                }
+            } else {
+                frame.material.color.copy(base);
+                frame.material.needsUpdate = true;
+                if (this.outlineSelection.delete(frame)) {
+                    selectionDirty = true;
+                }
+            }
+        }
+
+        if (selectionDirty) {
+            this._refreshOutlineSelection();
+        }
+
+        return maxIntensity;
+    }
+
+    _applyAlt1dLineAppearance(line, baseColor, intensity) {
+        if (!line || !line.material || !baseColor) {
+            return;
+        }
+        const blended = this.tempColor
+            .copy(baseColor)
+            .lerp(this.highlightColor, Math.min(1, intensity * 0.85));
+        line.material.color.copy(blended);
+        line.material.linewidth = 2.5 + (intensity * 3.5);
+        line.material.opacity = 1;
+        line.material.needsUpdate = true;
+    }
+
+    _restoreAlt1dLineAppearance(line, baseColor) {
+        if (!line || !line.material || !baseColor) {
+            return;
+        }
+        line.material.color.copy(baseColor);
+        line.material.linewidth = 2.5;
+        line.material.opacity = 1;
+        line.material.needsUpdate = true;
+    }
+
+    _getDimColorHex(dimIndex) {
+        const color = this.gridColors?.[dimIndex % this.gridColors.length];
+        if (!color) {
+            return '#ffd666';
+        }
+        return `#${color.getHexString()}`;
+    }
+
+    _build1DControlGroups() {
+        const useAltKeys = Boolean(this.altKeysMode);
+        const positiveLetters = useAltKeys
+            ? ['W', 'E', 'R', 'S', 'D', 'F']
+            : ['W', 'E', 'R', 'U', 'I', 'O'];
+        const negativeLetters = useAltKeys
+            ? ['U', 'I', 'O', 'J', 'K', 'L']
+            : ['S', 'D', 'F', 'J', 'K', 'L'];
+
+        const buildLabel = (letters, sign) => {
+            const markup = letters
+                .map((letter, idx) => {
+                    const color = this._getDimColorHex(idx);
+                    return `<span class="hud-dim-key" style="color:${color};">${letter}</span>`;
+                })
+                .join('<span class="hud-dim-key-sep"></span>');
+            return `<span class="hud-dim-combo">${markup}<span class="hud-dim-sign">${sign}</span></span>`;
+        };
+
+        return [
+            { icon: null, keys: [], label: buildLabel(positiveLetters, '(+)') },
+            { icon: null, keys: [], label: buildLabel(negativeLetters, '(-)') },
+            { icon: null, keys: ['Z'], label: '<span class="speed-run-label">SPEED RUN</span>' },
+        ];
+    }
+
     annotateBottomScreen(text, size = 20) {
         const bottomTextContainer = document.getElementById('bottomTextContainer');
-        if (bottomTextContainer) {
-            bottomTextContainer.innerHTML = formatHudMarkup(
-                text ?? '',
-                CONTROL_GROUPS,
-            );
+        if (!bottomTextContainer) {
+            return;
         }
+        const controls =
+            this.mode === '1d' ? this._build1DControlGroups() : CONTROL_GROUPS;
+        bottomTextContainer.innerHTML = formatHudMarkup(text ?? '', controls);
     }
     highlightLossLine(index, durationMs = this.glowDuration) {
         if (this.mode !== '1d') {
+            return;
+        }
+        if (this.alt1dMode) {
+            this._startAlt1dLineGlow(index, durationMs);
             return;
         }
         if (!this.lineFrames || !this.lineFrames[index]) {
@@ -241,6 +714,9 @@ export default class LandscapeView {
         let distance = (totalWidth / 2) / Math.tan(fovRadians / 2);
         if (this.customCameraDistance != null) {
             distance = this.customCameraDistance;
+        }
+        if (this.alt1dMode) {
+            distance *= 1.25;
         }
         this.camera_distance = distance;
         this.camera_yOffset = (totalWidth / 8);
@@ -847,6 +1323,11 @@ export default class LandscapeView {
             return;
         }
 
+        if (this.alt1dMode) {
+            this._updateAlt1dLossLines(lines, { stepSpacing, labels });
+            return;
+        }
+
         if (!this.lineGroup) {
             this.lineGroup = new Group();
             this.scene.add(this.lineGroup);
@@ -1130,27 +1611,31 @@ export default class LandscapeView {
             }
         }
 
-        for (let i = 0; i < this.frameGlowState.length; i += 1) {
-            const state = this.frameGlowState[i];
-            const frame = this.lineFrames[i];
-            if (!state || !frame) {
-                continue;
-            }
-            const elapsed = now - state.startTime;
-            if (elapsed >= state.duration) {
-                this.frameGlowState[i] = null;
-                frame.scale.set(1, 1, 1);
-                this._restoreFrameMaterial(i);
-                if (this.outlineSelection.delete(frame)) {
-                    this._refreshOutlineSelection();
+        if (this.alt1dMode) {
+            maxIntensity = this._renderAlt1dGlow(now);
+        } else {
+            for (let i = 0; i < this.frameGlowState.length; i += 1) {
+                const state = this.frameGlowState[i];
+                const frame = this.lineFrames[i];
+                if (!state || !frame) {
+                    continue;
                 }
-                continue;
+                const elapsed = now - state.startTime;
+                if (elapsed >= state.duration) {
+                    this.frameGlowState[i] = null;
+                    frame.scale.set(1, 1, 1);
+                    this._restoreFrameMaterial(i);
+                    if (this.outlineSelection.delete(frame)) {
+                        this._refreshOutlineSelection();
+                    }
+                    continue;
+                }
+                const intensity = 1 - elapsed / state.duration;
+                const expandScale = 1 + this.glowExpand * intensity;
+                frame.scale.set(expandScale, expandScale, 1);
+                this._applyFrameGlowAppearance(i, intensity);
+                maxIntensity = Math.max(maxIntensity, intensity);
             }
-            const intensity = 1 - elapsed / state.duration;
-            const expandScale = 1 + this.glowExpand * intensity;
-            frame.scale.set(expandScale, expandScale, 1);
-            this._applyFrameGlowAppearance(i, intensity);
-            maxIntensity = Math.max(maxIntensity, intensity);
         }
 
         if (this.outlinePass) {
@@ -1200,6 +1685,27 @@ export default class LandscapeView {
     }
 
     _resetAllFrameGlow() {
+        if (this.alt1dMode) {
+            for (let i = 0; i < this.alt1dGlowStates.length; i += 1) {
+                this.alt1dGlowStates[i] = null;
+            }
+            for (let i = 0; i < this.lineObjects.length; i += 1) {
+                const line = this.lineObjects[i];
+                const baseColor = this.lineBaseColors[i];
+                if (line && baseColor) {
+                    this._restoreAlt1dLineAppearance(line, baseColor);
+                }
+            }
+            for (let idx = 0; idx < this.alt1dFrames.length; idx += 1) {
+                const frame = this.alt1dFrames[idx];
+                const base = this.alt1dFrameBaseColors[idx];
+                if (frame && frame.material && base) {
+                    frame.material.color.copy(base);
+                    frame.material.needsUpdate = true;
+                }
+                this.outlineSelection.delete(frame);
+            }
+        }
         if (this.lineFrames) {
             for (let i = 0; i < this.lineFrames.length; i += 1) {
                 const frame = this.lineFrames[i];
@@ -1387,6 +1893,5 @@ export default class LandscapeView {
             }
         }
     }
-
 
 }

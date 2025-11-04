@@ -51,11 +51,17 @@ body {
     text-decoration: underline;
 }
 
-.view-toggle {
+.header-controls {
     position: absolute;
     right: clamp(12px, 4vw, 28px);
     top: 50%;
     transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.header-controls button {
     padding: 6px 14px;
     border-radius: 999px;
     border: 1px solid rgba(255, 210, 140, 0.42);
@@ -68,10 +74,15 @@ body {
     transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
-.view-toggle:hover {
+.header-controls button:hover {
     border-color: rgba(255, 225, 160, 0.9);
     background: rgba(255, 200, 80, 0.2);
     transform: translateY(-50%) scale(1.05);
+}
+
+.header-controls .mode-toggle {
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
 }
 
 #imageContainer {
@@ -410,6 +421,32 @@ body {
     white-space: nowrap;
     letter-spacing: 0.03em;
     text-shadow: 0 0 5px rgba(120, 200, 255, 0.4);
+}
+
+#bottomTextContainer .hud-dim-combo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+#bottomTextContainer .hud-dim-key {
+    display: inline-flex;
+    font-weight: 700;
+    font-size: 0.95em;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
+}
+
+#bottomTextContainer .hud-dim-key-sep {
+    display: inline-block;
+    width: 0.35rem;
+}
+
+#bottomTextContainer .hud-dim-sign {
+    margin-left: 0.4rem;
+    font-size: 0.8em;
+    letter-spacing: 0.08em;
+    color: rgba(220, 235, 255, 0.85);
 }
 
 /* Special styling for SPEED RUN label */

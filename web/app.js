@@ -50,21 +50,52 @@ function installModeToggle(currentMode) {
 	if (typeof document === 'undefined') return;
 	const header = document.querySelector('.site-header');
 	if (!header) return;
-	const existing = header.querySelector('.view-toggle');
-	if (existing) {
-		existing.remove();
+	let container = header.querySelector('.header-controls');
+	if (!container) {
+		container = document.createElement('div');
+		container.className = 'header-controls';
+		header.appendChild(container);
 	}
-	const button = document.createElement('button');
-	button.type = 'button';
-	button.className = 'view-toggle';
+	container.innerHTML = '';
+
+	const viewButton = document.createElement('button');
+	viewButton.type = 'button';
+	viewButton.className = 'view-toggle';
 	const targetMode = currentMode === '1d' ? '3d' : '1d';
-	button.textContent = currentMode === '1d' ? 'Switch to 3D view' : 'Switch to 1D view';
-	button.addEventListener('click', () => {
+	viewButton.textContent = currentMode === '1d' ? 'Switch to 3D view' : 'Switch to 1D view';
+	viewButton.addEventListener('click', () => {
 		const params = new URLSearchParams(window.location.search);
 		params.set('mode', targetMode);
 		window.location.search = params.toString();
 	});
-	header.appendChild(button);
+	container.appendChild(viewButton);
+
+	if (currentMode === '1d') {
+		const params = new URLSearchParams(window.location.search);
+		const toggleFlag = (key) => {
+			const current = params.get(key);
+			const enabled = typeof current === 'string' && /^(1|true|yes|on)$/i.test(current);
+			if (enabled) {
+				params.delete(key);
+			} else {
+				params.set(key, '1');
+			}
+			window.location.search = params.toString();
+		};
+
+		const makeToggle = (label, key) => {
+			const btn = document.createElement('button');
+			btn.type = 'button';
+			btn.className = 'mode-toggle';
+			const enabled = params.has(key);
+			btn.textContent = `${label}: ${enabled ? 'ON' : 'OFF'}`;
+			btn.addEventListener('click', () => toggleFlag(key));
+			return btn;
+		};
+
+		container.appendChild(makeToggle('Alt Keys', 'altkeys'));
+		container.appendChild(makeToggle('Alt 1D', 'alt1d'));
+	}
 }
 
 (async function bootstrap() {
@@ -76,6 +107,10 @@ function installModeToggle(currentMode) {
 	const debugEnabled = typeof debugParam === 'string' && /^(1|true|yes|on)$/i.test(debugParam);
 	const altKeysEnabled = (() => {
 		const flag = params.get('altkeys');
+		return typeof flag === 'string' && /^(1|true|yes|on)$/i.test(flag);
+	})();
+	const alt1dEnabled = (() => {
+		const flag = params.get('alt1d');
 		return typeof flag === 'string' && /^(1|true|yes|on)$/i.test(flag);
 	})();
 	const gridSizeParam = Number(params.get('gridSize'));
@@ -107,6 +142,7 @@ function installModeToggle(currentMode) {
 					depthStep,
 					cameraDistance,
 					altKeys: altKeysEnabled,
+					alt1d: alt1dEnabled,
 			  })
 			: new KeyboardClientGL(host, port, {
 					renderMode: '3d',
