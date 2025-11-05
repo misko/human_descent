@@ -663,11 +663,23 @@ export default class LandscapeView {
             return `<span class="hud-dim-combo">${markup}<span class="hud-dim-sign">${sign}</span></span>`;
         };
 
-        return [
+        const combos = [
             { icon: null, keys: [], label: buildLabel(positiveLetters, '(+)') },
             { icon: null, keys: [], label: buildLabel(negativeLetters, '(-)') },
-            { icon: null, keys: ['Z'], label: '<span class="speed-run-label">SPEED RUN</span>' },
         ];
+
+        const sharedControls = [
+            { icon: null, keys: ['Z'], label: '<span class="speed-run-label">SPEED RUN</span>' },
+            { icon: null, keys: ['Enter'], label: 'New Batch' },
+            { icon: null, keys: ['Spacebar'], label: 'New Dims' },
+            { icon: null, keys: ['[', ']'], label: 'Step ±' },
+            { icon: null, keys: [';'], label: 'Batch-size' },
+            { icon: null, keys: ["'"], label: 'FP16/32' },
+            { icon: null, keys: ['Y'], label: 'Top 10' },
+            { icon: null, keys: ['X'], label: 'Help' },
+        ];
+
+        return [...combos, ...sharedControls];
     }
 
     annotateBottomScreen(text, size = 20) {
