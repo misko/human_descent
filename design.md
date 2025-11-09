@@ -1,246 +1,146 @@
-# Human Descent – Web Speed Run Design
+# Human Descent Architecture
 
-## Overview
-This document defines the design of the **Speed Run** mode and leaderboard system for both the **web client** and **backend server** of *Human Descent*.
-It focuses on:
-- Protocol (protobuf) message types, inputs/outputs, and field mappings
-- State machines for server and client
-- Main runtime loops and message-driven updates
-- Known ambiguities and follow-ups
+## System Overview
+Human Descent couples an interactive browser (or native pygame) client with a Python inference server. Users explore a random low-dimensional subspace of a trained MNIST model by nudging parameters through keyboard, mouse, or MIDI controls. Every input generates protobuf messages over WebSockets, and the server responds with updated losses, predictions, mesh grids, and leaderboard data. The project is organized as two top-level roots:
 
-It complements `high_score.md` by clarifying client/server contracts and describing the code-accurate behavior.
+- `hudes/`: Python backend, realtime server, protobuf schema, and native controllers.
+- `web/`: Vite/Three.js/Chart.js frontend, browser controllers, and Playwright tests.
 
----
+The sections below document the runtime flow, stateful components, MVC split, and the protobuf socket contract that binds both halves.
 
-## 1. Protocol Summary
-**File:** `hudes/hudes.proto`
+## Backend Runtime (Python, `hudes/`)
+### Core modules
+| Module | Responsibility |
+| --- | --- |
+| `websocket_server.py` | Async WebSocket server, HTTP health endpoints, per-client state machine, and orchestration of inference workers. |
+| `model_data_and_subspace.py` | Loads MNIST models/datasets, fuses parameters, samples random subspaces, and runs training/validation/mesh computations. |
+| `websocket_client.py` | Aggregates outgoing control commands for native clients and manages the socket thread. |
+| `controllers/*` & `hudes_play.py` | Local pygame entry points that attach physical inputs to the backend via `HudesWebsocketClient`. |
+| `high_scores.py` | SQLite helpers powering leaderboard APIs. |
 
-### Envelope: `Control`
-- `type` (enum `Control.Type`) — message role
-- `request_idx` (optional int32) — sequential index for correlation
+### Execution pipeline
+1. `run_server()` (`hudes/websocket_server.py`) creates a listener for WebSocket clients and an HTTP API server for health/leaderboard queries.
+2. For each WebSocket connection, `process_client()` instantiates a `Client` dataclass that tracks configuration, queued parameter deltas, timers, and help state.
+3. `inference_runner()` spawns a separate process or thread (`listen_and_run`) that owns a `ModelDataAndSubspace` instance, fuses model parameters, and services batched requests from every client via multiprocessing queues.
+4. The async loop `inference_runner_clients()` polls clients, packages requests (`train`, `val`, `mesh`, `loss_line`, `sgd`), and pushes them to the worker queue.
+5. `inference_result_sender()` pulls worker results, encodes protobuf `Control` messages (`hudes_pb2.py`), and writes them back on each client's socket.
+6. Auxiliary coroutines schedule speed-run deadlines, emit batch example snapshots, and expose leaderboard APIs.
 
-### Core Payloads
-**Client → Server**
-- `CONTROL_CONFIG`: `config`
-- `CONTROL_DIMS`: `dims_and_steps[]`
-- `CONTROL_NEXT_BATCH`
-- `CONTROL_NEXT_DIMS`
-- `CONTROL_SGD_STEP`: `sgd_steps` (ignored during Speed Run)
-- `CONTROL_SPEED_RUN_START`
-- `CONTROL_HIGH_SCORE_LOG`: `{ name }` (server validates name strictly; score computed server-side)
-- `CONTROL_QUIT`
+### Client dataclass state (`hudes/websocket_server.py:227`)
+| Field | Purpose |
+| --- | --- |
+| `next_step` / `current_step` | Accumulates pending dimension deltas until they are applied in the worker loop. |
+| `dims_offset`, `dims_at_a_time` | Track which slice of the random subspace the user controls right now. |
+| `batch_idx`, `batch_size` | Control dataset sampling on both train and validation splits. |
+| `dtype`, `mesh_grid_size`, `mesh_step_size`, `mesh_grids` | Configure inference precision and visualization payloads. |
+| `sgd`, `total_sgd_steps`, `force_reset_weights` | Queue explicit SGD micro-steps and manage cached per-client weight tensors. |
+| `speed_run_active`, `speed_run_end_time`, `speed_run_log`, `best_val_loss_during_run`, `high_score_logged` | Manage timed “speed run” competitions and persist their inputs. |
+| `request_idx`, `active_request_idx`, `active_inference`, `sent_batch` | Provide back-pressure so that every protobuf reply references the user-visible request counter. |
 
-**Server → Client**
-- `CONTROL_BATCH_EXAMPLES`: `{ type, n, train_data, train_labels, shapes, batch_idx }`
-- `CONTROL_TRAIN_LOSS_AND_PREDS`: `{ train_loss, preds, confusion_matrix, total_sgd_steps, speed_run_seconds_remaining? }`
-- `CONTROL_VAL_LOSS`: `{ val_loss, speed_run_seconds_remaining?, speed_run_finished? }`
-- `CONTROL_MESHGRID_RESULTS`: `{ mesh_grid_results[], mesh_grid_shape[], speed_run_seconds_remaining? }`
+### Backend state transitions
+1. **Configuration** (`CONTROL_CONFIG`): updates dtype, dims, batch size, mesh options, and seeds; forces an inference refresh.
+2. **Dimension step** (`CONTROL_DIMS`): merges deltas into `next_step`. When `client_runner_q` wakes up it promotes them to `current_step`, requests `train` + optional `mesh` jobs, and resets `next_step`.
+3. **Batch advance** (`CONTROL_NEXT_BATCH`): increments `batch_idx`, forces a fresh batch example payload, and schedules `train`+`val` passes so charts/leaderboards stay in sync.
+4. **New subspace** (`CONTROL_NEXT_DIMS`): bumps `dims_offset`, zeros `current_step`, and reseeds `ModelDataAndSubspace.get_dim_vec()` so the player explores a new random projection.
+5. **SGD micro-step** (`CONTROL_SGD_STEP`): if not inside a speed run, queues `sgd` iterations so `listen_and_run()` calls `mad.sgd_step()` and persists the returned weights.
+6. **Speed run** (`CONTROL_SPEED_RUN_START` / automatic timeout / `CONTROL_HIGH_SCORE_LOG`): resets cached weights, starts a countdown, logs every inbound control before the deadline, and requests a final validation. When that `VAL` arrives it transitions to `AwaitingScore` until the user submits a high-score record.
+7. **Disconnect**: closing the socket removes the client’s entry from `active_clients` and cancels its scheduled tasks; cached weights are released the next time `listen_and_run()` sees the missing key.
 
-### Notes
-- Wire uses `snake_case`; JS via `protobuf.js` exposes `lowerCamelCase` (e.g., `speedRunSecondsRemaining`, `speedRunFinished`).
-- Countdown is included while a run is active in TRAIN/VAL/MESH messages.
-- End-of-run is signaled by `CONTROL_VAL_LOSS` with `speed_run_finished=true`.
-- The deprecated `CONTROL_FULL_LOSS` is removed; do not use.
+### Inference worker (`listen_and_run`)
+- Maintains a `client_weights` tensor clone per client ID, seeded from `ModelDataAndSubspace.saved_weights`.
+- Applies `mad.delta_from_dims()` to map the sparse `current_step` dict into a dense delta vector before every train/val/mesh job.
+- Provides hooks for additional visualizations: mesh grids (`get_loss_grid`) and loss lines (`get_loss_lines`).
+- Ensures dtype-specific copies stay in sync by moving results back to `float32` when needed.
 
----
+## Frontend Runtime (web/)
+### Boot sequence (`web/app.js`)
+1. Detect backend host/port via query params, build-time env vars, or health probes.
+2. Choose render mode (`1d` keyboard landscape vs `3d` GL) and instantiate `KeyboardClient` or `KeyboardClientGL` with options such as `meshGrids`, `rowSpacing`, and debug flags.
+3. Expose the client on `window.__hudesClient` for manual inspection and tests, install UI toggles, then call `client.runLoop()`.
 
-## 2. Server Design
-**File:** `hudes/websocket_server.py`
+### Browser client core (`web/client/HudesClient.js`)
+| Concern | Behavior |
+| --- | --- |
+| **Socket lifecycle** | Opens `ws://host:port`, sets `binaryType='arraybuffer'`, and defers all outbound traffic through `sendQ()` so protobuf.js can encode payloads once the schema loads. |
+| **State** | Owns a `ClientState` instance for step size, dtype, batch size, help screens, timer flags, and formatting helpers for the HUD. |
+| **View binding** | Creates a `ViewRouter` that currently wraps `LandscapeView` (Three.js scene + Chart.js HUD). The view instance is responsible for mesh grids, charts, loss lines, and help overlays. |
+| **Event handling** | Registers `keydown/keyup`, debounces repeats, and routes commands to helper methods (`sendDimsAndSteps`, `getNextBatch`, `getNextDims`, `getSGDStep`, `startSpeedRun`, `submitHighScore`). |
+| **Message pump** | The `_handleMessage` switch decodes protobuf payloads, reshapes arrays, updates charts, keeps loss history arrays aligned, and maintains a local countdown mirror for speed runs. |
 
-### 2.1 Core Components
-Each client has a state object containing:
-- **Runtime controls:** steps, batch, dims, dtype, mesh config, SGD counters
-- **Scheduling:** flags for updates, requests, and force states
-- **Speed Run:** timer, log, best validation loss, and flags
+### Browser controller variants
+- `KeyboardClient` maps paired keys to dimension deltas (alt layouts supported) and manages repeat timers so each press sends batched `CONTROL_DIMS` payloads.
+- `KeyboardClientGL` disables paired keys, enabling WASD/mouse-driven navigation of individual grids, rotation, and scroll-powered steps. It installs `mouseControls.js` for drag/scroll gestures and maps them into parameter updates in the selected grid.
+- Future controllers (mouse-only, touchscreen, gamepads) can extend `HudesClient` in the same way by overriding `initInput()` and `processKeyPress()` but reusing the networking/view stack.
 
-An async inference worker handles compute. Two loops manage scheduling and sending.
+### Client state container (`web/client/ClientState.js`)
+| Field | Purpose |
+| --- | --- |
+| `stepSizeIdx`, `stepSizeResolution`, `stepSize`, `minLogStepSize`, `maxLogStepSize` | Maintain logarithmic step sizes with bracket keys. |
+| `batchSizes`, `batchSizeIdx`, `batchSize` | Rotate through supported batch sizes. |
+| `dtypes`, `dtypeIdx`, `dtype` | Toggle precision hints sent to the backend. |
+| `bestScore`, `sgdSteps` | Track progress and annotate the HUD. |
+| `helpScreenFns`, `helpScreenIdx` | Drive overlay images for tutorials. |
+| `speedRunActive`, `speedRunSecondsRemaining` | Mirror authoritative server fields for local rendering. |
 
-### 2.2 Main Loops
-1. **`inference_runner_clients`** — schedules next op (`train`, `mesh`, `val`, `sgd`).
-2. **`inference_result_sender`** — serializes results into protobuf `Control` messages and sends to client.
+### Client-side state transitions
+1. **Initialization**: `ClientState` sets defaults, `HudesClient.runLoop()` blocks until protobuf definitions load, then sends `CONTROL_CONFIG`.
+2. **User input**: Keyboard or mouse events call `sendDimsAndSteps`, `getNextBatch`, etc., which encode protobuf payloads and optimistically update local buffers (e.g., `dimsAndStepsOnCurrentDims`).
+3. **Server messages**: Each protobuf reply updates history arrays, charts, and HUD annotations. Validation messages call `ClientState.updateBestScoreOrNot`, and mesh/loss-line payloads mutate Three.js meshes.
+4. **Speed run**: `startSpeedRun()` toggles timers and waits for server countdown data; the state returns to normal only after a `CONTROL_VAL_LOSS` message arrives with `speedRunFinished=true`.
+5. **Help overlay**: Text input is ignored while `helpScreenIdx >= 0`; cycling help screens eventually resumes normal event handling.
 
-### 2.3 Client → Server Messages
-| Message | Action |
-|----------|---------|
-| CONFIG | Updates configuration and may trigger `force_update` |
-| DIMS | Applies delta to weights, schedules train/mesh |
-| NEXT_DIMS | Increments dims offset |
-| NEXT_BATCH | Increments batch, triggers validation |
-| SGD_STEP | Increments SGD (ignored during Speed Run) |
-| SPEED_RUN_START | Resets weights, starts timer, clears logs |
-| HIGH_SCORE_LOG | Finalizes run, persists results |
-| QUIT | Closes client loop |
+## MVC Mapping
+| Layer | Implementation | Notes |
+| --- | --- | --- |
+| **Model** | On the backend, `ModelDataAndSubspace` plus per-client weight clones implement the data/model state. On the frontend, `ClientState` mirrors the user-adjustable subset (step size, dtype, help). |
+| **View** | `LandscapeView` renders mesh grids, charts, HUD overlays, and sample digits; it exposes methods (`updateLossChart`, `updateMeshGrids`, `highlightLossLine`, etc.) so controllers stay passive. Native pygame views (`hudes/view.py`, `hudes/opengl_view.py`) follow the same contract. |
+| **Controller** | `KeyboardClient*` and `XTouchClient` translate hardware events into protobuf control messages. The backend controller loop (`process_client`) likewise interprets protobuf commands and transitions `Client` state, acting as the other half of MVC. |
 
-### 2.4 Server → Client Messages
-| Type | Description |
-|------|--------------|
-| BATCH_EXAMPLES | Sends sample data and labels |
-| TRAIN_LOSS_AND_PREDS | Sends loss, predictions, confusion matrix |
-| VAL_LOSS | Sends validation loss |
-| MESHGRID_RESULTS | Sends grid data and remaining time during Speed Run |
+Code flow summary:
+1. **Input (Controller)**: User presses keys → controller computes a `dim -> delta` map.
+2. **State update (Model)**: Controller enqueues a protobuf `CONTROL_DIMS`; backend `Client.next_step` collects it; inference worker applies deltas to weight tensors.
+3. **Rendering (View)**: Worker responses are streamed back as protobuf `Control` messages; the browser view updates visuals while the backend can display pygame overlays for local builds.
 
-### 2.5 Scheduling Logic
-- `force_update=True` → triggers next operation.
-- Validation runs (`VAL_LOSS`) occur in normal cadence and at Speed Run finalization.
-- SGD steps run only when not in Speed Run.
-- Worker maintains per-client cloned weights; resets via `force_reset_weights`.
-- At the Speed Run deadline, the server schedules a final `VAL_LOSS`; in `inference_result_sender`, that VAL is marked with `speed_run_finished=true` and the server deactivates `speed_run_active`.
+## WebSocket + Protobuf Socket
+### Transport layer
+- **Browser**: `HudesClient` opens a WebSocket (`binaryType='arraybuffer'`) and uses `protobuf.js` (via `ProtoLoader.js`) to encode/decode the shared `hudes.proto` schema (`web/public/hudes.proto`, generated copies live under `web/dist/` and `hudes/hudes_pb2.py`).
+- **Native controllers**: `HudesWebsocketClient` (`hudes/websocket_client.py`) runs in a background thread, accumulates many small `CONTROL_DIMS` payloads into a single message per animation frame, and multiplexes send/receive queues for pygame clients.
 
----
+### Message catalog
+| Direction | Type | Payload highlights |
+| --- | --- | --- |
+| Client → Server | `CONTROL_CONFIG` | `Config` seed, dims, mesh config, batch size, dtype, mesh toggle, loss lines. |
+|  | `CONTROL_DIMS` | Repeated `{dim, step}` entries plus `request_idx`. Aggregated client-side to reduce chatter. |
+|  | `CONTROL_NEXT_DIMS` | Requests a fresh random subspace; server resets offsets. |
+|  | `CONTROL_NEXT_BATCH` | Advances `batch_idx`, causing new sample previews and loss recomputation. |
+|  | `CONTROL_SGD_STEP` | Increments `sgd` counter (ignored when `speed_run_active`). |
+|  | `CONTROL_SPEED_RUN_START` | Begins timed competition; server snapshots inbound controls. |
+|  | `CONTROL_HIGH_SCORE_LOG` | Sends a sanitized 4-character name to persist the current score. |
+| Server → Client | `CONTROL_BATCH_EXAMPLES` | Flattened tensors + shapes for `n` MNIST samples. |
+|  | `CONTROL_TRAIN_LOSS_AND_PREDS` | Scalar loss, flattened predictions, confusion matrix, `total_sgd_steps`, optional countdown seconds. |
+|  | `CONTROL_VAL_LOSS` | Validation loss, countdown, and `speed_run_finished` flag when appropriate. |
+|  | `CONTROL_MESHGRID_RESULTS` | Flattened loss landscapes + shape metadata. |
+|  | `CONTROL_LOSS_LINE_RESULTS` | 1D slices for each controlled dimension (1D mode). |
+|  | `CONTROL_LEADERBOARD_RESPONSE` | Parallel arrays of names/scores. |
 
-## 3. Client Design
-**File:** `web/client/HudesClient.js`
+### Typical sequence
+1. **Config/handshake**
+   - Client boots, loads proto, sends `CONTROL_CONFIG`.
+   - Server replies with `CONTROL_BATCH_EXAMPLES`, `CONTROL_TRAIN_LOSS_AND_PREDS`, `CONTROL_MESHGRID_RESULTS` based on initial seeds.
+2. **Interactive step**
+   - User taps a key → controller builds `{dim: delta}` → `sendDimsAndSteps()` enqueues `CONTROL_DIMS`.
+   - Python server merges deltas into `next_step`, schedules a `train` job, and returns `CONTROL_TRAIN_LOSS_AND_PREDS` followed by (optionally) `CONTROL_MESHGRID_RESULTS`.
+3. **Speed run**
+   - Client sends `CONTROL_SPEED_RUN_START` and suppresses SGD.
+   - Server resets weights, sets `speed_run_end_time`, and includes `speed_run_seconds_remaining` in every outbound message.
+   - When timer elapses, server flags `request_full_val`, emits a final `CONTROL_VAL_LOSS` with `speed_run_finished=true`, and waits for `CONTROL_HIGH_SCORE_LOG`.
 
-### 3.1 Initialization
-- Detects `ws/wss` target host/port.
-- Loads protobuf (`loadProto('hudes.proto')`).
-- Instantiates `View` + `ClientState`.
-- Sends initial `CONTROL_CONFIG`.
+### Socket helpers
+- `HudesWebsocketClient.send_config()` (Python) and `HudesClient.sendConfig()` (browser) both wrap protobuf creation so controllers remain declarative.
+- The browser `sendQ()` waits for `readyState === OPEN`, assigns `requestIdx`, verifies the payload against the protobuf schema, and logs every send when debug mode is enabled.
+- The native socket loop coalesces multiple `CONTROL_DIMS` entries before calling `websocket.send()`; this mirrors the browser-side repeat handling and keeps latency low even with high-frequency key presses.
 
-### 3.2 User Inputs
-| Key | Function |
-|-----|-----------|
-| R | Start Speed Run |
-| Delete/Backspace | Single SGD step (disabled during run) |
-| Space | Next dims |
-| Enter | Next batch |
-| [ / ] | Adjust step size |
-| ; | Toggle batch size |
-| ' | Toggle dtype |
-| X | Help overlay |
-
-### 3.3 Client → Server Messages
-Follows JS `lowerCamelCase` mapping:
-- `config`, `dimsAndSteps`, `nextDims`, `nextBatch`, `sgdStep`, `speedRunStart`, `highScoreLog`.
-
-### 3.4 Server → Client Handlers
-- **TRAIN_LOSS_AND_PREDS:** updates loss, preds, confusion matrix.
-- **VAL_LOSS:** updates validation loss, triggers best-score check.
-- **BATCH_EXAMPLES:** updates displayed samples.
-- **MESHGRID_RESULTS:** updates view and Speed Run countdown.
-
-### 3.5 Speed Run UX
-- **Start:** User presses **R** → sends `CONTROL_SPEED_RUN_START`.
-- **During:**
-	- Server includes `speed_run_seconds_remaining` in TRAIN/VAL/MESH while active.
-	- Client starts a local countdown on first server countdown and updates the HUD every ~300ms using wall time; UI shows seconds with 1 decimal precision.
-	- SGD is disabled during a run (client guard; server ignores).
-- **End:** The run ends only when a `CONTROL_VAL_LOSS` arrives with `speed_run_finished=true`. The client then prompts for a 4-character alphanumeric name and includes the achieved final VAL loss in the prompt. It submits `CONTROL_HIGH_SCORE_LOG` once. No local end occurs purely from countdown reaching 0.
-
----
-
-## 4. State Machines
-
-### 4.1 Server State (per client)
-| State | Description | Transition |
-|--------|--------------|-------------|
-| Normal | Idle | Start run |
-| SpeedRunActive | Timer running | Deadline reached → schedule final VAL |
-| AwaitingFinalVAL | Waiting for VAL completion | Send VAL with `speed_run_finished=true` → Normal |
-| HighScoreLogged | Finalized | Restart via new run |
-
-**Guards & Side Effects**
-- Ignore SGD during runs.
-- Append incoming messages to `speed_run_log` only before the strict deadline.
-- Include countdown in TRAIN/VAL/MESH results while active.
-- At end-of-run VAL, set `speed_run_finished=true` and deactivate `speed_run_active` server-side.
-- Persist results on `HIGH_SCORE_LOG` (submission no longer controls deactivation).
-
-### 4.2 Client State
-| State | Description |
-|--------|--------------|
-| Init | Loading protobuf |
-| Ready | Normal operation |
-| SpeedRunActive | Timer active |
-| Prompting | Waiting for name entry |
-| Submitted | High score sent |
-
----
-
-## 5. Typical Message Flows
-
-### 5.1 Startup
-1. Client connects
-2. Sends CONFIG
-3. Server replies with batch, train, mesh data
-
-### 5.2 Normal Interaction
-- `Space` → Next dims
-- `Enter` → Next batch
-- `DIMS` → Accumulate updates
-- `SGD_STEP` → Perform step
-
-### 5.3 Speed Run Flow
-1. Client → Server: `CONTROL_SPEED_RUN_START` → server resets weights, sets deadline, starts run.
-2. Server → Client: TRAIN/VAL/MESH messages include `speed_run_seconds_remaining` while active; client starts local timer for smooth HUD updates.
-3. Server: At deadline, schedules a final `VAL_LOSS` evaluation.
-4. Server → Client: `CONTROL_VAL_LOSS` with `speed_run_finished=true`; includes the authoritative final validation loss.
-5. Client: Shows prompt with the achieved final VAL loss; on valid 4-char name, sends `CONTROL_HIGH_SCORE_LOG` (single submission).
-6. Server: Validates name and persists the score and run log.
-
----
-
-## 6. Input / Output Summary
-
-| Source | Type | Example |
-|---------|------|----------|
-| **User → Client** | Keyboard | R, Space, Enter, [ ] |
-| **Client → Server** | Control messages | CONFIG, DIMS, NEXT, SGD, RUN, LOG |
-| **Server → Client** | Control messages | BATCH, TRAIN, VAL, MESH (+timer) |
-| **Server → Disk** | SQLite | High scores table with packed log |
-
----
-
-## 7. Decisions, clarifications, and open items
-This section records decisions made and what remains open.
-
-1) Countdown signaling (implemented):
-- Included in TRAIN/VAL/MESH while a run is active; client smooths UI locally.
-
-2) Final score reporting and end-of-run (implemented):
-- End-of-run is signaled by a `CONTROL_VAL_LOSS` with `speed_run_finished=true` (no special message type). The client only ends on this signal. `CONTROL_FULL_LOSS` was removed.
-
-3) Boundary of run expiry and logging (implemented):
-- Strict cutoff—only requests received before the deadline are counted and logged.
-
-4) Weight reset timing (accepted as-is for now):
-- Server sets `force_reset_weights` on run start. If generation tracking is needed later, we can add a per-client `weights_generation` to jobs and worker.
-
-5) High score name handling (implemented):
-- Server enforces exactly 4 alphanumeric uppercase characters; invalid names are rejected and not recorded. Client UI trims and uppercases.
-
-6) DIMS accumulation and ordering (clarification):
-- Per-connection FIFO ordering; `DIMS` applied against the active dims offset at receive time; `NEXT_DIMS` increments the offset.
-
-7) Request index semantics (accepted risk):
-- `request_idx` is correlation only; no global dedupe.
-
-8) Multiple runs per session (confirmed):
-- Starting a new run resets the in-memory run state/log and starts fresh.
-
-9) Countdown drift and authority (clarification):
-- Server is authoritative for end-of-run; client’s 300ms local ticker is UX-only.
-
-10) Security, rotation, and leaderboard retrieval (deferred):
-- No auth, rotation policy, or public leaderboard endpoint in scope yet.
-
----
-
-## 8. Testing Guidelines
-- Backend: shorten timer with `HUDES_SPEED_RUN_SECONDS=5`.
-- Frontend: unit test HUD markup; E2E verifies end-of-run on final `VAL_LOSS` with `speed_run_finished=true` and high score submission. UI countdown updates locally between server messages.
-
----
-
-## Appendix: Field Mapping Examples
-| Python | JS (protobuf.js) |
-|---------|------------------|
-| `train_loss_and_preds.train_loss` | `trainLossAndPreds.trainLoss` |
-| `speed_run_seconds_remaining` | `speedRunSecondsRemaining` |
-| `speed_run_finished` | `speedRunFinished` |
-| `dims_and_steps` | `dimsAndSteps[{dim, step}]` |
----
-
-## UI polish and accessibility
-- HUD bottom status shows countdown with 1 decimal precision during Speed Run (client-side formatting).
-- The “SPEED RUN” control label is styled red, bold, and italic in the controls list for discoverability.
+## References
+- Backend source: `hudes/websocket_server.py`, `hudes/model_data_and_subspace.py`, `hudes/websocket_client.py`.
+- Frontend source: `web/app.js`, `web/client/HudesClient.js`, `web/client/KeyboardClient*.js`, `web/client/views/LandscapeView.js`, `web/client/ClientState.js`.
+- Shared protocol: `hudes/hudes.proto`, `web/public/hudes.proto` (compiled to `hudes/hudes_pb2.py`).

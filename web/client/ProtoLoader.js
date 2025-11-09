@@ -9,7 +9,7 @@ export async function loadProto(protoPath) {
   // Prevent stale caching by appending a build id query when available
   const url = BUILD_ID ? `${protoPath}?v=${encodeURIComponent(BUILD_ID)}` : protoPath;
   const root = await protobuf.load(url);
-    const Control = root.lookupType('hudes.Control');
-    const ControlType = root.lookupEnum('hudes.Control.Type');
-    return { Control, ControlType };
-  }
+  const Control = root.lookupType('hudes.Control');
+  const ControlType = root.lookupEnum('hudes.Control.Type');
+  return { Control, ControlType, root };
+}

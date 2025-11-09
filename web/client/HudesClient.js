@@ -20,17 +20,28 @@ export default class HudesClient {
             }
         } catch {}
 
-    // Remember backend for API calls
-    this.backendHost = addr;
-    this.backendPort = port;
-    const isHttps = (typeof window !== 'undefined' && window.location?.protocol === 'https:');
-    const scheme = isHttps ? 'wss' : 'ws';
-    const url = addr?.startsWith('ws') ? addr : `${scheme}://${this.backendHost}:${this.backendPort}`;
-        log(`[HudesClient] Connecting WebSocket to ${url}`);
-        this.socket = new WebSocket(url);
-        this.socket.binaryType = "arraybuffer";
+        // Remember backend for API calls
+        this.backendHost = addr;
+        this.backendPort = port;
+        const isHttps = (typeof window !== 'undefined' && window.location?.protocol === 'https:');
+        this.wsScheme = isHttps ? 'wss' : 'ws';
+        this.socketUrl = addr?.startsWith('ws') ? addr : `${this.wsScheme}://${this.backendHost}:${this.backendPort}`;
+        this.socket = null;
         this.requestIdx = 0;
         this.running = true;
+        this._connected = false;
+        this._shouldReconnect = true;
+        this._reconnectAttempts = 0;
+        this._sessionStorageAvailable = typeof window !== 'undefined' && !!window.sessionStorage;
+        this._sessionTokenKey = 'hudes.tab.sessionToken';
+        this._resumeTokenKey = 'hudes.resume.token';
+        this._clientSessionToken = this._loadSessionToken();
+        this._pendingSessionToken = null;
+        this._resumeToken = this._loadPersistedResumeToken();
+        this._resumeInFlight = false;
+        this._readyForInput = false;
+        this._serverAckRequestIdx = 0;
+        this._protoReadyPromise = this.loadProto();
 
         const renderMode = (options.renderMode || '3d').toLowerCase();
         this.debug = Boolean(options.debug);
@@ -67,7 +78,7 @@ export default class HudesClient {
             alt1d: this.alt1d,
             altKeys: this.altKeys,
         });
-    this.view.initializeCharts(); // Initialize charts
+        this.view.initializeCharts(); // Initialize charts
         this.Control = null;
         this.ControlType = null;
         this.lossLineLabels = [];
@@ -91,15 +102,35 @@ export default class HudesClient {
         this.trainSteps = [];
         this.valSteps = [];
 
+        this._helpDismissKey = 'hudes.help.dismissed';
+        this._helpDismissed = false;
+        this._patchHelpStateTracking();
+        this._initHelpDismissState();
+
         this.initKeys();
-        this.setupSocket();
-        this.loadProto();
+        this._connectSocket();
     }
 
     async loadProto() {
-        const { Control, ControlType } = await loadProto('hudes.proto');
+        const { Control, ControlType, root } = await loadProto('hudes.proto');
         this.Control = Control;
         this.ControlType = ControlType;
+        try {
+            const resumeEnum = root.lookupEnum('hudes.Control.Resume.Status');
+            this.resumeStatus = resumeEnum?.values ?? {
+                RESUME_OK: 0,
+                RESUME_NOT_FOUND: 1,
+                RESUME_EXPIRED: 2,
+                RESUME_REJECTED: 3,
+            };
+        } catch {
+            this.resumeStatus = {
+                RESUME_OK: 0,
+                RESUME_NOT_FOUND: 1,
+                RESUME_EXPIRED: 2,
+                RESUME_REJECTED: 3,
+            };
+        }
         log("[HudesClient] Proto file and enums loaded successfully.");
     }
     _handleMessage(event) {
@@ -116,6 +147,15 @@ export default class HudesClient {
                     window.__hudesMsgCounts[t] = (window.__hudesMsgCounts[t] || 0) + 1;
                 }
             } catch {}
+            if (typeof message.resumeToken === 'string' && message.resumeToken.length > 0) {
+                this._persistResumeToken(message.resumeToken);
+            }
+            if (typeof message.requestIdx === 'number') {
+                this._serverAckRequestIdx = Math.max(
+                    this._serverAckRequestIdx,
+                    message.requestIdx,
+                );
+            }
 
             //log("Decoded Message:", message);
 
@@ -169,6 +209,10 @@ export default class HudesClient {
 
                     //log("hudes_client: receive message: loss and preds: done");
 
+                    this._updateEvalStepsFromMessage(message);
+                    break;
+                case this.ControlType.values.CONTROL_RESUME:
+                    this._handleResumeControl(message);
                     break;
 
                 case this.ControlType.values.CONTROL_VAL_LOSS:
@@ -197,6 +241,7 @@ export default class HudesClient {
 
 
                     this.state.updateBestScoreOrNot(this.valLosses[this.valLosses.length - 1]);
+                    this._updateEvalStepsFromMessage(message);
 
                     // Update the view with training and validation loss history
                     this.view.updateLossChart(
@@ -275,6 +320,7 @@ export default class HudesClient {
 
                     // Update local countdown but do not end until server signals finish
                     this._updateSpeedRunFromMessage(message);
+                    this._updateEvalStepsFromMessage(message);
                     break;
 
                 case this.ControlType.values.CONTROL_LOSS_LINE_RESULTS: {
@@ -290,6 +336,7 @@ export default class HudesClient {
                     this.view.updateLossLines?.(lossLines, { stepSpacing, labels });
                     this.view.annotateBottomScreen?.(this.state.toString());
                     this._updateSpeedRunFromMessage(message);
+                    this._updateEvalStepsFromMessage(message);
                     break;
                 }
 
@@ -580,14 +627,300 @@ export default class HudesClient {
     // }
 
 
-    setupSocket() {
-        this.socket.onopen = () => log("[HudesClient] WebSocket connected.");
-        this.socket.onclose = () => {
-            log("[HudesClient] WebSocket disconnected.");
+    _connectSocket() {
+        if (!this._shouldReconnect) {
+            return;
+        }
+        try {
+            log(`[HudesClient] Connecting WebSocket to ${this.socketUrl}`);
+            this.socket = new WebSocket(this.socketUrl);
+            this.socket.binaryType = 'arraybuffer';
+            this.socket.onopen = () => this._handleSocketOpen();
+            this.socket.onclose = (event) => this._handleSocketClose(event);
+            this.socket.onmessage = (event) => this._handleMessage(event);
+            this.socket.onerror = (error) =>
+                log(`[HudesClient] WebSocket error: ${error?.message ?? error}`, null, 'error');
+        } catch (err) {
+            log(`[HudesClient] Failed to open WebSocket: ${err?.message ?? err}`, null, 'error');
+            this._scheduleReconnect();
+        }
+    }
+
+    _handleSocketOpen() {
+        log('[HudesClient] WebSocket connected.');
+        this._connected = true;
+        try {
+            if (typeof window !== 'undefined') {
+                const el = document.querySelector('.connection-status');
+                if (el) {
+                    el.dataset.state = 'connected';
+                    el.textContent = 'Connected';
+                }
+            }
+        } catch {}
+        this._reconnectAttempts = 0;
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
+        this._readyForInput = false;
+        (async () => {
+            try {
+                await this._protoReadyPromise;
+                if (this._resumeToken) {
+                    this._resumeInFlight = true;
+                    this._sendResumeRequest();
+                } else {
+                    this._resumeInFlight = false;
+                    await this.sendConfig();
+                    this._readyForInput = true;
+                }
+            } catch (err) {
+                log(`[HudesClient] Failed during socket open init: ${err?.message ?? err}`, null, 'error');
+            }
+        })();
+    }
+
+    _handleSocketClose(event) {
+        log(`[HudesClient] WebSocket disconnected (code=${event?.code ?? 'n/a'})`);
+        this._connected = false;
+        try {
+            if (typeof window !== 'undefined') {
+                const el = document.querySelector('.connection-status');
+                if (el) {
+                    el.dataset.state = 'disconnected';
+                    el.textContent = 'Disconnected';
+                }
+            }
+        } catch {}
+        this._readyForInput = false;
+        this._resumeInFlight = false;
+        this._pendingSessionToken = null;
+        if (!this._shouldReconnect) {
             this.running = false;
+            return;
+        }
+        this._scheduleReconnect();
+    }
+
+    _scheduleReconnect() {
+        this._reconnectAttempts += 1;
+        const delay = Math.min(1000 * this._reconnectAttempts, 5000);
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+        }
+        this._reconnectTimer = setTimeout(() => this._connectSocket(), delay);
+    }
+
+    _sendResumeRequest() {
+        if (!this.Control || !this.ControlType) {
+            return;
+        }
+        if (!this._resumeToken) {
+            this._pendingSessionToken = null;
+            this._readyForInput = false;
+            this.sendConfig();
+            return;
+        }
+        const nextSessionToken = this._generateSessionToken();
+        this._pendingSessionToken = nextSessionToken;
+        const payload = {
+            type: this.ControlType.values.CONTROL_RESUME,
+            resume: {
+                token: this._resumeToken,
+                lastRequestIdx: this._serverAckRequestIdx,
+                clientSessionToken: this._clientSessionToken,
+                newClientSessionToken: nextSessionToken,
+            },
         };
-        this.socket.onmessage = (event) => this._handleMessage(event);
-        this.socket.onerror = (error) => log(`[HudesClient] WebSocket error: ${error}`);
+        this.sendQ(payload);
+    }
+
+    _handleResumeControl(message) {
+        const resumePayload = message?.resume;
+        const status = resumePayload?.status;
+        const token = resumePayload?.token || message?.resumeToken;
+        if (token) {
+            this._persistResumeToken(token);
+        }
+        if (typeof resumePayload?.lastRequestIdx === 'number') {
+            this._serverAckRequestIdx = Math.max(
+                this._serverAckRequestIdx,
+                resumePayload.lastRequestIdx,
+            );
+        }
+        if (status === this.resumeStatus?.RESUME_OK || status === 0) {
+            const nextSession =
+                resumePayload?.clientSessionToken || this._pendingSessionToken;
+            if (nextSession) {
+                this._setSessionToken(nextSession);
+            }
+            this._pendingSessionToken = null;
+            this._resumeInFlight = false;
+            this._readyForInput = true;
+            try {
+                this.sendConfig();
+            } catch (err) {
+                log(`[HudesClient] Failed to resend config after resume: ${err?.message ?? err}`, null, 'error');
+            }
+            return;
+        }
+        this._pendingSessionToken = null;
+        this._resumeInFlight = false;
+        this._readyForInput = false;
+        this._clearResumeToken();
+        this.sendConfig();
+    }
+
+    _persistResumeToken(token) {
+        if (!token || typeof token !== 'string') {
+            return;
+        }
+        this._resumeToken = token;
+        try {
+            if (this._sessionStorageAvailable) {
+                window.sessionStorage?.setItem(this._resumeTokenKey, token);
+            }
+        } catch {}
+    }
+
+    _loadPersistedResumeToken() {
+        try {
+            if (this._sessionStorageAvailable) {
+                return window.sessionStorage?.getItem(this._resumeTokenKey) || null;
+            }
+        } catch {}
+        return null;
+    }
+
+    _clearResumeToken() {
+        this._resumeToken = null;
+        try {
+            if (this._sessionStorageAvailable) {
+                window.sessionStorage?.removeItem(this._resumeTokenKey);
+            }
+        } catch {}
+    }
+
+    _patchHelpStateTracking() {
+        const state = this.state;
+        if (!state) return;
+        const originalClose = state.closeHelpScreens?.bind(state);
+        if (originalClose) {
+            state.closeHelpScreens = (...args) => {
+                const result = originalClose(...args);
+                this._handleHelpStateChanged();
+                return result;
+            };
+        }
+        const originalNext = state.nextHelpScreen?.bind(state);
+        if (originalNext) {
+            state.nextHelpScreen = (...args) => {
+                const prev = state.helpScreenIdx;
+                const result = originalNext(...args);
+                if (state.helpScreenIdx !== prev) {
+                    this._handleHelpStateChanged();
+                }
+                return result;
+            };
+        }
+    }
+
+    _initHelpDismissState() {
+        if (!this._sessionStorageAvailable) {
+            return;
+        }
+        try {
+            if (window.sessionStorage?.getItem(this._helpDismissKey) === '1') {
+                this._helpDismissed = true;
+                if (typeof this.state.closeHelpScreens === 'function') {
+                    this.state.closeHelpScreens();
+                } else {
+                    this.state.helpScreenIdx = -1;
+                }
+            }
+        } catch {}
+    }
+
+    _handleHelpStateChanged() {
+        if (this.state?.helpScreenIdx === -1) {
+            this._markHelpDismissed();
+        }
+    }
+
+    _markHelpDismissed() {
+        if (this._helpDismissed) {
+            return;
+        }
+        this._helpDismissed = true;
+        if (this._sessionStorageAvailable) {
+            try {
+                window.sessionStorage?.setItem(this._helpDismissKey, '1');
+            } catch {}
+        }
+    }
+
+    _updateEvalStepsFromMessage(message) {
+        const steps = message?.totalEvalSteps;
+        if (typeof steps === 'number' && Number.isFinite(steps)) {
+            if (typeof this.state.setEvalSteps === 'function') {
+                this.state.setEvalSteps(steps);
+            } else {
+                this.state.evalSteps = steps;
+            }
+        }
+    }
+
+    _loadSessionToken() {
+        if (!this._sessionStorageAvailable) {
+            return this._generateSessionToken();
+        }
+        try {
+            const existing = window.sessionStorage?.getItem(this._sessionTokenKey);
+            if (existing) {
+                return existing;
+            }
+        } catch {}
+        const token = this._generateSessionToken();
+        this._persistSessionToken(token);
+        return token;
+    }
+
+    _persistSessionToken(token) {
+        if (!token || typeof token !== 'string' || !this._sessionStorageAvailable) {
+            return;
+        }
+        try {
+            window.sessionStorage?.setItem(this._sessionTokenKey, token);
+        } catch {}
+    }
+
+    _setSessionToken(token) {
+        if (!token || typeof token !== 'string') {
+            return;
+        }
+        this._clientSessionToken = token;
+        this._persistSessionToken(token);
+    }
+
+    _generateSessionToken() {
+        try {
+            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+                const bytes = new Uint32Array(4);
+                crypto.getRandomValues(bytes);
+                return Array.from(bytes, (b) => b.toString(16).padStart(8, '0')).join('');
+            }
+        } catch {}
+        return `sess-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    }
+
+    _canSendUserCommands() {
+        return (
+            this.socket &&
+            this.socket.readyState === WebSocket.OPEN &&
+            !this._resumeInFlight &&
+            this._readyForInput
+        );
     }
 
     initKeys() {
@@ -839,12 +1172,21 @@ export default class HudesClient {
         let elapsedTime = 0;
 
         // Quick check if the WebSocket is already open
+        if (!this.socket) {
+            console.error("WebSocket is not initialized.");
+            return;
+        }
         if (this.socket.readyState === WebSocket.OPEN) {
             callback();
             return;
         }
 
         const interval = setInterval(() => {
+            if (!this.socket) {
+                clearInterval(interval);
+                console.error("WebSocket instance missing during wait.");
+                return;
+            }
             if (this.socket.readyState === WebSocket.OPEN) {
                 clearInterval(interval);
                 callback(); // Invoke the callback when the WebSocket is ready
@@ -912,6 +1254,10 @@ export default class HudesClient {
             // Client-side guard; server also ignores
             return;
         }
+        if (!this._canSendUserCommands()) {
+            log("[HudesClient] Ignoring SGD request while socket unavailable", null, 'warn');
+            return;
+        }
 
         const payload = {
             type: this.ControlType.values.CONTROL_SGD_STEP,
@@ -928,6 +1274,10 @@ export default class HudesClient {
             console.error("Proto definitions not loaded. Cannot request next batch.");
             return;
         }
+        if (!this._canSendUserCommands()) {
+            log("[HudesClient] Ignoring next batch while socket unavailable", null, 'warn');
+            return;
+        }
 
         const payload = {
             type: this.ControlType.values.CONTROL_NEXT_BATCH,
@@ -941,6 +1291,10 @@ export default class HudesClient {
     async getNextDims() {
         if (!this.Control || !this.ControlType) {
             console.error("Proto definitions not loaded. Cannot request next dims.");
+            return;
+        }
+        if (!this._canSendUserCommands()) {
+            log("[HudesClient] Ignoring next dims while socket unavailable", null, 'warn');
             return;
         }
 
@@ -966,6 +1320,10 @@ export default class HudesClient {
             console.error("Proto definitions not loaded. Cannot start Speed Run.");
             return;
         }
+        if (!this._canSendUserCommands()) {
+            log("[HudesClient] Cannot start Speed Run while disconnected", null, 'warn');
+            return;
+        }
         this.highScoreSubmitted = false;
         if (this._srsInterval) { try { clearInterval(this._srsInterval); } catch {} this._srsInterval = null; }
         this._srsEndAt = null;
@@ -988,6 +1346,10 @@ export default class HudesClient {
             return;
         }
         if (this.highScoreSubmitted) return;
+        if (!this._canSendUserCommands()) {
+            log("[HudesClient] Cannot submit High Score while disconnected", null, 'warn');
+            return;
+        }
         const clean = (name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
         if (clean.length !== 4) return;
         const payload = {
@@ -1020,6 +1382,10 @@ export default class HudesClient {
                 console.error("Proto definitions not loaded. Cannot send dims and steps.");
                 return;
             }
+            if (!this._canSendUserCommands()) {
+                log("[HudesClient] Ignoring dims send while socket unavailable", null, 'warn');
+                return;
+            }
 
             // Construct the payload
             const payload = {
@@ -1028,7 +1394,6 @@ export default class HudesClient {
                     dim: parseInt(dim, 10),
                     step,
                 })),
-                requestIdx: this.requestIdx,
             };
 
             // Debug: Log the payload before sending
@@ -1051,9 +1416,6 @@ export default class HudesClient {
 
             // Update the UI or internal state to reflect the changes
             this.dimsAndStepsUpdated();
-
-            // Increment the request index
-            this.requestIdx++;
 
         } catch (error) {
             console.error("Error in sendDimsAndSteps:", error);
@@ -1082,11 +1444,14 @@ export default class HudesClient {
                 dtype: this.state.dtype,
                 meshEnabled: this.meshEnabled,
                 lossLines: this.renderMode === '1d' ? this.lossLines : 0,
+                resumeSupported: true,
+                clientSessionToken: this._clientSessionToken,
             },
         };
 
         // Use sendQ to send the message
         this.sendQ(payload);
+        this._readyForInput = true;
 
         log(`[HudesClient] Config sent: mode=${this.renderMode} grids=${this.grids} lossLines=${this.lossLines} size=${this.grid_size} step=${this.state.stepSize} batch=${this.state.batchSize} dtype=${this.state.dtype} meshEnabled=${this.meshEnabled}`);
     }
@@ -1094,10 +1459,7 @@ export default class HudesClient {
 
 
     async runLoop() {
-        while (!this.Control || !this.ControlType) {
-            await sleep(100);
-        }
-        this.sendConfig();
+        await this._protoReadyPromise;
         while (this.running) {
             await sleep(10);
         }

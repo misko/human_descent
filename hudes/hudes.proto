@@ -17,6 +17,8 @@ message Config {
   required string dtype = 7;
   optional bool mesh_enabled = 8 [default = true];
   optional int32 loss_lines = 9;
+  optional bool resume_supported = 10 [default = true];
+  optional string client_session_token = 11;
 }
 
 message TrainLossAndPreds {
@@ -63,6 +65,7 @@ message Control {
     CONTROL_MESHGRID_RESULTS= 104;
     CONTROL_SGD_STEP = 105;
     CONTROL_LOSS_LINE_RESULTS = 108;
+    CONTROL_RESUME = 109;
     CONTROL_QUIT = 901;
   }
   required Type type = 1;
@@ -99,5 +102,21 @@ message Control {
   optional HighScore high_score = 211; // used with CONTROL_HIGH_SCORE_LOG
   repeated float loss_line_results = 216;
   repeated int32 loss_line_shape = 217;
+  message Resume {
+    enum Status {
+      RESUME_OK = 0;
+      RESUME_NOT_FOUND = 1;
+      RESUME_EXPIRED = 2;
+      RESUME_REJECTED = 3;
+    }
+    optional Status status = 1;
+    optional string token = 2;
+    optional int32 last_request_idx = 3;
+    optional string client_session_token = 4;
+    optional string new_client_session_token = 5;
+  }
+  optional Resume resume = 218;
+  optional string resume_token = 219;
+  optional int32 total_eval_steps = 220;
 
 }

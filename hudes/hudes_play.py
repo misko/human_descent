@@ -25,6 +25,11 @@ def main(argv=None):
         "--skip-help",
         action="store_true",
     )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Use non-OpenGL view when running keyboardGL (useful for CI/headless)",
+    )
     parser.add_argument("--max-loop-iterations", type=int, default=None)
     parser.add_argument("--max-seconds", type=float, default=None)
 
@@ -52,7 +57,10 @@ def main(argv=None):
             joystick_controller_key=args.controller,
             skip_help=args.skip_help,
         )
-        view = OpenGLView(grid_size=args.grid_size, grids=args.grids)
+        if args.headless:
+            view = View()
+        else:
+            view = OpenGLView(grid_size=args.grid_size, grids=args.grids)
     elif args.input == "xtouch":
         controller = XTouchClient(
             addr=args.addr,

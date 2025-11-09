@@ -87,6 +87,7 @@ class HudesWebsocketClient:
                     mesh_grids=mesh_grids,
                     batch_size=batch_size,
                     dtype=dtype,
+                    resume_supported=False,
                 ),
             ).SerializeToString()
         )
@@ -98,64 +99,72 @@ class HudesWebsocketClient:
         return self.recv_q.get(timeout=0.0)
 
     def run_loop(self):
-        try:
-            with sync_connect(self.remote_addr) as websocket:
-                while self.running:
-                    # figure out what if we should send
-                    request_idx = -1
-                    dims_and_steps = {}
-                    while not self.send_q.empty():
-                        raw_msg = self.send_q.get()
-                        msg = hudes_pb2.Control()
-                        msg.ParseFromString(raw_msg)
-                        if msg.type == hudes_pb2.Control.CONTROL_DIMS:
-                            request_idx = max(request_idx, msg.request_idx)
-                            for dim_and_step in msg.dims_and_steps:
-                                dim = dim_and_step.dim
-                                if dim not in dims_and_steps:
-                                    dims_and_steps[dim] = dim_and_step.step
-                                else:
-                                    dims_and_steps[dim] += dim_and_step.step
-                        else:
-                            if len(dims_and_steps) != 0:
-                                websocket.send(
-                                    dims_and_steps_to_control_message(
-                                        dims_and_steps=dims_and_steps,
-                                        request_idx=request_idx,
-                                    ).SerializeToString()
-                                )
-                                dims_and_steps = {}
-                            websocket.send(raw_msg)
-                    if len(dims_and_steps) != 0:
-                        websocket.send(
-                            dims_and_steps_to_control_message(
-                                dims_and_steps=dims_and_steps,
-                                request_idx=request_idx,
-                            ).SerializeToString()
-                        )
+        backoff = 1
+        while self.running:
+            try:
+                with sync_connect(self.remote_addr) as websocket:
+                    logging.info("Connected to %s", self.remote_addr)
+                    backoff = 1
+                    while self.running:
+                        request_idx = -1
                         dims_and_steps = {}
+                        while not self.send_q.empty():
+                            raw_msg = self.send_q.get()
+                            msg = hudes_pb2.Control()
+                            msg.ParseFromString(raw_msg)
+                            if msg.type == hudes_pb2.Control.CONTROL_DIMS:
+                                request_idx = max(request_idx, msg.request_idx)
+                                for dim_and_step in msg.dims_and_steps:
+                                    dim = dim_and_step.dim
+                                    if dim not in dims_and_steps:
+                                        dims_and_steps[dim] = dim_and_step.step
+                                    else:
+                                        dims_and_steps[dim] += dim_and_step.step
+                            else:
+                                if len(dims_and_steps) != 0:
+                                    websocket.send(
+                                        dims_and_steps_to_control_message(
+                                            dims_and_steps=dims_and_steps,
+                                            request_idx=request_idx,
+                                        ).SerializeToString()
+                                    )
+                                    dims_and_steps = {}
+                                websocket.send(raw_msg)
+                        if len(dims_and_steps) != 0:
+                            websocket.send(
+                                dims_and_steps_to_control_message(
+                                    dims_and_steps=dims_and_steps,
+                                    request_idx=request_idx,
+                                ).SerializeToString()
+                            )
+                            dims_and_steps = {}
 
-                    # figure out what we are recv'ing if anything
-                    try:
-                        msg = websocket.recv(timeout=0.00001)
-                        self.recv_q.put(msg)
-                    except TimeoutError:
-                        pass
-                    except (
-                        websockets.exceptions.ConnectionClosedError,
-                        websockets.exceptions.ConnectionClosedOK,
-                    ):
-                        self.running = False
+                        try:
+                            msg = websocket.recv(timeout=0.00001)
+                            self.recv_q.put(msg)
+                        except TimeoutError:
+                            pass
+                        except (
+                            websockets.exceptions.ConnectionClosedError,
+                            websockets.exceptions.ConnectionClosedOK,
+                        ):
+                            logging.info(
+                                "Remote closed connection; attempting reconnect"
+                            )
+                            break
 
-                    # when there is no interaction give the system a break(?)
-                    # if not send_or_recv:
-                    time.sleep(0.01)
-        except (ConnectionRefusedError, socket.gaierror) as e:
-            logging.error(f"Connection issue with {self.remote_addr}, {e}")
-            self.running = False
-        except Exception as e:
-            logging.error(f"Unexpected connection issue with {self.remote_addr}, {e}")
-            self.running = False
+                        time.sleep(0.01)
+            except (ConnectionRefusedError, socket.gaierror) as e:
+                logging.error(f"Connection issue with {self.remote_addr}, {e}")
+            except Exception as e:
+                logging.error(
+                    f"Unexpected connection issue with {self.remote_addr}, {e}"
+                )
+
+            if not self.running:
+                break
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 10)
 
 
 async def send_dims(n: int = 10):

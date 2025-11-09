@@ -2,6 +2,7 @@ export default class ClientState {
     constructor(stepSizeResolution, initialStepSizeIdx) {
         this.bestScore = Infinity;
         this.sgdSteps = 0;
+        this.evalSteps = 0;
         this.speedRunActive = false;
         this.speedRunSecondsRemaining = 0;
         this.dtypes = ["float16", "float32"];
@@ -26,7 +27,7 @@ export default class ClientState {
     const timer = this.speedRunActive
         ? ` | SpeedRun: ${secs.toFixed(1)}s`
         : '';
-    return `Best-val-loss: ${this.bestScore.toFixed(3)}, Batch-size: ${this.batchSize}, StepSize: ${this.stepSize.toExponential(3)}, SGD-steps: ${this.sgdSteps} , Dtype: ${this.dtype}${timer}`
+    return `Best-val-loss: ${this.bestScore.toFixed(3)}, Batch-size: ${this.batchSize}, StepSize: ${this.stepSize.toExponential(3)}, SGD-steps: ${this.sgdSteps}, Eval-steps: ${this.evalSteps}, Dtype: ${this.dtype}${timer}`
     }
 
     updateStepSize() {
@@ -35,6 +36,9 @@ export default class ClientState {
             this.maxLogStepSize
         );
         this.stepSize = Math.pow(10, logStepSize);
+    }
+    setEvalSteps(count) {
+        this.evalSteps = count;
     }
 
     increaseStepSize(mag = 1) {

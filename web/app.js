@@ -58,12 +58,17 @@ function installModeToggle(currentMode) {
 	}
 	container.innerHTML = '';
 
-	const viewButton = document.createElement('button');
-	viewButton.type = 'button';
-	viewButton.className = 'view-toggle';
+	const makeToggleButton = (label, onClick, extraClass = '') => {
+		const btn = document.createElement('button');
+		btn.type = 'button';
+		btn.className = `header-pill ${extraClass}`.trim();
+		btn.textContent = label;
+		btn.addEventListener('click', onClick);
+		return btn;
+	};
+
 	const targetMode = currentMode === '1d' ? '3d' : '1d';
-	viewButton.textContent = currentMode === '1d' ? 'Switch to 3D view' : 'Switch to 1D view';
-	viewButton.addEventListener('click', () => {
+	const viewButton = makeToggleButton(currentMode === '1d' ? 'Switch to 3D view' : 'Switch to 1D view', () => {
 		const params = new URLSearchParams(window.location.search);
 		params.set('mode', targetMode);
 		window.location.search = params.toString();
@@ -83,19 +88,23 @@ function installModeToggle(currentMode) {
 			window.location.search = params.toString();
 		};
 
-		const makeToggle = (label, key) => {
-			const btn = document.createElement('button');
-			btn.type = 'button';
-			btn.className = 'mode-toggle';
-			const enabled = params.has(key);
-			btn.textContent = `${label}: ${enabled ? 'ON' : 'OFF'}`;
-			btn.addEventListener('click', () => toggleFlag(key));
-			return btn;
-		};
+		const makeToggle = (label, key) =>
+			makeToggleButton(`${label}: ${params.has(key) ? 'ON' : 'OFF'}`, () => toggleFlag(key), 'mode-toggle');
 
 		container.appendChild(makeToggle('Alt Keys', 'altkeys'));
 		container.appendChild(makeToggle('Alt 1D', 'alt1d'));
 	}
+
+	let status = header.querySelector('.connection-status');
+	if (!status) {
+		status = document.createElement('span');
+		status.className = 'connection-status';
+		header.appendChild(status);
+	}
+	status.dataset.state = 'connecting';
+	status.textContent = 'Connecting…';
+
+	return status;
 }
 
 (async function bootstrap() {

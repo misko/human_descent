@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import inspect
 import os
+import subprocess
 import sys
 import types
 from types import SimpleNamespace
@@ -128,6 +129,38 @@ async def wait_for_server(host: str, port: int, timeout: float = 20.0):
             await asyncio.sleep(0.1)
 
 
+async def launch_test_server(port: int, device: str = "mps"):
+    download_args = SimpleNamespace(
+        device="cpu",
+        model="ffnn",
+        max_batch_size=512,
+        max_grids=5,
+        port=port,
+        max_grid_size=41,
+        ssl_pem=None,
+        run_in="thread",
+        download_dataset_and_exit=True,
+    )
+    await run_wrapper(download_args)
+
+    server_args = SimpleNamespace(
+        device=device,
+        model="ffnn",
+        max_batch_size=512,
+        max_grids=5,
+        port=port,
+        max_grid_size=41,
+        ssl_pem=None,
+        run_in="thread",
+        download_dataset_and_exit=False,
+    )
+    loop = asyncio.get_running_loop()
+    stop_future = loop.create_future()
+    server_task = asyncio.create_task(run_wrapper(server_args, stop_future=stop_future))
+    await wait_for_server("localhost", port)
+    return server_task, stop_future
+
+
 def run_clients_sequence(port: int):
     KeyboardClientGL = _get_keyboard_client_gl()
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -190,42 +223,56 @@ def run_clients_sequence(port: int):
         pg.quit()
 
 
+def run_hudes_cli_controller(input_name: str, port: int, headless: bool = False):
+    env = os.environ.copy()
+    env.setdefault("SDL_VIDEODRIVER", "dummy")
+    env.setdefault("SDL_AUDIODRIVER", "dummy")
+    env.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+    cmd = [
+        sys.executable,
+        "hudes/hudes_play.py",
+        "--input",
+        input_name,
+        "--port",
+        str(port),
+        "--skip-help",
+        "--max-loop-iterations",
+        "200",
+        "--max-seconds",
+        "10",
+    ]
+    cmd = [
+        sys.executable,
+        "hudes/hudes_play.py",
+        "--input",
+        input_name,
+        "--port",
+        str(port),
+        "--skip-help",
+        "--max-loop-iterations",
+        "200",
+        "--max-seconds",
+        "10",
+    ]
+    if headless:
+        cmd.append("--headless")
+    result = subprocess.run(
+        cmd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=60,
+    )
+    return result
+
+
 @pytest.mark.asyncio
 @pytest.mark.timeout(120)
 async def test_run_sh_headless_pygame():
     port = 8766
-
-    download_args = SimpleNamespace(
-        device="cpu",
-        model="ffnn",
-        max_batch_size=512,
-        max_grids=5,
-        port=port,
-        max_grid_size=41,
-        ssl_pem=None,
-        run_in="thread",
-        download_dataset_and_exit=True,
-    )
-    await run_wrapper(download_args)
-
-    server_args = SimpleNamespace(
-        device="mps",
-        model="ffnn",
-        max_batch_size=512,
-        max_grids=5,
-        port=port,
-        max_grid_size=41,
-        ssl_pem=None,
-        run_in="thread",
-        download_dataset_and_exit=False,
-    )
-    loop = asyncio.get_running_loop()
-    stop_future = loop.create_future()
-    server_task = asyncio.create_task(run_wrapper(server_args, stop_future=stop_future))
-
+    server_task, stop_future = await launch_test_server(port)
     try:
-        await wait_for_server("localhost", port)
-
         results = await asyncio.to_thread(run_clients_sequence, port)
 
         assert results["keyboardGL"][
@@ -237,6 +284,38 @@ async def test_run_sh_headless_pygame():
             "train_losses"
         ], "keyboard client received no train data"
         assert results["keyboard"]["examples_updated"] > 0
+    finally:
+        if not stop_future.done():
+            stop_future.set_result(True)
+        await server_task
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_hudes_play_keyboardgl_cli():
+    port = 8770
+    server_task, stop_future = await launch_test_server(port)
+    try:
+        result = await asyncio.to_thread(
+            run_hudes_cli_controller, "keyboardGL", port, True
+        )
+        assert result.returncode == 0, f"keyboardGL CLI failed: {result.stderr}"
+        assert "Traceback" not in (result.stderr or "")
+    finally:
+        if not stop_future.done():
+            stop_future.set_result(True)
+        await server_task
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_hudes_play_keyboard_cli():
+    port = 8771
+    server_task, stop_future = await launch_test_server(port)
+    try:
+        result = await asyncio.to_thread(run_hudes_cli_controller, "keyboard", port)
+        assert result.returncode == 0, f"keyboard CLI failed: {result.stderr}"
+        assert "Traceback" not in (result.stderr or "")
     finally:
         if not stop_future.done():
             stop_future.set_result(True)

@@ -45,44 +45,71 @@ body {
     transition: color 140ms ease;
 }
 
-.site-source-link:hover,
-.site-source-link:focus-visible {
-    color: #ffe59c;
-    text-decoration: underline;
+.site-source-link {
+    transition: color 180ms ease, text-shadow 180ms ease;
+}
+
+.connection-status {
+    position: absolute;
+    top: 50%;
+    right: clamp(4px, 1vw, 12px);
+    transform: translateY(-50%);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #ffd666;
 }
 
 .header-controls {
     position: absolute;
-    right: clamp(12px, 4vw, 28px);
+    right: clamp(120px, 12vw, 210px);
     top: 50%;
     transform: translateY(-50%);
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.8rem;
 }
 
-.header-controls button {
-    padding: 6px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 210, 140, 0.42);
-    background: rgba(0, 0, 0, 0.68);
+.header-controls button.header-pill {
+    padding: 0;
+    border: none;
+    background: none;
     color: #ffd666;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     cursor: pointer;
-    transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+    transition: color 180ms ease, text-shadow 180ms ease;
 }
 
-.header-controls button:hover {
-    border-color: rgba(255, 225, 160, 0.9);
-    background: rgba(255, 200, 80, 0.2);
-    transform: translateY(-50%) scale(1.05);
+.header-controls button.header-pill:focus {
+    outline: none;
 }
 
 .header-controls .mode-toggle {
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     letter-spacing: 0.1em;
+}
+
+.header-controls button.header-pill:hover,
+.header-controls button.header-pill:focus-visible,
+.site-source-link:hover,
+.site-source-link:focus-visible {
+    color: #ffe59c;
+    text-decoration: none;
+    text-shadow: 0 0 8px rgba(255, 229, 156, 0.85);
+}
+
+.connection-status[data-state='connected'] {
+    color: #4caf50;
+}
+
+.connection-status[data-state='connecting'] {
+    color: #ffaa33;
+}
+
+.connection-status[data-state='disconnected'] {
+    color: #ff5757;
 }
 
 #imageContainer {
