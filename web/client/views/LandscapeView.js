@@ -780,6 +780,13 @@ export default class LandscapeView {
     // Optional: Initialize Confusion Matrix as an empty Heatmap
     initializeConfusionMatrixHeatmap() {
         if (this.confusionMatrixContainer) {
+            const heatmapConfig = {
+                displayModeBar: false,
+                staticPlot: true,
+                scrollZoom: false,
+                doubleClick: false,
+                responsive: true,
+            };
             const initialData = [
                 {
                     z: [], // Initialize with empty data
@@ -804,7 +811,7 @@ export default class LandscapeView {
                 responsive: true,
             };
 
-            Plotly.newPlot(this.confusionMatrixContainer, initialData, layout);
+            Plotly.newPlot(this.confusionMatrixContainer, initialData, layout, heatmapConfig);
         }
     }
 
@@ -1044,8 +1051,15 @@ export default class LandscapeView {
                 responsive: true,
             };
 
+            const heatmapConfig = {
+                displayModeBar: false,
+                staticPlot: true,
+                scrollZoom: false,
+                doubleClick: false,
+                responsive: true,
+            };
             // Plot or update the heatmap
-            Plotly.newPlot('confusionMatrixChart', updatedData, updatedLayout);
+            Plotly.newPlot('confusionMatrixChart', updatedData, updatedLayout, heatmapConfig);
             //console.log("Confusion matrix heatmap updated successfully.");
         } catch (error) {
             console.error("Failed to update confusion matrix heatmap:", error);
