@@ -97,6 +97,7 @@ export default class HudesClient {
     this._srsInterval = null; // local countdown ticker (started on first server reply)
     this._srsEndAt = null; // timestamp (ms) when local countdown should end
     this.highScoreSubmitted = false;
+    this._speedRunRequestPending = false;
 
 
         // Initialize loss and step tracking arrays
@@ -387,6 +388,7 @@ export default class HudesClient {
                 this.state.speedRunSecondsRemaining = 0;
                 this.speedRunActive = false;
                 this.state.speedRunActive = false;
+                this._speedRunRequestPending = false;
                 // Capture achieved final val loss if present
                 if (message.valLoss && typeof message.valLoss.valLoss === 'number') {
                     this._lastFinalValLoss = message.valLoss.valLoss;
@@ -408,6 +410,7 @@ export default class HudesClient {
 
             // Start local timer on first srs > 0 after Speed Run starts
             if (srs > 0) {
+                this._speedRunRequestPending = false;
                 this.speedRunActive = true;
                 this.state.speedRunActive = true;
                 if (!this._srsInterval) {
@@ -1071,9 +1074,13 @@ export default class HudesClient {
         if (event.type === "keydown") {
             switch (event.code) {
                 case "KeyZ":
-                    // Start a speed run
-                    log('[HudesClient] KeyZ pressed: starting speed run');
-                    this.startSpeedRun();
+                    if (this.speedRunActive || this._speedRunRequestPending) {
+                        log('[HudesClient] KeyZ pressed: cancelling speed run');
+                        this.cancelSpeedRun();
+                    } else {
+                        log('[HudesClient] KeyZ pressed: starting speed run');
+                        this.startSpeedRun();
+                    }
                     break;
                 case "KeyY":
                     // Request Top 10 leaderboard over WebSocket
@@ -1347,6 +1354,10 @@ export default class HudesClient {
             log("[HudesClient] Cannot start Speed Run while disconnected", null, 'warn');
             return;
         }
+        if (this.speedRunActive || this._speedRunRequestPending) {
+            this.cancelSpeedRun();
+            return;
+        }
         this.highScoreSubmitted = false;
         if (this._srsInterval) { try { clearInterval(this._srsInterval); } catch {} this._srsInterval = null; }
         this._srsEndAt = null;
@@ -1354,6 +1365,7 @@ export default class HudesClient {
         this.state.speedRunActive = true;
         this.state.speedRunSecondsRemaining = 0;
         this.state.bestScore = Infinity;
+        this._speedRunRequestPending = true;
         // Do not change mesh grid configuration during Speed Run.
         const payload = {
             type: this.ControlType.values.CONTROL_SPEED_RUN_START,
@@ -1361,6 +1373,35 @@ export default class HudesClient {
         this.sendQ(payload);
         log("[HudesClient] Speed Run started.");
         // No fallback timer; countdown will start on first server reply with speedRunSecondsRemaining
+    }
+
+    cancelSpeedRun() {
+        if (!this.Control || !this.ControlType) {
+            console.error("Proto definitions not loaded. Cannot cancel Speed Run.");
+            return;
+        }
+        if (!this._canSendUserCommands()) {
+            log("[HudesClient] Cannot cancel Speed Run while disconnected", null, 'warn');
+            return;
+        }
+        if (!this.speedRunActive && !this._speedRunRequestPending) {
+            return;
+        }
+        this._speedRunRequestPending = false;
+        this.speedRunActive = false;
+        this.state.speedRunActive = false;
+        this.speedRunSecondsRemaining = 0;
+        this.state.speedRunSecondsRemaining = 0;
+        if (this._srsInterval) {
+            try { clearInterval(this._srsInterval); } catch {}
+            this._srsInterval = null;
+        }
+        this._srsEndAt = null;
+        const payload = {
+            type: this.ControlType.values.CONTROL_SPEED_RUN_CANCEL,
+        };
+        this.sendQ(payload);
+        log('[HudesClient] Speed Run cancelled.');
     }
 
     submitHighScore(name) {

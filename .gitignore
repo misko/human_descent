@@ -4,8 +4,10 @@
 hudes_env/
 hudes/mnist_data/
 web/mnist_data/
+mnist_data/
 web/node_modules/
 web/dist/
 web/test-results/
 web/generated/
 web/bundle-visualization.html
+web/package-lock.json

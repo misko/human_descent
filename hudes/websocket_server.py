@@ -46,6 +46,18 @@ client_idx = 0
 active_clients = {}
 # Track scheduled timeout tasks per client to finalize Speed Runs
 active_speedrun_tasks: dict[int, asyncio.Task] = {}
+
+
+def _cancel_speedrun_timeout(client_id: int):
+    task = active_speedrun_tasks.pop(client_id, None)
+    if task and not task.done():
+        try:
+            task.cancel()
+            logging.debug("Cancelled speed run timeout task for client %s", client_id)
+        except Exception:
+            pass
+
+
 # Map resume tokens to client ids for quick lookup
 resume_token_to_client_id: dict[str, int] = {}
 # Default Speed Run duration in seconds
@@ -711,15 +723,7 @@ def _schedule_speedrun_timeout(client_id: int, duration_sec: int, client_runner_
             logging.error("Speed Run timeout scheduling error: %s", e)
 
     # Cancel previous task if any
-    old_task = active_speedrun_tasks.get(client_id)
-    if old_task and not old_task.done():
-        try:
-            old_task.cancel()
-            logging.debug(
-                "Cancelled previous speed run timeout task for client %s", client_id
-            )
-        except Exception:
-            pass
+    _cancel_speedrun_timeout(client_id)
     task = asyncio.create_task(_timeout_then_eval())
     active_speedrun_tasks[client_id] = task
 
@@ -892,6 +896,25 @@ async def process_client(websocket, client_runner_q):
                 _schedule_speedrun_timeout(client.client_id, duration, client_runner_q)
                 client.force_update = True
                 client.force_reset_weights = True
+            elif msg.type == hudes_pb2.Control.CONTROL_SPEED_RUN_CANCEL:
+                logging.debug("process_client: %s : speed run cancel", client.client_id)
+                if client.speed_run_active:
+                    client.speed_run_active = False
+                    client.speed_run_end_time = 0.0
+                    client.speed_run_log = []
+                    client.best_val_loss_during_run = None
+                    _cancel_speedrun_timeout(client.client_id)
+                    client.force_update = True
+                    client_runner_q.put(True)
+                    logging.info(
+                        "Client %d Speed Run cancelled and returning to normal play",
+                        client.client_id,
+                    )
+                else:
+                    logging.debug(
+                        "process_client: %s : cancel ignored (no active run)",
+                        client.client_id,
+                    )
             elif msg.type == hudes_pb2.Control.CONTROL_HIGH_SCORE_LOG:
                 logging.debug("process_client: %s : high score log", client.client_id)
                 if client.high_score_logged:

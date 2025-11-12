@@ -32,6 +32,45 @@ def _decode_len_prefixed_log(blob: bytes):
     return messages
 
 
+async def _wait_for_srs_value(websocket, predicate, timeout=3.0):
+    deadline = time.time() + timeout
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            raise AssertionError("Timed out waiting for speed run seconds condition")
+        try:
+            raw = await asyncio.wait_for(websocket.recv(), timeout=remaining)
+        except asyncio.TimeoutError as exc:  # pragma: no cover
+            raise AssertionError("Timed out waiting for server message") from exc
+        msg = hudes_pb2.Control()
+        msg.ParseFromString(raw)
+        if msg.HasField("speed_run_seconds_remaining"):
+            value = msg.speed_run_seconds_remaining
+            if predicate(value):
+                return value
+
+
+async def _assert_no_positive_srs(websocket, duration=1.5, grace=0.3):
+    deadline = time.time() + duration
+    grace_deadline = time.time() + grace
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return
+        try:
+            raw = await asyncio.wait_for(websocket.recv(), timeout=remaining)
+        except asyncio.TimeoutError:
+            return
+        msg = hudes_pb2.Control()
+        msg.ParseFromString(raw)
+        if (
+            msg.HasField("speed_run_seconds_remaining")
+            and msg.speed_run_seconds_remaining > 0
+        ):
+            if time.time() > grace_deadline:
+                raise AssertionError("Unexpected countdown observed after cancellation")
+
+
 @pytest_asyncio.fixture
 async def run_speed_server_thread(tmp_path):
     # Configure short speed run and isolated DB path
@@ -177,3 +216,57 @@ async def test_speed_run_flow_and_db(run_speed_server_thread):
     ), "Expected interaction messages in log"
     # Timer should have been included during run
     assert saw_timer, "Did not observe speed run countdown in responses"
+
+
+@pytest.mark.timeout(60)
+@pytest.mark.asyncio
+async def test_speed_run_cancel_and_restart(run_speed_server_thread):
+    port, _ = run_speed_server_thread
+
+    async with websockets.connect(f"ws://localhost:{port}") as websocket:
+        cfg = hudes_pb2.Control(
+            type=hudes_pb2.Control.CONTROL_CONFIG,
+            config=hudes_pb2.Config(
+                seed=456,
+                dims_at_a_time=6,
+                mesh_grid_size=21,
+                mesh_step_size=0.1,
+                mesh_grids=1,
+                batch_size=32,
+                dtype="float32",
+            ),
+        )
+        await websocket.send(cfg.SerializeToString())
+
+        # Start and ensure countdown appears
+        await websocket.send(
+            hudes_pb2.Control(
+                type=hudes_pb2.Control.CONTROL_SPEED_RUN_START
+            ).SerializeToString()
+        )
+        await _wait_for_srs_value(websocket, lambda v: v > 0, timeout=5)
+
+        # Cancel and verify countdown stops
+        await websocket.send(
+            hudes_pb2.Control(
+                type=hudes_pb2.Control.CONTROL_SPEED_RUN_CANCEL
+            ).SerializeToString()
+        )
+        # Nudge the server so it emits another response after cancellation
+        dims = hudes_pb2.Control(
+            type=hudes_pb2.Control.CONTROL_DIMS,
+            dims_and_steps=[
+                hudes_pb2.DimAndStep(dim=0, step=0.05),
+            ],
+            request_idx=2,
+        )
+        await websocket.send(dims.SerializeToString())
+        await _assert_no_positive_srs(websocket, duration=1.5)
+
+        # Starting again should yield a new countdown
+        await websocket.send(
+            hudes_pb2.Control(
+                type=hudes_pb2.Control.CONTROL_SPEED_RUN_START
+            ).SerializeToString()
+        )
+        await _wait_for_srs_value(websocket, lambda v: v > 0, timeout=5)

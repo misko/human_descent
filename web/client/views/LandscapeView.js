@@ -701,9 +701,10 @@ export default class LandscapeView {
         ];
 
         const sharedControls = [
-            { icon: null, keys: ['Z'], label: '<span class="speed-run-label">SPEED RUN</span>' },
+            { icon: null, keys: ['Z'], label: '<span class="speed-run-label">SPEED RUN 🔥</span>' },
             { icon: null, keys: ['Enter'], label: 'New Batch' },
-            { icon: null, keys: ['Spacebar'], label: 'New Dims' },
+            { icon: null, keys: ['SPACE'], label: 'New Dims' },
+            { icon: null, keys: ['Del'], label: 'SGD Step' },
             { icon: null, keys: ['[', ']'], label: 'Step ±' },
             { icon: null, keys: [';'], label: 'Batch-size' },
             { icon: null, keys: ["'"], label: 'FP16/32' },
