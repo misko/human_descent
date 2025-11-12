@@ -36,7 +36,7 @@ const debugSelection = (message) => {
     }
 };
 
-//import Plotly from 'plotly.js-dist-min'; // Import Plotly
+import Plotly from 'plotly.js-dist-min'; // Local Plotly bundle
 import {
     Chart,
     CategoryScale,    // Register the category scale
