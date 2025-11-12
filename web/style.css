@@ -359,6 +359,13 @@ body {
     background: transparent;
 }
 
+.example-chart canvas,
+.example-chart-canvas,
+.confusion-matrix-canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
 .example-image {
     width: 50%; /* Half the width of the cell */
     height: 50%; /* Half the height of the cell */

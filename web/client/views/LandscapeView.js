@@ -36,7 +36,34 @@ const debugSelection = (message) => {
     }
 };
 
-import Plotly from 'plotly.js-dist-min'; // Local Plotly bundle
+const CONFUSION_LABELS = Array.from({ length: 10 }, (_, i) => i.toString());
+const HEATMAP_STOPS = [
+    { stop: 0, color: [33, 11, 68] },
+    { stop: 0.5, color: [0, 168, 168] },
+    { stop: 1, color: [255, 221, 87] },
+];
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const colorToRgba = ([r, g, b], alpha = 0.95) =>
+    `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha})`;
+
+const interpolateHeatmapColor = (valueRatio) => {
+    const t = Math.min(1, Math.max(0, valueRatio));
+    for (let i = 0; i < HEATMAP_STOPS.length - 1; i += 1) {
+        const left = HEATMAP_STOPS[i];
+        const right = HEATMAP_STOPS[i + 1];
+        if (t >= left.stop && t <= right.stop) {
+            const localT = (t - left.stop) / (right.stop - left.stop || 1);
+            return colorToRgba([
+                lerp(left.color[0], right.color[0], localT),
+                lerp(left.color[1], right.color[1], localT),
+                lerp(left.color[2], right.color[2], localT),
+            ]);
+        }
+    }
+    return colorToRgba(HEATMAP_STOPS[HEATMAP_STOPS.length - 1].color);
+};
+
 import {
     Chart,
     CategoryScale,    // Register the category scale
@@ -88,6 +115,11 @@ export default class LandscapeView {
         this.dimsAndStepsChart = null;
         this.exampleImagesContainer = document.getElementById('exampleImages');
         this.confusionMatrixContainer = document.getElementById('confusionMatrixChart');
+        this.confusionMatrixChart = null;
+        this.confusionMatrixMaxValue = 1;
+        this.confusionRows = 10;
+        this.confusionCols = 10;
+        this.exampleCharts = [];
         this.helpOverlay = null;
         this.helpImageEl = null;
 
@@ -768,7 +800,7 @@ export default class LandscapeView {
 
 
 
-    // Initialize all charts (including Plotly-based heatmap)
+    // Initialize all charts (including confusion matrix heatmap)
     initializeCharts() {
         this.initializeLossChart();
         this.initializeLastStepsChart();
@@ -779,40 +811,87 @@ export default class LandscapeView {
     }
     // Optional: Initialize Confusion Matrix as an empty Heatmap
     initializeConfusionMatrixHeatmap() {
-        if (this.confusionMatrixContainer) {
-            const heatmapConfig = {
-                displayModeBar: false,
-                staticPlot: true,
-                scrollZoom: false,
-                doubleClick: false,
-                responsive: true,
-            };
-            const initialData = [
-                {
-                    z: [], // Initialize with empty data
-                    type: 'heatmap',
-                    colorscale: 'Blues',
-                    zmin: 0,
-                    zmax: 255,
-                },
-            ];
-
-            const layout = {
-                title: 'Confusion Matrix Heatmap',
-                xaxis: {
-                    title: 'Predicted Label',
-                    tickmode: 'linear',
-                },
-                yaxis: {
-                    title: 'Actual Label',
-                    tickmode: 'linear',
-                    autorange: 'reversed', // Reverse y-axis to match visualization expectations
-                },
-                responsive: true,
-            };
-
-            Plotly.newPlot(this.confusionMatrixContainer, initialData, layout, heatmapConfig);
+        const container = this.confusionMatrixContainer;
+        if (!container) {
+            return;
         }
+        container.innerHTML = '';
+        const canvas = document.createElement('canvas');
+        canvas.className = 'confusion-matrix-canvas';
+        container.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        const dataset = {
+            label: 'Confusion Matrix',
+            data: [],
+            borderWidth: 0.5,
+            borderColor: 'rgba(255, 255, 255, 0.05)',
+            backgroundColor: (context) => {
+                const value = context.raw?.v ?? 0;
+                return this._getHeatmapColor(value);
+            },
+            width: (ctxArg) => this._matrixCellWidth(ctxArg?.chart),
+            height: (ctxArg) => this._matrixCellHeight(ctxArg?.chart),
+        };
+        this.confusionMatrixChart = new Chart(ctx, {
+            type: 'matrix',
+            data: {
+                datasets: [dataset],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => {
+                                const item = items[0];
+                                const raw = item.raw || {};
+                                return `Predicted: ${raw.x} • Actual: ${raw.y}`;
+                            },
+                            label: (item) => {
+                                const value = item.raw?.v ?? 0;
+                                return `Count: ${value}`;
+                            },
+                        },
+                    },
+                },
+                layout: {
+                    padding: {
+                        top: 8,
+                        left: 12,
+                        right: 12,
+                        bottom: 32,
+                    },
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        labels: CONFUSION_LABELS,
+                        title: {
+                            display: true,
+                            text: 'Predicted Label',
+                            color: '#ffffff',
+                        },
+                        ticks: { color: '#ffffff' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    },
+                    y: {
+                        type: 'category',
+                        labels: CONFUSION_LABELS,
+                        reverse: true,
+                        title: {
+                            display: true,
+                            text: 'Actual Label',
+                            color: '#ffffff',
+                        },
+                        ticks: { color: '#ffffff' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    },
+                },
+            },
+        });
     }
 
     initializeLossChart() {
@@ -987,83 +1066,116 @@ export default class LandscapeView {
     }
     // Update Confusion Matrix Heatmap with new data
     updateConfusionMatrix(confusionMatrix) {
-        if (!document.getElementById('confusionMatrixChart')) {
-            console.error("Element with id 'confusionMatrixChart' not found.");
+        if (!this.confusionMatrixChart) {
+            this.initializeConfusionMatrixHeatmap();
+        }
+        const chart = this.confusionMatrixChart;
+        if (!chart) {
             return;
         }
-
         try {
-            // Validate input matrix
             if (!Array.isArray(confusionMatrix) || confusionMatrix.length === 0) {
                 throw new Error("Confusion matrix data must be a non-empty array.");
             }
-
             const numRows = confusionMatrix.length;
             const numCols = Array.isArray(confusionMatrix[0]) ? confusionMatrix[0].length : 0;
-
-            if (numCols === 0 || !confusionMatrix.every(row => Array.isArray(row) && row.length === numCols)) {
+            if (
+                numCols === 0 ||
+                !confusionMatrix.every((row) => Array.isArray(row) && row.length === numCols)
+            ) {
                 throw new Error("Confusion matrix data is empty or improperly formatted.");
             }
-
-            // Prepare data and layout for Plotly
-            const zMaxValue = Math.max(...confusionMatrix.flat());
-            const updatedData = [
-                {
-                    z: confusionMatrix,
-                    type: 'heatmap',
-                    colorscale: 'Viridis', // Colorscale suitable for dark background
-                    zmin: 0,
-                    zmax: zMaxValue,
-                },
-            ];
-
-            const updatedLayout = {
-                title: {
-                    text: 'Confusion Matrix Heatmap',
-                    font: {
-                        color: 'white'
-                    }
-                },
-                xaxis: {
-                    title: {
-                        text: 'Predicted Label',
-                        font: { color: 'white' }
-                    },
-                    tickmode: 'linear',
-                    dtick: 1,
-                    tickfont: { color: 'white' },
-                    gridcolor: 'rgba(255, 255, 255, 0.2)', // Light grid lines for visibility
-                },
-                yaxis: {
-                    title: {
-                        text: 'Actual Label',
-                        font: { color: 'white' }
-                    },
-                    tickmode: 'linear',
-                    dtick: 1,
-                    autorange: 'reversed',
-                    tickfont: { color: 'white' },
-                    gridcolor: 'rgba(255, 255, 255, 0.2)',
-                },
-                margin: { t: 30, l: 1, r: 1, b: 1 }, // Small margins for compactness
-                plot_bgcolor: 'rgba(0, 0, 0, 0)', // Transparent plot background
-                paper_bgcolor: 'rgba(0, 0, 0, 0)', // Transparent paper background
-                responsive: true,
-            };
-
-            const heatmapConfig = {
-                displayModeBar: false,
-                staticPlot: true,
-                scrollZoom: false,
-                doubleClick: false,
-                responsive: true,
-            };
-            // Plot or update the heatmap
-            Plotly.newPlot('confusionMatrixChart', updatedData, updatedLayout, heatmapConfig);
-            //console.log("Confusion matrix heatmap updated successfully.");
+            const labels = Array.from({ length: numCols }, (_, idx) => idx.toString());
+            const flatValues = confusionMatrix.flat();
+            const maxVal = Math.max(1, ...flatValues);
+            this.confusionMatrixMaxValue = maxVal;
+            this.confusionRows = numRows;
+            this.confusionCols = numCols;
+            const data = [];
+            for (let actual = 0; actual < numRows; actual += 1) {
+                for (let predicted = 0; predicted < numCols; predicted += 1) {
+                    data.push({
+                        x: labels[predicted],
+                        y: labels[actual],
+                        v: confusionMatrix[actual][predicted],
+                    });
+                }
+            }
+            chart.data.datasets[0].data = data;
+            chart.options.scales.x.labels = labels;
+            chart.options.scales.y.labels = labels;
+            chart.update('none');
         } catch (error) {
             console.error("Failed to update confusion matrix heatmap:", error);
         }
+    }
+    _matrixCellWidth(chart) {
+        if (!chart || !chart.chartArea) {
+            return 18;
+        }
+        const { width } = chart.chartArea;
+        const cols = Math.max(1, this.confusionCols || CONFUSION_LABELS.length);
+        const gap = Math.max(0, cols - 1) * 0.4;
+        return Math.max(6, (width - gap) / cols);
+    }
+
+    _matrixCellHeight(chart) {
+        if (!chart || !chart.chartArea) {
+            return 18;
+        }
+        const { height } = chart.chartArea;
+        const rows = Math.max(1, this.confusionRows || CONFUSION_LABELS.length);
+        const gap = Math.max(0, rows - 1) * 0.4;
+        return Math.max(6, (height - gap) / rows);
+    }
+
+    _getHeatmapColor(value) {
+        const ratio = value / Math.max(1, this.confusionMatrixMaxValue);
+        return interpolateHeatmapColor(ratio);
+    }
+
+    _createExampleChart(ctx, labels) {
+        return new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Probability',
+                        data: [],
+                        backgroundColor: 'rgba(255, 165, 0, 0.8)',
+                        borderWidth: 0,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `Prob: ${(ctx.raw ?? 0).toFixed(2)}`,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#ffffff', font: { size: 9 } },
+                        grid: { display: false },
+                        title: { display: true, text: 'Class', color: '#ffffff', font: { size: 10 } },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        suggestedMax: 1.2,
+                        ticks: { color: '#ffffff', maxTicksLimit: 4 },
+                        grid: { color: 'rgba(255, 255, 255, 0.08)' },
+                        title: { display: true, text: 'Probability', color: '#ffffff', font: { size: 10 } },
+                    },
+                },
+            },
+        });
     }
 
 
@@ -1751,13 +1863,14 @@ export default class LandscapeView {
 
         // Select side container and get the individual example cells
         const sideContainer = document.getElementById('sideContainer');
+        if (!sideContainer) {
+            return;
+        }
         const exampleCells = sideContainer.getElementsByClassName('example-cell');
 
-        // Clear the current images in each cell
         Array.from(exampleCells).forEach((exampleCell, index) => {
-            // Clear previous canvas if exists
-            const previousImage = exampleCell.querySelector('canvas');
-            if (previousImage) {
+            const previousImage = exampleCell.querySelector('.example-image');
+            if (previousImage && previousImage.parentElement === exampleCell) {
                 exampleCell.removeChild(previousImage);
             }
 
@@ -1797,11 +1910,14 @@ export default class LandscapeView {
 
         // Select side container and get the individual example cells
         const sideContainer = document.getElementById('sideContainer');
+        if (!sideContainer) {
+            return;
+        }
         const exampleCells = sideContainer.getElementsByClassName('example-cell');
 
         predictions.forEach((prediction, index) => {
             // Get or create chart container for the corresponding example cell
-            if (exampleCells.length<=index) {
+            if (exampleCells.length <= index) {
                 return;
             }
             let chartDiv = exampleCells[index].querySelector('.example-chart');
@@ -1813,36 +1929,23 @@ export default class LandscapeView {
                 chartDiv.classList.add('example-chart');
                 exampleCells[index].appendChild(chartDiv);
             }
-
-            // Create Plotly bar chart for predicted classifications
-            const trace = {
-                x: Array.from({ length: 10 }, (_, i) => i), // Labels 0 to 9
-                y: prediction, // Corresponding probabilities
-                type: 'bar',
-                marker: {
-                    color: 'rgba(255, 165, 0, 0.8)' // Bright orange bars for visibility on a black background
-                }
-            };
-
-            const layout = {
-                plot_bgcolor: 'rgba(0, 0, 0, 0)', // Transparent plot background
-                paper_bgcolor: 'rgba(0, 0, 0, 0)', // Transparent paper background
-                margin: { t: 20, l: 30, r: 20, b: 40 },
-                xaxis: {
-                    title: 'Class',
-                    titlefont: { size: 10, color: '#ffffff' }, // White text for better contrast
-                    tickfont: { size: 8, color: '#ffffff' } // White tick labels
-                },
-                yaxis: {
-                    title: 'Probability',
-                    titlefont: { size: 10, color: '#ffffff' }, // White text for better contrast
-                    tickfont: { size: 8, color: '#ffffff' }, // White tick labels
-                    range: [0, 2] // Set y-axis limit to [0, 2]
-                },
-                showlegend: false // Hide legend to save space
-            };
-
-            Plotly.newPlot(chartDiv, [trace], layout, { displayModeBar: false });
+            let canvas = chartDiv.querySelector('canvas');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.className = 'example-chart-canvas';
+                chartDiv.appendChild(canvas);
+            }
+            const ctx = canvas.getContext('2d');
+            const labels = Array.from({ length: prediction.length }, (_, i) => i.toString());
+            let chart = this.exampleCharts[index];
+            if (!chart) {
+                chart = this._createExampleChart(ctx, labels);
+                this.exampleCharts[index] = chart;
+            } else {
+                chart.data.labels = labels;
+            }
+            chart.data.datasets[0].data = prediction;
+            chart.update('none');
         });
     }
 

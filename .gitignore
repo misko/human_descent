@@ -1,4 +1,11 @@
 **/*__pycache__
 **/*.pem
 **/*.sqlite3
+hudes_env/
+hudes/mnist_data/
+web/mnist_data/
+web/node_modules/
+web/dist/
+web/test-results/
 web/generated/
+web/bundle-visualization.html

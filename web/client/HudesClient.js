@@ -38,6 +38,9 @@ export default class HudesClient {
         this._clientSessionToken = this._loadSessionToken();
         this._pendingSessionToken = null;
         this._resumeToken = this._loadPersistedResumeToken();
+        if (this._didReload()) {
+            this._clearResumeToken();
+        }
         this._resumeInFlight = false;
         this._readyForInput = false;
         this._serverAckRequestIdx = 0;
@@ -791,6 +794,26 @@ export default class HudesClient {
             }
         } catch {}
         return null;
+    }
+
+    _didReload() {
+        try {
+            if (typeof performance !== 'undefined') {
+                const entries = performance.getEntriesByType?.('navigation');
+                if (entries && entries.length > 0) {
+                    return entries[0].type === 'reload';
+                }
+                if (performance.navigation) {
+                    const TYPE_RELOAD =
+                        performance.navigation.TYPE_RELOAD ??
+                        (typeof PerformanceNavigation !== 'undefined'
+                            ? PerformanceNavigation.TYPE_RELOAD
+                            : 1);
+                    return performance.navigation.type === TYPE_RELOAD;
+                }
+            }
+        } catch {}
+        return false;
     }
 
     _clearResumeToken() {
