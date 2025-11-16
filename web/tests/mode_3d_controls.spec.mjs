@@ -46,4 +46,56 @@ test.describe('3D keyboard controls', () => {
     const speedRunActive = await page.evaluate(() => window.__hudesClient?.state?.speedRunActive);
     expect(speedRunActive).toBeFalsy();
   });
+
+  test('mouse drag vertical requires half window height for full tilt range', async ({ page }) => {
+    await page.goto(`${APP_ORIGIN}/?mode=3d&host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
+
+    await page.waitForFunction(
+      () => window.__hudesClient && window.__hudesClient.ControlType,
+      { timeout: 10000 },
+    );
+
+    await page.waitForSelector('#glContainer canvas', { timeout: 10000 });
+
+    await page.evaluate(() => {
+      const view = window.__hudesClient?.view;
+      if (!view?.getAngles || !view?.adjustAngles) return;
+      const { angleV } = view.getAngles();
+      view.adjustAngles(0, -angleV / 2);
+    });
+
+    const { innerHeight, maxAngle } = await page.evaluate(() => ({
+      innerHeight: window.innerHeight,
+      maxAngle: window.__hudesClient?.view?.impl?.maxAngleV ?? 25,
+    }));
+    const dragPixels = Math.max(10, innerHeight * 0.5);
+    const tolerance = 0.8;
+
+    const canvas = page.locator('#glContainer canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas bounding box unavailable');
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+
+    const dragAndRead = async (deltaY) => {
+      await page.mouse.move(centerX, centerY);
+      await page.mouse.down();
+      await page.mouse.move(centerX, centerY + deltaY, { steps: 10 });
+      await page.mouse.up();
+      return page.evaluate(() => window.__hudesClient?.view?.getAngles?.().angleV ?? 0);
+    };
+
+    const downAngle = await dragAndRead(dragPixels);
+    expect(Math.abs(downAngle + maxAngle)).toBeLessThanOrEqual(tolerance);
+
+    await page.evaluate(() => {
+      const view = window.__hudesClient?.view;
+      if (!view?.getAngles || !view?.adjustAngles) return;
+      const { angleV } = view.getAngles();
+      view.adjustAngles(0, -angleV / 2);
+    });
+
+    const upAngle = await dragAndRead(-dragPixels);
+    expect(Math.abs(upAngle - maxAngle)).toBeLessThanOrEqual(tolerance);
+  });
 });

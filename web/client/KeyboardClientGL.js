@@ -36,7 +36,8 @@ export default class KeyboardClientGL extends KeyboardClient {
         this.directionalKeys = new Set(['w', 's', 'a', 'd']);
         this.angleKeys = new Set(['arrowleft', 'arrowright', 'arrowup', 'arrowdown']);
 
-        this.dragSensitivity = 0.3;
+        this.dragSensitivity = 0.18;
+        this.verticalTiltDragFraction = 0.75; // portion of window height mapping to full tilt range
         this._mouseControls = null;
 
         this.view.resetAngle(); // Set initial angles
@@ -52,7 +53,8 @@ export default class KeyboardClientGL extends KeyboardClient {
                         return;
                     }
                     const horizontal = deltaX * this.dragSensitivity;
-                    const vertical = -deltaY * this.dragSensitivity;
+                    const verticalSensitivity = this._getVerticalDragSensitivity();
+                    const vertical = -deltaY * verticalSensitivity;
 
                     const before = this.view.getAngles();
                     debugMouse(
@@ -295,6 +297,15 @@ export default class KeyboardClientGL extends KeyboardClient {
             }
         }
         return redraw;
+    }
+
+    _getVerticalDragSensitivity() {
+        const impl = this.view?.impl;
+        const maxAngleV = typeof impl?.maxAngleV === 'number' ? impl.maxAngleV : 25;
+        const height = typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerHeight : 800;
+        const dragSpan = Math.max(1, height * (this.verticalTiltDragFraction ?? 0.5));
+        // adjustAngles multiplies deltas by 2, so use half the desired slope here
+        return (2 * maxAngleV) / dragSpan;
     }
 
     updateKeyHolds() {

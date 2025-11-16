@@ -10,6 +10,13 @@ body {
     color: #fff; /* Optional: Set the text color to white for better contrast */
 }
 
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* Prevent browser scrollbars; all scrollable panes are explicit */
+}
+
 .site-header {
     position: fixed;
     top: 0;
@@ -294,7 +301,7 @@ body {
     top: var(--header-height);
     left: 0;
     width: 90%; /* Set to 80% of width to make space for the side container */
-    height: calc(100% - var(--header-height));
+    height: calc(100vh - var(--header-height));
     z-index: 1; /* Lower index to be behind the plotly and other containers */
     pointer-events: auto; /* Allow direct interaction with the GL canvas */
 }
@@ -304,7 +311,7 @@ body {
     top: calc(var(--header-height) + 20vh);
     right: 0;
     width: 17%; /* The container should take up the right 20% */
-    height: calc(80% - var(--header-height)); /* Adjust to account for header space */
+    height: calc(80vh - var(--header-height)); /* Adjust to account for header space */
     pointer-events: auto; /* Ensure the side container can be interacted with */
     z-index: 3; /* Higher index to be on top of the GL container */
     background: transparent; /* Transparent background */

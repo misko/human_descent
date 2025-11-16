@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 
 const SERVER_HOST = process.env.HUDES_HOST || 'localhost';
 const SERVER_PORT = Number(process.env.HUDES_PORT || '10001');
-const SPEED_SECONDS = Number(process.env.HUDES_SPEED_RUN_SECONDS || '5');
+const SPEED_SECONDS = Number(process.env.HUDES_SPEED_RUN_SECONDS ?? '120');
 const APP_ORIGIN = process.env.HUDES_APP_ORIGIN || 'http://localhost:6173';
 
 async function runSpeedRunScenario(page, { extraQuery = '', name = 'TEST' } = {}) {

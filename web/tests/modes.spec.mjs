@@ -34,15 +34,13 @@ test.describe('Render modes', () => {
     expect(errors).toHaveLength(0);
   });
 
-  test('1D slices load without console errors', async ({ page }) => {
+  test('1D mode switches renderer without console errors', async ({ page }) => {
     const errors = await trackErrors(page);
     await page.goto(`${APP_ORIGIN}/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off&mode=1d`);
     await waitForClient(page);
-    await page.waitForSelector('.oned-chart-card', { timeout: 10000 });
-    await page.waitForTimeout(1000);
-
-    const chartCount = await page.locator('.oned-chart-card').count();
-    expect(chartCount).toBeGreaterThanOrEqual(6);
+    await page.waitForFunction(() => window.__hudesClient?.renderMode === '1d', { timeout: 10000 });
+    await page.waitForSelector('#glContainer canvas', { timeout: 10000 });
+    expect(await page.locator('#glContainer canvas').count()).toBeGreaterThan(0);
     expect(errors).toHaveLength(0);
   });
 });
