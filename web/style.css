@@ -10,6 +10,14 @@ body {
     color: #fff; /* Optional: Set the text color to white for better contrast */
 }
 
+body.hudes-mobile #plot2 {
+    display: none;
+}
+
+body.hudes-mobile #sideContainer {
+    display: none !important;
+}
+
 html,
 body {
     width: 100%;
@@ -38,22 +46,14 @@ body {
     image-rendering: auto;
 }
 
-.site-source-link {
+.header-left-actions {
     position: absolute;
     left: clamp(10px, 3vw, 28px);
     top: 50%;
     transform: translateY(-50%);
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #ffd666;
-    text-decoration: none;
-    font-weight: 600;
-    transition: color 140ms ease;
-}
-
-.site-source-link {
-    transition: color 180ms ease, text-shadow 180ms ease;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .connection-status {
@@ -77,7 +77,8 @@ body {
     gap: 0.8rem;
 }
 
-.header-controls button.header-pill {
+.header-controls button.header-pill,
+.header-left-actions .header-pill {
     padding: 0;
     border: none;
     background: none;
@@ -89,7 +90,8 @@ body {
     transition: color 180ms ease, text-shadow 180ms ease;
 }
 
-.header-controls button.header-pill:focus {
+.header-controls button.header-pill:focus,
+.header-left-actions .header-pill:focus {
     outline: none;
 }
 
@@ -100,8 +102,8 @@ body {
 
 .header-controls button.header-pill:hover,
 .header-controls button.header-pill:focus-visible,
-.site-source-link:hover,
-.site-source-link:focus-visible {
+.header-left-actions .header-pill:hover,
+.header-left-actions .header-pill:focus-visible {
     color: #ffe59c;
     text-decoration: none;
     text-shadow: 0 0 8px rgba(255, 229, 156, 0.85);
@@ -326,14 +328,15 @@ body {
     position: absolute;
     top: calc(var(--header-height) + 10px);
     left: 0;
-    width: 100%; /* Make sure it also matches the GL container width */
-    height: 25vh; /* Set to 33% of the viewport height */
-    margin-left: 0; /* Align with glContainer */
-    z-index: 2; /* Higher than GL container, but lower than the side container */
-    background: transparent; /* Transparent background */
+    width: 100%;
+    height: 25vh;
+    margin-left: 0;
+    z-index: 2;
+    background: transparent;
     display: flex;
-    box-sizing: border-box; /* Include padding and border in the element's total width and height */
-    gap: 10px; /* Add gap between the plot elements to improve spacing */
+    box-sizing: border-box;
+    gap: 10px;
+    padding: 0 12px 0 0;
 }
 
 .plot {
@@ -341,6 +344,30 @@ body {
     height: 100%;
     box-sizing: border-box; /* Ensures padding and border are included in the element's total width and height */
     padding: 1px; /* Optional padding */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+}
+
+.plot canvas {
+    flex: 1;
+}
+
+.plot-title {
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(210, 235, 255, 0.85);
+    margin: 0;
+}
+
+#plot3 .plot-title {
+    font-size: clamp(0.6rem, 1.4vw, 0.72rem);
+    letter-spacing: 0.08em;
+    align-self: flex-end;
+    width: auto;
+    text-align: right;
 }
 
 .example-cell {
@@ -437,7 +464,9 @@ body {
     background: rgba(40, 90, 140, 0.32);
     box-shadow: inset 0 0 0 1px rgba(86, 198, 255, 0.3);
     text-shadow: 0 0 4px rgba(40, 180, 255, 0.3);
-    white-space: nowrap;
+    white-space: normal;
+    text-align: center;
+    width: 100%;
 }
 
 #bottomTextContainer .hud-controls {
@@ -449,6 +478,34 @@ body {
     gap: 0.25rem 0.55rem;
     font-size: clamp(0.72rem, 1.55vw, 0.88rem);
     line-height: 1.2;
+}
+
+#bottomTextContainer .hud-inline-actions {
+    flex-basis: 100%;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+
+#bottomTextContainer .hud-inline-actions button {
+    border: 1px solid rgba(86, 198, 255, 0.35);
+    border-radius: 999px;
+    background: rgba(28, 42, 68, 0.55);
+    color: #e9f6ff;
+    font-size: clamp(0.72rem, 1.4vw, 0.86rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.9rem;
+    pointer-events: auto;
+    transition: background 120ms ease, transform 120ms ease;
+}
+
+#bottomTextContainer .hud-inline-actions button:active {
+    background: rgba(40, 60, 90, 0.9);
+    transform: translateY(1px);
 }
 
 #bottomTextContainer .control-group {
@@ -562,4 +619,111 @@ body {
     #bottomTextContainer .separator {
         display: none;
     }
+}
+
+#mobileActionPanel {
+    position: fixed;
+    top: 50%;
+    right: clamp(6px, 3vw, 28px);
+    transform: translateY(-50%);
+    width: auto;
+    padding: 0;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+    display: none;
+    flex-direction: column;
+    gap: 0.45rem;
+    z-index: 600;
+    pointer-events: auto;
+}
+
+body.hudes-mobile #mobileActionPanel {
+    display: flex;
+}
+
+body.hudes-mobile .container {
+    justify-content: flex-end;
+    align-items: flex-start;
+    padding-right: 2px;
+    padding-left: 0;
+    gap: 0;
+}
+
+body.hudes-mobile #plot1 {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+}
+
+body.hudes-mobile #plot3 {
+    width: min(42vw, 300px);
+    margin-left: 2px;
+}
+
+body.hudes-mobile #plot3 #confusionMatrixChart {
+    flex: 1;
+}
+
+#mobileActionPanel .mobile-panel__grid {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 35px;
+    padding: 0;
+    background: transparent;
+}
+
+#mobileActionPanel button {
+    border: 1px solid rgba(86, 198, 255, 0.25);
+    border-radius: 10px;
+    padding: 0.4rem 0.65rem;
+    background: rgba(30, 40, 70, 0.55);
+    color: #e9f6ff;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    width: auto;
+    white-space: nowrap;
+    text-align: center;
+    min-width: 92px;
+}
+
+#mobileActionPanel button:active {
+    background: rgba(40, 60, 90, 0.9);
+}
+#bottomTextContainer .hud-card {
+    padding-left: 1rem;
+    padding-right: 1rem;
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+#bottomTextContainer .hud-mobile-actions {
+    display: none;
+    margin-top: 0.5rem;
+    width: 100%;
+    gap: 0.5rem;
+}
+
+body.hudes-mobile #bottomTextContainer .hud-mobile-actions {
+    display: flex;
+}
+
+#bottomTextContainer .hud-mobile-actions button {
+    flex: 1;
+    border-radius: 999px;
+    border: none;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #06121f;
+    background: #ffd666;
+    padding: 0.6rem 0.8rem;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+}
+
+#bottomTextContainer .hud-mobile-actions button:active {
+    transform: translateY(1px);
 }

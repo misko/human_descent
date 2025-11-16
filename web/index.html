@@ -12,15 +12,10 @@
 
 <body>
     <header class="site-header">
+        <div class="header-left-actions">
+            <button type="button" class="header-pill" data-hud-action="toggle-help">Help</button>
+        </div>
         <img class="site-logo" src="/header.png" alt="humandescent.net">
-        <a
-            class="site-source-link"
-            href="https://github.com/misko/human_descent"
-            target="_blank"
-            rel="noopener noreferrer"
-        >
-            source
-        </a>
     </header>
     <div id="glContainer"></div>
 
@@ -34,6 +29,7 @@
         </div>
 
         <div id="plot3" class="plot">
+        <div class="plot-title">Confusion Matrix</div>
         <div id="confusionMatrixChart" style="width:100%;height:100%;"></div>
         </div>
     </div>

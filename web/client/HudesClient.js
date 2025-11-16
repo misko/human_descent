@@ -47,6 +47,7 @@ export default class HudesClient {
         this._protoReadyPromise = this.loadProto();
 
         const renderMode = (options.renderMode || '3d').toLowerCase();
+        this.isMobile = Boolean(options.isMobile);
         this.debug = Boolean(options.debug);
         this.renderMode = renderMode === '1d' ? '1d' : '3d';
         this.meshEnabled = this.renderMode !== '1d';
@@ -80,6 +81,7 @@ export default class HudesClient {
             cameraDistance: this.cameraDistance,
             alt1d: this.alt1d,
             altKeys: this.altKeys,
+            mobile: this.isMobile,
         });
         this.view.initializeCharts(); // Initialize charts
         this.Control = null;
@@ -111,8 +113,72 @@ export default class HudesClient {
         this._patchHelpStateTracking();
         this._initHelpDismissState();
 
+        this._handleHudAction = this._handleHudAction.bind(this);
         this.initKeys();
+        this._bindHudActions();
         this._connectSocket();
+    }
+
+    _bindHudActions() {
+        if (typeof document === 'undefined') return;
+        document.addEventListener('click', this._handleHudAction);
+    }
+
+    _handleHudAction(event) {
+        const target = event.target?.closest?.('[data-hud-action]');
+        if (!target) return;
+        const action = target.dataset.hudAction;
+        const refreshHud = () => {
+            try {
+                this.view?.annotateBottomScreen?.(this.state.toString());
+            } catch {}
+        };
+        switch (action) {
+            case 'next-dims':
+                event.preventDefault();
+                this.getNextDims();
+                break;
+            case 'next-batch':
+                event.preventDefault();
+                this.getNextBatch();
+                break;
+            case 'step-plus':
+                event.preventDefault();
+                if (typeof this.state?.increaseStepSize === 'function') {
+                    this.state.increaseStepSize(this.stepSizeMultiplier || 1);
+                    try { this.sendConfig(); } catch {}
+                    refreshHud();
+                }
+                break;
+            case 'step-minus':
+                event.preventDefault();
+                if (typeof this.state?.decreaseStepSize === 'function') {
+                    this.state.decreaseStepSize(this.stepSizeMultiplier || 1);
+                    try { this.sendConfig(); } catch {}
+                    refreshHud();
+                }
+                break;
+            case 'toggle-fp':
+                event.preventDefault();
+                if (typeof this.state?.toggleDtype === 'function') {
+                    this.state.toggleDtype();
+                    try { this.sendConfig(); } catch {}
+                    refreshHud();
+                }
+                break;
+            case 'show-top':
+                event.preventDefault();
+                try { this.requestLeaderboard?.(); } catch {}
+                break;
+            case 'toggle-help':
+                event.preventDefault();
+                if (typeof this._cycleHelpScreens === 'function') {
+                    this._cycleHelpScreens();
+                    refreshHud();
+                }
+                break;
+            default:
+        }
     }
 
     async loadProto() {

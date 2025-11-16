@@ -59,7 +59,9 @@ export default class KeyboardClient extends HudesClient {
       this.keyToParamAndSign[downKey] = { dim: index, sign: -firstKeySign };
     });
 
-    this.state.setBatchSize(this.renderMode === '1d' ? 512 : 256);
+    const defaultBatchSize =
+      this.renderMode === '1d' ? 512 : this.isMobile ? 32 : 256;
+    this.state.setBatchSize(defaultBatchSize);
     this.state.setDtype('float16');
 
     this.state.setHelpScreenFns([

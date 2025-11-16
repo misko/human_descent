@@ -1,6 +1,7 @@
 import KeyboardClient from './KeyboardClient.js';
 import { log } from '../utils/logger.js';
 import { installMouseControls, computeStepVector } from './mouseControls.js';
+import { installTouchControls } from './touchControls.js';
 
 const DEBUG_MOUSE = false;
 
@@ -12,7 +13,12 @@ const debugMouse = (message) => {
 
 export default class KeyboardClientGL extends KeyboardClient {
     constructor(addr, port, options = {}) {
-        super(addr, port, { ...options, renderMode: '3d' });
+        const mergedOptions = { ...options, renderMode: '3d' };
+        if (options.isMobile) {
+            mergedOptions.meshGrids = 1;
+        }
+        super(addr, port, mergedOptions);
+        this.isMobile = Boolean(options.isMobile);
         this.initInput();
 
     if (this.state.helpScreenIdx != -1) {
@@ -39,15 +45,25 @@ export default class KeyboardClientGL extends KeyboardClient {
         this.dragSensitivity = 0.18;
         this.verticalTiltDragFraction = 0.75; // portion of window height mapping to full tilt range
         this._mouseControls = null;
+        this._touchControls = null;
+        this._touchRotateCleanup = null;
 
         this.view.resetAngle(); // Set initial angles
 
         const canvas = this.view.getCanvasElement?.();
         if (canvas) {
-            debugMouse('[KeyboardClientGL] installing mouse controls');
-            this._mouseControls = installMouseControls(canvas, {
-                moveTarget: typeof window !== 'undefined' ? window : canvas,
-                onDrag: ({ deltaX, deltaY }) => {
+            if (this.isMobile) {
+                this._touchControls = installTouchControls(canvas, {
+                    onVector: (vector) => this._applyTouchVector(vector),
+                });
+                this.__applyTouchVector = (vector) => this._applyTouchVector(vector);
+                this._installMobileUi();
+                this._installTouchRotationControls(canvas);
+            } else {
+                debugMouse('[KeyboardClientGL] installing mouse controls');
+                this._mouseControls = installMouseControls(canvas, {
+                    moveTarget: typeof window !== 'undefined' ? window : canvas,
+                    onDrag: ({ deltaX, deltaY }) => {
                     if (this.state.helpScreenIdx !== -1) {
                         debugMouse('[KeyboardClientGL] drag ignored while help screen active');
                         return;
@@ -111,8 +127,9 @@ export default class KeyboardClientGL extends KeyboardClient {
                     this.view.updateMeshGrids();
                     event.preventDefault?.();
                 },
-            });
-            debugMouse('[KeyboardClientGL] mouse controls installed');
+                });
+                debugMouse('[KeyboardClientGL] mouse controls installed');
+            }
         } else {
             log('[KeyboardClientGL] renderer canvas missing; mouse controls disabled');
         }
@@ -308,7 +325,204 @@ export default class KeyboardClientGL extends KeyboardClient {
         return (2 * maxAngleV) / dragSpan;
     }
 
+    _applyTouchVector(vector) {
+        if (!vector || this.state.helpScreenIdx !== -1) {
+            return;
+        }
+        const rawX = Number(vector.x) || 0;
+        const rawY = Number(vector.y) || 0;
+        if (!rawX && !rawY) {
+            return;
+        }
+        const clamp = (v) => Math.max(-1, Math.min(1, v));
+        const baseX = clamp(-rawY);
+        const baseY = clamp(-rawX);
+        const magnitude = Math.min(1, Math.hypot(baseX, baseY));
+        if (magnitude < 0.05) {
+            return;
+        }
+        const { angleH } = this.view.getAngles();
+        const rotated = this._rotateVector(baseX, baseY, -angleH);
+        this.stepInSelectedGrid(-rotated.x, -rotated.y);
+    }
+
+    _installTouchRotationControls(canvas) {
+        if (!canvas || typeof window === 'undefined') {
+            return;
+        }
+        if (this._touchRotateCleanup) {
+            try {
+                this._touchRotateCleanup();
+            } catch {}
+            this._touchRotateCleanup = null;
+        }
+        const state = { active: false, prevX: 0, prevY: 0 };
+        const getMidpoint = (touchList) => {
+            if (!touchList || touchList.length < 2) {
+                return null;
+            }
+            const t1 = touchList[0];
+            const t2 = touchList[1];
+            return {
+                x: (t1.clientX + t2.clientX) / 2,
+                y: (t1.clientY + t2.clientY) / 2,
+            };
+        };
+        const handleStart = (event) => {
+            if ((event.touches?.length || 0) >= 2) {
+                const mid = getMidpoint(event.touches);
+                if (mid) {
+                    state.active = true;
+                    state.prevX = mid.x;
+                    state.prevY = mid.y;
+                    event.preventDefault?.();
+                }
+            }
+        };
+        const handleMove = (event) => {
+            if (!state.active) {
+                return;
+            }
+            if ((event.touches?.length || 0) < 2) {
+                state.active = false;
+                return;
+            }
+            const mid = getMidpoint(event.touches);
+            if (!mid) {
+                return;
+            }
+            const dx = mid.x - state.prevX;
+            const dy = mid.y - state.prevY;
+            state.prevX = mid.x;
+            state.prevY = mid.y;
+            if (dx || dy) {
+                this._handleTouchRotationDrag(dx, dy);
+            }
+            event.preventDefault?.();
+        };
+        const endGesture = () => {
+            state.active = false;
+        };
+        const handleEnd = () => {
+            endGesture();
+        };
+        const handleCancel = () => {
+            endGesture();
+        };
+        canvas.addEventListener('touchstart', handleStart, { passive: false });
+        canvas.addEventListener('touchmove', handleMove, { passive: false });
+        canvas.addEventListener('touchend', handleEnd, { passive: false });
+        canvas.addEventListener('touchcancel', handleCancel, { passive: false });
+        this._touchRotateCleanup = () => {
+            canvas.removeEventListener('touchstart', handleStart);
+            canvas.removeEventListener('touchmove', handleMove);
+            canvas.removeEventListener('touchend', handleEnd);
+            canvas.removeEventListener('touchcancel', handleCancel);
+        };
+    }
+
+    _handleTouchRotationDrag(deltaX, deltaY) {
+        if (this.state.helpScreenIdx !== -1) {
+            return;
+        }
+        const horizontal = deltaX * this.dragSensitivity;
+        const verticalSensitivity = this._getVerticalDragSensitivity();
+        const vertical = -deltaY * verticalSensitivity;
+        if (horizontal) {
+            this.view.adjustAngles(horizontal, 0);
+        }
+        if (vertical) {
+            this.view.adjustAngles(0, vertical);
+        }
+    }
+
     updateKeyHolds() {
         // Handle key up events here if needed
     }
+
+    _installMobileUi() {
+        if (this._mobileUi) {
+            return;
+        }
+        const panel = document.createElement('div');
+        panel.id = 'mobileActionPanel';
+        const grid = document.createElement('div');
+        grid.className = 'mobile-panel__grid';
+        panel.appendChild(grid);
+
+        const buttons = {};
+        const addButton = (key, handler) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.mobileAction = key;
+            btn.addEventListener('click', handler);
+            grid.appendChild(btn);
+            buttons[key] = btn;
+            return btn;
+        };
+
+        addButton('speed', () => {
+            if (this.speedRunActive || this.state.speedRunActive) {
+                this.cancelSpeedRun();
+            } else {
+                this.startSpeedRun();
+            }
+            this._updateMobileUi();
+        });
+
+        addButton('batch', () => {
+            this.state.toggleBatchSize();
+            this.sendConfig();
+            this._updateMobileUi();
+        });
+
+        addButton('sgd', () => {
+            this.getSGDStep();
+        });
+
+        const matrixContainer = document.getElementById('confusionMatrixChart');
+        if (matrixContainer?.parentElement) {
+            matrixContainer.parentElement.appendChild(panel);
+        } else {
+            document.body.appendChild(panel);
+        }
+        this._mobileUi = { panel, buttons };
+        this._updateMobileUi();
+        this._mobileUiTicker = setInterval(() => this._updateMobileUi(), 800);
+    }
+
+    _cycleHelpScreens() {
+        this.state.nextHelpScreen();
+        if (this.state.helpScreenIdx !== -1) {
+            const idx = Math.min(this.state.helpScreenIdx, (this.state.helpScreenFns?.length ?? 1) - 1);
+            const fn = this.state.helpScreenFns?.[idx];
+            if (fn) {
+                this.view.showImage(fn);
+            }
+        } else {
+            this.view.hideImage();
+        }
+    }
+
+    _updateMobileUi() {
+        if (!this._mobileUi) {
+            return;
+        }
+        const { buttons } = this._mobileUi;
+        const setText = (btn, text) => {
+            if (!btn || btn.textContent === text) {
+                return;
+            }
+            btn.textContent = text;
+        };
+        setText(
+            buttons.speed,
+            this.state.speedRunActive
+                ? `🔥 ${Number(this.state.speedRunSecondsRemaining ?? 0).toFixed(1)}s`
+                : 'SPEED 🔥'
+        );
+        setText(buttons.batch, `Batch ${this.state.batchSize ?? ''}`);
+        setText(buttons.sgd, 'SGD');
+    }
+
 }

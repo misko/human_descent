@@ -25,7 +25,7 @@ import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Import OrbitControls
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'; // Import CSS2DRenderer for annotations
-import { CONTROL_GROUPS, formatHudMarkup } from '../hud.js';
+import { CONTROL_GROUPS, formatHudMarkup, MOBILE_CONTROL_GROUPS, MOBILE_HUD_BUTTONS } from '../hud.js';
 import { log } from '../../utils/logger.js'; // Import your logging utility
 
 const DEBUG_SELECTION = false;
@@ -108,6 +108,12 @@ export default class LandscapeView {
         this.alt1dMode = this.mode === '1d' && Boolean(options.alt1d);
         this.altKeysMode = Boolean(options.altKeys);
 
+        this.mobileMode = Boolean(options.mobile);
+        if (this.mobileMode && this.numGrids > 1) {
+            this.numGrids = 1;
+            this.effectiveGrids = 1;
+        }
+
         this.state=clientState;
         this.lossChart = null;
         this.lastStepsChart = null;
@@ -155,6 +161,7 @@ export default class LandscapeView {
         this.depthStep = typeof options.depthStep === 'number' ? options.depthStep : null;
         this.customCameraDistance = typeof options.cameraDistance === 'number' ? options.cameraDistance : null;
         this.spacing = 20; // Spacing between grids
+        this.mobileCameraScalar = this.mobileMode ? this._computeMobileCameraScalar() : 1;
         this.selectedGridIndex = 0; // Index of the selected grid
         this.selectedGridScale = 2 * 1.5; //1.5; // Scale multiplier for the selected grid
         // Three.js setup
@@ -181,13 +188,19 @@ export default class LandscapeView {
             if (this.alt1dMode) {
                 this.camera_distance *= 1.25;
             }
+            if (this.mobileMode) {
+                this.camera_distance *= this.mobileCameraScalar;
+            }
+            if (this.mobileMode) {
+                this.camera_distance *= this.mobileCameraScalar;
+            }
 
             this.raycaster = new Raycaster();
             this.pointer = new Vector2();
 
             // Set the y-offset for the camera to position the grids 2/3 of the way down the view
             // The y offset is calculated as (1/3 of the totalHeight) since we want the grids to be 2/3 of the way down
-            this.camera_yOffset = (totalWidth / 8);
+            this.camera_yOffset = this.mobileMode ? (totalWidth / 6) * this.mobileCameraScalar * 0.85 : totalWidth / 8;
 
             // Update camera position
             this.camera.position.set(0, this.camera_yOffset, this.camera_distance);
@@ -242,6 +255,22 @@ export default class LandscapeView {
             this.render();
             window.addEventListener('resize', this.onWindowResize.bind(this), false);
         }
+    }
+
+    _computeMobileCameraScalar() {
+        if (typeof window === 'undefined') {
+            return 1.35;
+        }
+        const shortRef = 760;
+        const longRef = 1280;
+        const width = window.innerWidth || shortRef;
+        const height = window.innerHeight || longRef;
+        const shortSide = Math.min(width, height) || shortRef;
+        const longSide = Math.max(width, height) || longRef;
+        const shortRatio = shortRef / shortSide;
+        const longRatio = longRef / longSide;
+        const scalar = Math.min(1.6, Math.max(1.2, Math.max(shortRatio, longRatio)));
+        return scalar;
     }
 
     _updateAlt1dLossLines(lines, { stepSpacing, labels } = {}) {
@@ -715,14 +744,37 @@ export default class LandscapeView {
         return [...combos, ...sharedControls];
     }
 
+    _buildMobileHudButtons() {
+        if (!this.mobileMode) {
+            return [];
+        }
+        const dtype = (this.state?.dtype || '').replace('float', '').toUpperCase();
+        const dtypeLabel = dtype ? `FP${dtype}` : 'FP';
+        return MOBILE_HUD_BUTTONS.map((button) => {
+            if (button.action === 'toggle-fp') {
+                return { ...button, label: dtypeLabel };
+            }
+            return button;
+        });
+    }
+
     annotateBottomScreen(text, size = 20) {
         const bottomTextContainer = document.getElementById('bottomTextContainer');
         if (!bottomTextContainer) {
             return;
         }
-        const controls =
-            this.mode === '1d' ? this._build1DControlGroups() : CONTROL_GROUPS;
-        bottomTextContainer.innerHTML = formatHudMarkup(text ?? '', controls);
+        let controls;
+        let hudButtons = [];
+        if (this.mode === '1d') {
+            controls = this._build1DControlGroups();
+        } else if (this.mobileMode) {
+            controls = MOBILE_CONTROL_GROUPS;
+            hudButtons = this._buildMobileHudButtons();
+        } else {
+            controls = CONTROL_GROUPS;
+        }
+        const options = hudButtons.length ? { buttons: hudButtons } : {};
+        bottomTextContainer.innerHTML = formatHudMarkup(text ?? '', controls, options);
     }
     highlightLossLine(index, durationMs = this.glowDuration) {
         if (this.mode !== '1d') {
@@ -752,6 +804,9 @@ export default class LandscapeView {
     }
     // Function to handle window resizing
     onWindowResize() {
+        if (this.mobileMode) {
+            this.mobileCameraScalar = this._computeMobileCameraScalar();
+        }
 
         // Calculate camera position to fit all grids
         const fovRadians = (this.camera.fov * Math.PI) / 180;
@@ -763,8 +818,11 @@ export default class LandscapeView {
         if (this.alt1dMode) {
             distance *= 1.25;
         }
+        if (this.mobileMode) {
+            distance *= this.mobileCameraScalar;
+        }
         this.camera_distance = distance;
-        this.camera_yOffset = (totalWidth / 8);
+        this.camera_yOffset = this.mobileMode ? (totalWidth / 6) * this.mobileCameraScalar * 0.85 : totalWidth / 8;
         this.camera.position.set(0, this.camera_yOffset, distance);
 
         // Update camera aspect ratio and projection matrix
@@ -897,17 +955,19 @@ export default class LandscapeView {
 
     initializeLossChart() {
         if (document.getElementById('lossChart')) {
+            const lineWidth = this.mobileMode ? 1.2 : 2.4;
             this.lossChart = new Chart(document.getElementById('lossChart'), {
                 type: 'line',
                 data: {
                     labels: [], // Step numbers
                     datasets: [
-                        { label: 'Train Loss', data: [], borderColor: 'blue', fill: false },
-                        { label: 'Validation Loss', data: [], borderColor: 'red', fill: false },
+                        { label: 'Train', data: [], borderColor: 'blue', fill: false },
+                        { label: 'Val', data: [], borderColor: 'red', fill: false },
                     ],
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: {
                             display: true,
@@ -924,15 +984,23 @@ export default class LandscapeView {
                         },
                     },
                     elements: {
+                        line: {
+                            borderWidth: lineWidth,
+                        },
                         point: {
-                            radius: 3,
+                            radius: 0,
+                            hoverRadius: 0,
+                            hitRadius: 4,
                         },
                     },
                     scales: {
                         x: {
                             title: {
-                                display: true,
+                                display: !this.mobileMode,
                                 text: 'Step',
+                            },
+                            ticks: {
+                                display: !this.mobileMode,
                             },
                         },
                         y: {
@@ -949,15 +1017,17 @@ export default class LandscapeView {
 
     // Initialize Last Steps Chart
     initializeLastStepsChart() {
-        if (document.getElementById('lastStepsChart')) {
+        if (!this.mobileMode && document.getElementById('lastStepsChart')) {
+            const lineWidth = this.mobileMode ? 1.2 : 2.4;
             this.lastStepsChart = new Chart(document.getElementById('lastStepsChart'), {
                 type: 'line',
                 data: {
                     labels: [], // Recent steps
-                    datasets: [{ label: 'Loss (Last Steps)', data: [], borderColor: 'green', fill: false }],
+                    datasets: [{ label: 'Train (recent)', data: [], borderColor: 'green', fill: false }],
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: {
                             display: true,
@@ -974,15 +1044,23 @@ export default class LandscapeView {
                         },
                     },
                     elements: {
+                        line: {
+                            borderWidth: lineWidth,
+                        },
                         point: {
-                            radius: 3,
+                            radius: 0,
+                            hoverRadius: 0,
+                            hitRadius: 4,
                         },
                     },
                     scales: {
                         x: {
                             title: {
-                                display: true,
+                                display: !this.mobileMode,
                                 text: 'Step',
+                            },
+                            ticks: {
+                                display: !this.mobileMode,
                             },
                         },
                         y: {
@@ -1042,7 +1120,7 @@ export default class LandscapeView {
 
     // Update Last Steps Chart
     updateLastStepsChart(lastSteps, losses) {
-        if (this.lastStepsChart) {
+        if (!this.mobileMode && this.lastStepsChart) {
             this.lastStepsChart.data.labels = lastSteps;
             this.lastStepsChart.data.datasets[0].data = losses;
             this.lastStepsChart.update();

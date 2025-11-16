@@ -1,5 +1,6 @@
 import KeyboardClient from './client/KeyboardClient.js';
 import KeyboardClientGL from './client/KeyboardClientGL.js';
+import { detectMobileMode, setMobileFlag } from './mobile.js';
 
 async function detectBackendHostPort() {
 	const params = new URLSearchParams(window.location.search);
@@ -67,15 +68,18 @@ function installModeToggle(currentMode) {
 		return btn;
 	};
 
-	const targetMode = currentMode === '1d' ? '3d' : '1d';
-	const viewButton = makeToggleButton(currentMode === '1d' ? 'Switch to 3D view' : 'Switch to 1D view', () => {
-		const params = new URLSearchParams(window.location.search);
-		params.set('mode', targetMode);
-		window.location.search = params.toString();
-	});
-	container.appendChild(viewButton);
+	const isMobile = typeof window !== 'undefined' && window.__hudesIsMobile;
+	if (!isMobile) {
+		const targetMode = currentMode === '1d' ? '3d' : '1d';
+		const viewButton = makeToggleButton(currentMode === '1d' ? 'Switch to 3D view' : 'Switch to 1D view', () => {
+			const params = new URLSearchParams(window.location.search);
+			params.set('mode', targetMode);
+			window.location.search = params.toString();
+		});
+		container.appendChild(viewButton);
+	}
 
-	if (currentMode === '1d') {
+	if (currentMode === '1d' && !isMobile) {
 		const params = new URLSearchParams(window.location.search);
 		const toggleFlag = (key) => {
 			const current = params.get(key);
@@ -110,8 +114,10 @@ function installModeToggle(currentMode) {
 (async function bootstrap() {
 	const { host, port } = await detectBackendHostPort();
 	const params = new URLSearchParams(window.location.search);
+	const isMobile = detectMobileMode(params);
+	setMobileFlag(isMobile);
 	const modeParam = (params.get('mode') || '').toLowerCase();
-	const renderMode = modeParam === '1d' ? '1d' : '3d';
+	const renderMode = modeParam === '1d' && !isMobile ? '1d' : '3d';
 	const debugParam = params.get('debug');
 	const debugEnabled = typeof debugParam === 'string' && /^(1|true|yes|on)$/i.test(debugParam);
 	const altKeysEnabled = (() => {
@@ -142,25 +148,27 @@ function installModeToggle(currentMode) {
 	const cameraDistance = renderMode === '1d' ? (cameraDistanceRaw ?? 50) : cameraDistanceRaw;
 	const client =
 		renderMode === '1d'
-			? new KeyboardClient(host, port, {
-					renderMode: '1d',
-					lossLines: 6,
-					debug: debugEnabled,
-					gridSize,
-					rowSpacing,
-					depthStep,
-					cameraDistance,
-					altKeys: altKeysEnabled,
-					alt1d: alt1dEnabled,
-			  })
-			: new KeyboardClientGL(host, port, {
-					renderMode: '3d',
-					debug: debugEnabled,
-					gridSize,
-					rowSpacing,
-					depthStep,
-					cameraDistance,
-			  });
+          ? new KeyboardClient(host, port, {
+                  renderMode: '1d',
+                  lossLines: 6,
+                  debug: debugEnabled,
+                  gridSize,
+                  rowSpacing,
+                  depthStep,
+                  cameraDistance,
+                  altKeys: altKeysEnabled,
+                  alt1d: alt1dEnabled,
+                  isMobile,
+              })
+          : new KeyboardClientGL(host, port, {
+                  renderMode: '3d',
+                  debug: debugEnabled,
+                  gridSize,
+                  rowSpacing,
+                  depthStep,
+                  cameraDistance,
+                  isMobile,
+              });
 	if (typeof window !== 'undefined') {
 		window.__hudesClient = client;
 		if (debugEnabled) {
