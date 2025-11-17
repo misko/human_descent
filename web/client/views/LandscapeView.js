@@ -25,7 +25,15 @@ import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Import OrbitControls
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'; // Import CSS2DRenderer for annotations
-import { CONTROL_GROUPS, formatHudMarkup, MOBILE_CONTROL_GROUPS, MOBILE_HUD_BUTTONS } from '../hud.js';
+import { CONTROL_GROUPS, formatHudMarkup, MOBILE_CONTROL_GROUPS, MOBILE_HUD_BUTTONS, escapeHtml } from '../hud.js';
+import {
+    HELP_TOUR_SCREENS,
+    HELP_TAGLINE,
+    HELP_ELEVATOR_PITCH,
+    HOW_IT_WORKS_POINTS,
+    TOUR_MODE_OPTIONS,
+    MOBILE_KEY_COMMANDS,
+} from '../helpTour.js';
 import { log } from '../../utils/logger.js'; // Import your logging utility
 
 const DEBUG_SELECTION = false;
@@ -128,7 +136,15 @@ export default class LandscapeView {
         this.confusionCols = 10;
         this.exampleCharts = [];
         this.helpOverlay = null;
+        this.helpOverlayContent = null;
+        this.helpInfoSheet = null;
         this.helpImageEl = null;
+        this.helpTourSelection = 'explore';
+        this.selectedTourMode = 'explore';
+        this.manualKeyOverlay = false;
+        this._helpKeyListenerAttached = false;
+        this._boundHelpKeydown = (event) => this._handleHelpKeydown(event);
+        this._howItWorksVisible = false;
 
 
         // Grid properties
@@ -764,12 +780,6 @@ export default class LandscapeView {
         if (!bottomTextContainer) {
             return;
         }
-        if (this.hideHud) {
-            bottomTextContainer.innerHTML = '';
-            bottomTextContainer.style.display = 'none';
-            return;
-        }
-        bottomTextContainer.style.display = '';
         let controls;
         let hudButtons = [];
         if (this.mode === '1d') {
@@ -780,8 +790,30 @@ export default class LandscapeView {
         } else {
             controls = CONTROL_GROUPS;
         }
+        const statusText = typeof text === 'string' ? text : '';
         const options = hudButtons.length ? { buttons: hudButtons } : {};
-        bottomTextContainer.innerHTML = formatHudMarkup(text ?? '', controls, options);
+        const statusHtml = this._buildStatusHtml(statusText);
+        if (statusHtml) {
+            options.statusHtml = statusHtml;
+        }
+        bottomTextContainer.innerHTML = formatHudMarkup(statusText || text || '', controls, options);
+    }
+
+    _buildStatusHtml(text) {
+        if (!this.state?.speedRunActive || typeof text !== 'string' || !text.length) {
+            return null;
+        }
+        const marker = 'SPEED RUN:';
+        const idx = text.toUpperCase().indexOf(marker);
+        if (idx === -1) {
+            return null;
+        }
+        const before = escapeHtml(text.slice(0, idx));
+        const highlight = escapeHtml(text.slice(idx));
+        if (!highlight.length) {
+            return null;
+        }
+        return `${before}<span class="hud-timer">${highlight}</span>`;
     }
     highlightLossLine(index, durationMs = this.glowDuration) {
         if (this.mode !== '1d') {
@@ -2035,99 +2067,38 @@ export default class LandscapeView {
         });
     }
 
-    showImage(filename) {
+    showImage(screenId) {
         const container = document.getElementById('imageContainer');
         if (!container) {
             return;
         }
-
-        if (!this.helpOverlay) {
-            const overlay = document.createElement('div');
-            overlay.className = 'help-overlay';
-            overlay.setAttribute('role', 'dialog');
-            overlay.setAttribute('aria-label', 'Help screens');
-
-            const advanceHelp = (event) => {
-                event?.preventDefault?.();
-                event?.stopPropagation?.();
-                if (!this.state) {
-                    this.hideImage();
-                    return;
-                }
-                const prevIdx = this.state.helpScreenIdx;
-                if (typeof this.state.nextHelpScreen === 'function') {
-                    this.state.nextHelpScreen();
-                } else {
-                    this.state.helpScreenIdx = -1;
-                }
-                if (this.state.helpScreenIdx === -1 || this.state.helpScreenIdx === prevIdx) {
-                    this.hideImage();
-                    return;
-                }
-                const nextImage = this.state.helpScreenFns?.[this.state.helpScreenIdx];
-                if (nextImage) {
-                    this.showImage(nextImage);
-                } else {
-                    this.hideImage();
-                }
-            };
-
-            const closeBtn = document.createElement('button');
-            closeBtn.type = 'button';
-            closeBtn.className = 'help-overlay__close';
-            closeBtn.setAttribute('aria-label', 'Close help screens');
-            closeBtn.innerHTML = '&times;';
-            const dismissHelp = (event) => {
-                event?.preventDefault?.();
-                event?.stopPropagation?.();
-                if (this.state) {
-                    if (typeof this.state.closeHelpScreens === 'function') {
-                        this.state.closeHelpScreens();
-                    } else {
-                        this.state.helpScreenIdx = -1;
-                    }
-                }
-                this.hideImage();
-            };
-            closeBtn.addEventListener('click', dismissHelp);
-            overlay.addEventListener('click', (event) => {
-                if (event.target.closest('.help-overlay__close')) {
-                    return;
-                }
-                advanceHelp(event);
-            });
-
-            const img = document.createElement('img');
-            img.className = 'help-overlay__image';
-            img.alt = 'Help screen';
-            img.addEventListener('click', (event) => {
-                event?.preventDefault?.();
-                event?.stopPropagation?.();
-                advanceHelp(event);
-            });
-            overlay.appendChild(closeBtn);
-            overlay.appendChild(img);
-            container.appendChild(overlay);
-
-            this.helpOverlay = overlay;
-            this.helpImageEl = img;
-        }
-
-        const overlay = this.helpOverlay;
-        const img = this.helpImageEl;
-        if (!overlay || !img) {
+        this.manualKeyOverlay = false;
+        const isTourScreen = HELP_TOUR_SCREENS.includes(screenId);
+        this._ensureHelpOverlayElements();
+        if (!this.helpOverlay || !this.helpOverlayContent) {
             return;
         }
-
         container.classList.add('help-open');
-        overlay.classList.add('visible');
-
-        if (img.dataset.currentSrc === filename) {
+        this.helpOverlay.classList.add('visible');
+        this._hideHowItWorksSheet();
+        if (isTourScreen) {
+            this._renderTourScreen(screenId);
+            this._attachHelpKeyListener();
             return;
         }
-
-        img.dataset.currentSrc = filename;
-        img.src = filename;
+        // fallback to legacy image viewer
+        this.helpOverlayContent.innerHTML = '';
+        const img = document.createElement('img');
+        img.className = 'help-overlay__image';
+        img.alt = 'Help screen';
+        img.src = screenId;
+        img.addEventListener('click', (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            this._advanceHelpScreen();
+        });
+        this.helpOverlayContent.appendChild(img);
+        this._attachHelpKeyListener();
     }
 
     hideImage() {
@@ -2136,7 +2107,9 @@ export default class LandscapeView {
             return;
         }
         container.classList.remove('help-open');
-
+        this._detachHelpKeyListener();
+        this._hideHowItWorksSheet();
+        this.manualKeyOverlay = false;
         if (this.helpOverlay) {
             this.helpOverlay.classList.remove('visible');
         } else {
@@ -2145,6 +2118,595 @@ export default class LandscapeView {
                 overlay.classList.remove('visible');
             }
         }
+    }
+
+    _ensureHelpOverlayElements() {
+        if (this.helpOverlay && this.helpOverlayContent && this.helpInfoSheet) {
+            return;
+        }
+        const container = document.getElementById('imageContainer');
+        if (!container) {
+            return;
+        }
+        const overlay = document.createElement('div');
+        overlay.className = 'help-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-label', 'First-run guide');
+
+        const closeOverlay = (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            if (this.state) {
+                if (typeof this.state.closeHelpScreens === 'function') {
+                    this.state.closeHelpScreens();
+                } else {
+                    this.state.helpScreenIdx = -1;
+                }
+            }
+            this.hideImage();
+        };
+
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) {
+                if (this._howItWorksVisible) {
+                    this._hideHowItWorksSheet();
+                    return;
+                }
+                this._advanceHelpScreen();
+            }
+        });
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'help-overlay__content';
+        contentWrapper.addEventListener('click', (event) => event.stopPropagation());
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'help-overlay__close';
+        closeBtn.setAttribute('aria-label', 'Close help screens');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.addEventListener('click', closeOverlay);
+
+        const contentBody = document.createElement('div');
+        contentBody.className = 'help-overlay__body';
+
+        const infoSheet = this._buildHowItWorksSheet();
+
+        contentWrapper.appendChild(closeBtn);
+        contentWrapper.appendChild(contentBody);
+        overlay.appendChild(contentWrapper);
+        overlay.appendChild(infoSheet);
+        container.appendChild(overlay);
+
+        this.helpOverlay = overlay;
+        this.helpOverlayContent = contentBody;
+        this.helpInfoSheet = infoSheet;
+    }
+
+    _renderTourScreen(screenId) {
+        if (!this.helpOverlayContent) {
+            return;
+        }
+        this.helpOverlayContent.innerHTML = '';
+        this.helpOverlay?.setAttribute('data-tour-screen', screenId);
+        switch (screenId) {
+            case 'tour_hook':
+                this.helpOverlayContent.appendChild(this._buildHookScreen());
+                break;
+            case 'tour_modes':
+                this.helpOverlayContent.appendChild(this._buildModeScreen());
+                break;
+            case 'tour_keys':
+                this.helpOverlayContent.appendChild(this._buildKeyScreen());
+                break;
+            default:
+                break;
+        }
+    }
+
+    _buildHookScreen() {
+        const screen = document.createElement('div');
+        screen.className = 'tour-screen tour-screen--hook';
+
+        const hero = document.createElement('div');
+        hero.className = 'tour-hero';
+
+        const visual = document.createElement('div');
+        visual.className = 'tour-hero__visual';
+        const gif = document.createElement('img');
+        gif.className = 'tour-hero__gif';
+        gif.src = '/dist/help_screens/loss_landscape.gif';
+        gif.alt = 'CNN loss landscape animation';
+        visual.appendChild(gif);
+        hero.appendChild(visual);
+
+        const body = document.createElement('div');
+        body.className = 'tour-hero__body';
+
+        const eyebrow = document.createElement('p');
+        eyebrow.className = 'tour-eyebrow';
+        eyebrow.textContent = HELP_TAGLINE;
+        body.appendChild(eyebrow);
+
+        const title = document.createElement('h2');
+        title.textContent = 'Explore the Loss Landscape.';
+        body.appendChild(title);
+
+        const pitch = document.createElement('p');
+        pitch.className = 'tour-pitch';
+        pitch.textContent = HELP_ELEVATOR_PITCH;
+        body.appendChild(pitch);
+
+        const desc = document.createElement('p');
+        desc.className = 'tour-desc';
+        desc.textContent =
+            'Each point is a neural network. Move in weight space, and lower Z means lower loss.';
+        body.appendChild(desc);
+
+        const platformNote = document.createElement('p');
+        platformNote.className = 'tour-mobile-note';
+        platformNote.textContent = this.mobileMode
+            ? 'Tap Play to explore with touch controls. Connect a keyboard for ranked Speed-Runs.'
+            : 'Desktop gives you full control and the fastest Speed-Run times.';
+        body.appendChild(platformNote);
+
+        const ctas = document.createElement('div');
+        ctas.className = 'tour-cta-row';
+
+        const playBtn = document.createElement('button');
+        playBtn.type = 'button';
+        playBtn.className = 'tour-btn primary';
+        playBtn.textContent = 'Play';
+        playBtn.addEventListener('click', (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            this._advanceHelpScreen();
+        });
+        ctas.appendChild(playBtn);
+
+        const infoBtn = document.createElement('button');
+        infoBtn.type = 'button';
+        infoBtn.className = 'tour-btn ghost';
+        infoBtn.textContent = 'What is this?';
+        infoBtn.addEventListener('click', (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            this._showHowItWorksSheet();
+        });
+        ctas.appendChild(infoBtn);
+
+        body.appendChild(ctas);
+
+        if (this.state?.resumeMode) {
+            const resumeRow = document.createElement('div');
+            resumeRow.className = 'tour-resume-row';
+            const resumeBtn = document.createElement('button');
+            resumeBtn.type = 'button';
+            resumeBtn.className = 'tour-btn resume';
+            resumeBtn.textContent =
+                this.state.resumeMode === 'speed' ? 'Resume Speed-Run' : 'Resume Explore';
+            resumeBtn.addEventListener('click', (event) => {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                this._resumeLastMode();
+            });
+            resumeRow.appendChild(resumeBtn);
+            body.appendChild(resumeRow);
+        }
+
+        hero.appendChild(body);
+        screen.appendChild(hero);
+        return screen;
+    }
+
+    _buildModeScreen() {
+        const screen = document.createElement('div');
+        screen.className = 'tour-screen tour-screen--modes';
+
+        const eyebrow = document.createElement('p');
+        eyebrow.className = 'tour-eyebrow';
+        eyebrow.textContent = 'Pick your mode';
+        screen.appendChild(eyebrow);
+
+        const modesWrap = document.createElement('div');
+        modesWrap.className = 'tour-modes';
+
+        TOUR_MODE_OPTIONS.forEach((option) => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'tour-mode-card';
+            card.dataset.mode = option.id;
+            if (this.helpTourSelection === option.id) {
+                card.classList.add('is-selected');
+            }
+            const extraCopy =
+                this.mobileMode && option.id === 'speed'
+                    ? ' (Keyboard recommended)'
+                    : this.mobileMode && option.id === 'explore'
+                    ? ' (Touch-optimized)'
+                    : '';
+            const description =
+                option.description +
+                (this.mobileMode && option.id === 'speed'
+                    ? ' For ranked play, connect a keyboard to access all shortcuts.'
+                    : '');
+            card.innerHTML = `
+                <div class="tour-mode-heading">
+                    <h3>${option.title}${extraCopy}</h3>
+                    <p>${option.tagline}</p>
+                </div>
+                <p class="tour-mode-body">${description}</p>
+            `;
+            if (option.nudge) {
+                const nudge = document.createElement('span');
+                nudge.className = 'tour-mode-nudge';
+                nudge.textContent = option.nudge;
+                card.appendChild(nudge);
+            }
+            card.addEventListener('click', (event) => {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                this._selectTourMode(option.id);
+            });
+            modesWrap.appendChild(card);
+        });
+
+        screen.appendChild(modesWrap);
+
+        const continueBtn = document.createElement('button');
+        continueBtn.type = 'button';
+        continueBtn.className = 'tour-btn primary';
+        continueBtn.textContent = 'Continue';
+        continueBtn.addEventListener('click', (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            this._confirmModeSelection();
+        });
+        screen.appendChild(continueBtn);
+
+        return screen;
+    }
+
+    _buildKeyScreen() {
+        if (this.selectedTourMode === 'speed') {
+            return this._buildSpeedRunPreScreen();
+        }
+        return this._buildExploreKeyScreen();
+    }
+
+    _buildExploreKeyScreen() {
+        const screen = document.createElement('div');
+        screen.className = 'tour-screen tour-screen--keys';
+
+        const eyebrow = document.createElement('p');
+        eyebrow.className = 'tour-eyebrow';
+        eyebrow.textContent = 'Controls';
+        screen.appendChild(eyebrow);
+
+        const title = document.createElement('h2');
+        title.textContent = this.mobileMode ? 'Touch controls' : 'Keyboard overlay';
+        screen.appendChild(title);
+
+        const list = document.createElement('ul');
+        list.className = 'tour-legend';
+        this._populateLegendList(list);
+        screen.appendChild(list);
+
+        const footer = document.createElement('p');
+        footer.className = 'tour-footer';
+        footer.textContent = 'Press Enter to start. Press ? anytime.';
+        screen.appendChild(footer);
+
+        const startBtn = document.createElement('button');
+        startBtn.type = 'button';
+        startBtn.className = 'tour-btn primary';
+        startBtn.textContent = 'Start exploring';
+        startBtn.addEventListener('click', (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            this._completeKeysOverlayAndExplore();
+        });
+        screen.appendChild(startBtn);
+
+        return screen;
+    }
+
+    _buildSpeedRunPreScreen() {
+        const screen = document.createElement('div');
+        screen.className = 'tour-screen tour-screen--speed';
+
+        const eyebrow = document.createElement('p');
+        eyebrow.className = 'tour-eyebrow';
+        eyebrow.textContent = 'Speed-Run Mode';
+        screen.appendChild(eyebrow);
+
+        const title = document.createElement('h2');
+        title.textContent = '2-minute ranked challenge';
+        screen.appendChild(title);
+
+        const desc = document.createElement('p');
+        desc.className = 'tour-desc';
+        desc.textContent =
+            'Configure quickly, keep loss low, and submit your best validation score to the global leaderboard.';
+        screen.appendChild(desc);
+
+        const keyList = document.createElement('ul');
+        keyList.className = 'tour-legend';
+        this._populateLegendList(keyList);
+        screen.appendChild(keyList);
+
+        const footer = document.createElement('p');
+        footer.className = 'tour-footer';
+        footer.textContent = this.mobileMode
+            ? 'Timer starts when you tap Start. Connect a keyboard for the best ranked times.'
+            : 'Timer starts when you hit Start. Press ? anytime for this overlay.';
+        screen.appendChild(footer);
+
+        const startBtn = document.createElement('button');
+        startBtn.type = 'button';
+        startBtn.className = 'tour-btn primary';
+        startBtn.textContent = 'Start Speed-Run';
+        startBtn.addEventListener('click', (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            this._startSpeedrunFromTour();
+        });
+        screen.appendChild(startBtn);
+
+        return screen;
+    }
+
+    _getKeyLegendData() {
+        if (this.mobileMode) {
+            return MOBILE_KEY_COMMANDS;
+        }
+        return CONTROL_GROUPS.map((group) => {
+            const keys = Array.isArray(group.keys)
+                ? group.keys.filter((key) => typeof key === 'string' && key.length > 0)
+                : (typeof group.keys === 'string' && group.keys.length > 0) ? [group.keys] : [];
+            return {
+                keys,
+                label: group.label || '',
+            };
+        });
+    }
+
+    _populateLegendList(listEl) {
+        const keyData = this._getKeyLegendData();
+        keyData.forEach((cmd) => {
+            const item = document.createElement('li');
+            const keysEl = document.createElement('span');
+            keysEl.className = 'tour-key';
+            const keyText = Array.isArray(cmd.keys) ? cmd.keys.join(' / ') : (cmd.keys ?? '');
+            keysEl.textContent = keyText;
+            const labelEl = document.createElement('span');
+            labelEl.className = 'tour-label';
+            if (this.mobileMode) {
+                labelEl.textContent = cmd.label ?? '';
+            } else {
+                labelEl.innerHTML = cmd.label ?? '';
+            }
+            item.appendChild(keysEl);
+            item.appendChild(labelEl);
+            listEl.appendChild(item);
+        });
+    }
+
+    _confirmModeSelection() {
+        const mode = this.helpTourSelection || 'explore';
+        this.selectedTourMode = mode;
+        const client = this._getHudesClient();
+        client?.rememberResumeMode(mode);
+        this._advanceHelpScreen();
+    }
+
+    _completeKeysOverlayAndExplore() {
+        const client = this._getHudesClient();
+        client?.markKeysOverlaySeen?.();
+        this.state?.setHasSeenKeysOverlay?.(true);
+        if (typeof this.state.closeHelpScreens === 'function') {
+            this.state.closeHelpScreens();
+        } else {
+            this.state.helpScreenIdx = -1;
+        }
+        this.hideImage();
+        this._startExploreFlow();
+    }
+
+    _startExploreFlow() {
+        const client = this._getHudesClient();
+        client?.rememberResumeMode?.('explore');
+        if (!this.state?.hasSeenKeysOverlay) {
+            this.state?.setHasSeenKeysOverlay?.(true);
+            client?.markKeysOverlaySeen?.();
+        }
+        this._beginExploreTutorialIfNeeded();
+    }
+
+    _beginExploreTutorialIfNeeded() {
+        const client = this._getHudesClient();
+        const tutorial = this.state?.tutorialState;
+        if (!tutorial || tutorial.completed) {
+            client?.resetTutorialProgress?.(6);
+        }
+    }
+
+    _startSpeedrunFromTour() {
+        const client = this._getHudesClient();
+        client?.markKeysOverlaySeen?.();
+        this.state?.setHasSeenKeysOverlay?.(true);
+        if (typeof this.state.closeHelpScreens === 'function') {
+            this.state.closeHelpScreens();
+        } else {
+            this.state.helpScreenIdx = -1;
+        }
+        this.hideImage();
+        client?.startSpeedRun?.();
+    }
+
+    _resumeLastMode() {
+        const mode = this.state?.resumeMode || 'explore';
+        this.selectedTourMode = mode;
+        if (mode === 'speed') {
+            this._startSpeedrunFromTour();
+        } else {
+            if (typeof this.state.closeHelpScreens === 'function') {
+                this.state.closeHelpScreens();
+            } else {
+                this.state.helpScreenIdx = -1;
+            }
+            this.hideImage();
+            this._startExploreFlow();
+        }
+    }
+
+    _buildHowItWorksSheet() {
+        const sheet = document.createElement('div');
+        sheet.className = 'help-info-sheet';
+        sheet.setAttribute('aria-hidden', 'true');
+
+        const title = document.createElement('h2');
+        title.textContent = 'How it works';
+        sheet.appendChild(title);
+
+        const description = document.createElement('p');
+        description.textContent =
+            'Human Descent streams projections of a convolutional neural network trained on MNIST. You steer its weights directly.';
+        sheet.appendChild(description);
+
+        const list = document.createElement('ul');
+        HOW_IT_WORKS_POINTS.forEach((point) => {
+            const item = document.createElement('li');
+            item.textContent = point;
+            list.appendChild(item);
+        });
+        sheet.appendChild(list);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'tour-btn ghost';
+        closeBtn.textContent = 'Back';
+        closeBtn.addEventListener('click', (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            this._hideHowItWorksSheet();
+        });
+        sheet.appendChild(closeBtn);
+
+        sheet.addEventListener('click', (event) => event.stopPropagation());
+        return sheet;
+    }
+
+    _showHowItWorksSheet() {
+        if (!this.helpOverlay || !this.helpInfoSheet) {
+            return;
+        }
+        this.helpOverlay.classList.add('showing-info');
+        this.helpInfoSheet.setAttribute('aria-hidden', 'false');
+        this._howItWorksVisible = true;
+    }
+
+    _hideHowItWorksSheet() {
+        if (!this.helpOverlay || !this.helpInfoSheet) {
+            return;
+        }
+        this.helpOverlay.classList.remove('showing-info');
+        this.helpInfoSheet.setAttribute('aria-hidden', 'true');
+        this._howItWorksVisible = false;
+    }
+
+    _selectTourMode(mode) {
+        if (this.helpTourSelection === mode) {
+            return;
+        }
+        this.helpTourSelection = mode;
+        if (this.helpOverlay?.getAttribute('data-tour-screen') === 'tour_modes') {
+            this._renderTourScreen('tour_modes');
+        }
+    }
+
+    _advanceHelpScreen() {
+        if (!this.state) {
+            this.hideImage();
+            return;
+        }
+        const prevIdx = this.state.helpScreenIdx;
+        if (typeof this.state.nextHelpScreen === 'function') {
+            this.state.nextHelpScreen();
+        } else {
+            this.state.helpScreenIdx = -1;
+        }
+        if (this.state.helpScreenIdx === -1 || this.state.helpScreenIdx === prevIdx) {
+            this.hideImage();
+            return;
+        }
+        const nextScreen = this.state.helpScreenFns?.[this.state.helpScreenIdx];
+        if (nextScreen) {
+            this.showImage(nextScreen);
+        } else {
+            this.hideImage();
+        }
+    }
+
+    _attachHelpKeyListener() {
+        if (this._helpKeyListenerAttached || typeof window === 'undefined') {
+            return;
+        }
+        window.addEventListener('keydown', this._boundHelpKeydown, true);
+        this._helpKeyListenerAttached = true;
+    }
+
+    _detachHelpKeyListener() {
+        if (!this._helpKeyListenerAttached || typeof window === 'undefined') {
+            return;
+        }
+        window.removeEventListener('keydown', this._boundHelpKeydown, true);
+        this._helpKeyListenerAttached = false;
+    }
+
+    _handleHelpKeydown(event) {
+        if (!this.state || this.state.helpScreenIdx === -1) {
+            return;
+        }
+        const key = event.key?.toLowerCase?.();
+        if (key === 'enter' || key === ' ') {
+            event.preventDefault();
+            this._advanceHelpScreen();
+        } else if (key === 'escape') {
+            event.preventDefault();
+            if (typeof this.state.closeHelpScreens === 'function') {
+                this.state.closeHelpScreens();
+            } else {
+                this.state.helpScreenIdx = -1;
+            }
+            this.hideImage();
+        }
+    }
+
+    _getHudesClient() {
+        if (typeof window !== 'undefined' && window.__hudesClient) {
+            return window.__hudesClient;
+        }
+        return null;
+    }
+
+    openKeyOverlay(mode = 'explore') {
+        this.selectedTourMode = mode || 'explore';
+        this.manualKeyOverlay = true;
+        this._ensureHelpOverlayElements();
+        const container = document.getElementById('imageContainer');
+        if (!container || !this.helpOverlay) {
+            return;
+        }
+        this._hideHowItWorksSheet();
+        this.helpOverlay.classList.add('visible');
+        container.classList.add('help-open');
+        this._renderTourScreen('tour_keys');
+        this._attachHelpKeyListener();
+    }
+
+    isManualKeyOverlayVisible() {
+        return Boolean(this.manualKeyOverlay);
     }
 
 }

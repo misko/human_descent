@@ -2,6 +2,7 @@ import KeyboardClient from './KeyboardClient.js';
 import { log } from '../utils/logger.js';
 import { installMouseControls, computeStepVector } from './mouseControls.js';
 import { installTouchControls } from './touchControls.js';
+import { HELP_TOUR_SCREENS } from './helpTour.js';
 
 const DEBUG_MOUSE = false;
 
@@ -141,20 +142,7 @@ export default class KeyboardClientGL extends KeyboardClient {
         //window.addEventListener('keydown', (event) => this.processKeyPress(event));
         //window.addEventListener('keyup', (event) => this.updateKeyHolds());
 
-                this.state.setHelpScreenFns([
-            "help_screens/hudes_help_start.png",
-            "help_screens/hudes_1.png",
-            "help_screens/hudes_2.png",
-            "help_screens/hudes_3.png",
-            "help_screens/hudes_4.png",
-            "help_screens/hudes_5.png",
-            "help_screens/hudes_6.png",
-            "help_screens/hudes_7.png",
-            "help_screens/hudes_8.png",
-            "help_screens/hudes_9.png",
-            "help_screens/hudes_2d_keyboard_controls.png",
-            "help_screens/hudes_2d_xbox_controls.png",
-          ]);
+                this.state.setHelpScreenFns(HELP_TOUR_SCREENS);
 
     }
 
@@ -221,12 +209,16 @@ export default class KeyboardClientGL extends KeyboardClient {
         }
         const currentTime = performance.now();
         let redraw = this.processCommonKeys(event);
+        const manualOverlayVisible = this.view?.isManualKeyOverlayVisible?.();
 
         if (this.state.helpScreenIdx !== -1) {
             this.view.showImage(this.state.helpScreenFns[this.state.helpScreenIdx]);
             return redraw; // Skip further processing if help screen is active
-          }
-          this.view.hideImage();
+        }
+        if (manualOverlayVisible) {
+            return redraw;
+        }
+        this.view.hideImage();
 
         if (event.type === 'keydown') {
             const key = event.key.toLowerCase();

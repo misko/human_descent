@@ -40,13 +40,13 @@ export default class ViewRouter {
         return this.impl?.updateLossLines?.(...args);
     }
 
-  annotateBottomScreen(...args) {
-    return this.impl?.annotateBottomScreen?.(...args);
-  }
+    annotateBottomScreen(...args) {
+        return this.impl?.annotateBottomScreen?.(...args);
+    }
 
-  showImage(...args) {
-    return this.impl?.showImage?.(...args);
-  }
+    showImage(...args) {
+        return this.impl?.showImage?.(...args);
+    }
 
     hideImage(...args) {
         return this.impl?.hideImage?.(...args);
@@ -84,11 +84,19 @@ export default class ViewRouter {
         return this.impl?.selectGridAt?.(...args);
     }
 
-  get modeName() {
-    return this.mode;
-  }
+    get modeName() {
+        return this.mode;
+    }
 
-  highlightLossLine(...args) {
-    return this.impl?.highlightLossLine?.(...args);
-  }
+    highlightLossLine(...args) {
+        return this.impl?.highlightLossLine?.(...args);
+    }
+
+    openKeyOverlay(...args) {
+        return this.impl?.openKeyOverlay?.(...args);
+    }
+
+    isManualKeyOverlayVisible(...args) {
+        return this.impl?.isManualKeyOverlayVisible?.(...args);
+    }
 }

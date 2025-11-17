@@ -37,6 +37,9 @@ export default class HudesClient {
         this._sessionStorageAvailable = typeof window !== 'undefined' && !!window.sessionStorage;
         this._sessionTokenKey = 'hudes.tab.sessionToken';
         this._resumeTokenKey = 'hudes.resume.token';
+        this._tourKeysSeenKey = 'hudes.tour.keysSeen';
+        this._tourResumeModeKey = 'hudes.tour.resumeMode';
+        this._tourTutorialStateKey = 'hudes.tour.tutorial';
         this._clientSessionToken = this._loadSessionToken();
         this._pendingSessionToken = null;
         this._resumeToken = this._loadPersistedResumeToken();
@@ -119,8 +122,11 @@ export default class HudesClient {
         this._helpDismissed = false;
         this._patchHelpStateTracking();
         this._initHelpDismissState();
+        this._loadTourState();
 
         this._handleHudAction = this._handleHudAction.bind(this);
+        this._speedRunCountdownOverlay = null;
+        this._speedRunCountdownText = null;
         this.initKeys();
         this._bindHudActions();
         this._connectSocket();
@@ -471,6 +477,7 @@ export default class HudesClient {
                     log('[HudesClient] prompting for high score submission');
                     this._promptAndSubmitHighScore(this._lastFinalValLoss);
                 }
+                document.body.classList.remove('speedrun-active');
                 return;
             }
 
@@ -959,6 +966,191 @@ export default class HudesClient {
         }
     }
 
+    _loadTourState() {
+        if (!this._sessionStorageAvailable) {
+            return;
+        }
+        try {
+            if (window.sessionStorage?.getItem(this._tourKeysSeenKey) === '1') {
+                this.state?.setHasSeenKeysOverlay(true);
+            }
+            const resumeMode = window.sessionStorage?.getItem(this._tourResumeModeKey);
+            if (resumeMode) {
+                this.state?.setResumeMode(resumeMode);
+            }
+            const tutorialRaw = window.sessionStorage?.getItem(this._tourTutorialStateKey);
+            if (tutorialRaw) {
+                try {
+                    const parsed = JSON.parse(tutorialRaw);
+                    if (parsed && typeof parsed === 'object') {
+                        this.state.tutorialState = {
+                            completed: Boolean(parsed.completed),
+                            currentIdx: Number(parsed.currentIdx) || 0,
+                            totalSteps: Number(parsed.totalSteps) || 0,
+                        };
+                    }
+                } catch {
+                    // ignore malformed stored data
+                }
+            }
+        } catch {}
+    }
+
+    _persistTourValue(key, value) {
+        if (!this._sessionStorageAvailable) {
+            return;
+        }
+        try {
+            if (value === null || value === undefined) {
+                window.sessionStorage?.removeItem(key);
+            } else {
+                window.sessionStorage?.setItem(key, value);
+            }
+        } catch {}
+    }
+
+    _persistTutorialState() {
+        if (!this.state?.tutorialState) {
+            this._persistTourValue(this._tourTutorialStateKey, null);
+            return;
+        }
+        const payload = JSON.stringify({
+            completed: Boolean(this.state.tutorialState.completed),
+            currentIdx: Number(this.state.tutorialState.currentIdx) || 0,
+            totalSteps: Number(this.state.tutorialState.totalSteps) || 0,
+        });
+        this._persistTourValue(this._tourTutorialStateKey, payload);
+    }
+
+    markKeysOverlaySeen() {
+        if (this.state?.hasSeenKeysOverlay) {
+            return;
+        }
+        this.state?.setHasSeenKeysOverlay(true);
+        this._persistTourValue(this._tourKeysSeenKey, '1');
+    }
+
+    rememberResumeMode(mode) {
+        if (!mode) {
+            return;
+        }
+        this.state?.setResumeMode(mode);
+        this._persistTourValue(this._tourResumeModeKey, mode);
+    }
+
+    resetTutorialProgress(totalSteps = 0) {
+        this.state?.resetTutorial(totalSteps);
+        this._persistTutorialState();
+    }
+
+    advanceTutorialProgress() {
+        this.state?.advanceTutorialStep();
+        this._persistTutorialState();
+    }
+
+    completeTutorialProgress() {
+        this.state?.markTutorialCompleted();
+        this._persistTutorialState();
+    }
+
+    toggleKeyOverlay(mode) {
+        const view = this.view;
+        if (!view) {
+            return;
+        }
+        if (view.isManualKeyOverlayVisible?.()) {
+            view.hideImage?.();
+            return;
+        }
+        const targetMode = mode || this.state?.resumeMode || 'explore';
+        view.openKeyOverlay?.(targetMode);
+    }
+
+    _ensureCountdownOverlay() {
+        if (this._speedRunCountdownOverlay) {
+            return this._speedRunCountdownOverlay;
+        }
+        if (typeof document === 'undefined') {
+            return null;
+        }
+        const overlay = document.createElement('div');
+        overlay.id = 'speedrunCountdownOverlay';
+        const box = document.createElement('div');
+        box.className = 'speedrun-countdown__box';
+        const text = document.createElement('span');
+        text.className = 'speedrun-countdown__text';
+        box.appendChild(text);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        this._speedRunCountdownOverlay = overlay;
+        this._speedRunCountdownText = text;
+        return overlay;
+    }
+
+    _showCountdownFrame(text, variant = 'ready') {
+        const overlay = this._ensureCountdownOverlay();
+        if (!overlay) {
+            return;
+        }
+        if (this._speedRunCountdownText) {
+            this._speedRunCountdownText.textContent = text.toUpperCase();
+        } else {
+            overlay.textContent = text.toUpperCase();
+        }
+        overlay.classList.remove('ready', 'count');
+        overlay.classList.add('visible', variant);
+        document.body.classList.add('speedrun-countdown');
+    }
+
+    _hideCountdownOverlay() {
+        const overlay = this._speedRunCountdownOverlay;
+        if (overlay) {
+            overlay.classList.remove('visible', 'ready', 'count');
+            if (this._speedRunCountdownText) {
+                this._speedRunCountdownText.textContent = '';
+            } else {
+                overlay.textContent = '';
+            }
+        }
+        document.body.classList.remove('speedrun-countdown');
+    }
+
+    _clearCountdownTimer() {
+        if (this._speedRunCountdownTimer) {
+            clearTimeout(this._speedRunCountdownTimer);
+            this._speedRunCountdownTimer = null;
+        }
+    }
+
+    _runSpeedRunCountdown() {
+        const frames = [
+            { text: 'Get ready', variant: 'ready', duration: 900 },
+            { text: '3', variant: 'count', duration: 700 },
+            { text: '2', variant: 'count', duration: 700 },
+            { text: '1', variant: 'count', duration: 700 },
+        ];
+        let idx = 0;
+        const step = () => {
+            if (idx >= frames.length) {
+                this._clearCountdownTimer();
+                this._hideCountdownOverlay();
+                this._sendSpeedRunStart();
+                return;
+            }
+            const frame = frames[idx++];
+            this._showCountdownFrame(frame.text, frame.variant);
+            this._speedRunCountdownTimer = setTimeout(step, frame.duration);
+        };
+        step();
+    }
+
+    _cancelSpeedRunCountdown() {
+        this._clearCountdownTimer();
+        this._hideCountdownOverlay();
+        document.body.classList.remove('speedrun-active');
+        this._speedRunRequestPending = false;
+    }
+
     _updateEvalStepsFromMessage(message) {
         const steps = message?.totalEvalSteps;
         if (typeof steps === 'number' && Number.isFinite(steps)) {
@@ -1160,8 +1352,23 @@ export default class HudesClient {
                     this.requestLeaderboard();
                     break;
                 case "KeyX":
-                    //log("Next help screen.");
-                    this.state.nextHelpScreen();
+                    if (this.view?.isManualKeyOverlayVisible?.()) {
+                        this.view.hideImage?.();
+                    } else if (this.state.helpScreenIdx !== -1) {
+                        if (typeof this.state.closeHelpScreens === 'function') {
+                            this.state.closeHelpScreens();
+                        } else {
+                            this.state.helpScreenIdx = -1;
+                        }
+                        this.view.hideImage?.();
+                    } else {
+                        this.toggleKeyOverlay();
+                    }
+                    break;
+                case "Slash":
+                    if (event.shiftKey) {
+                        this.toggleKeyOverlay();
+                    }
                     break;
                 // default:
                 //       log(`Unhandled key: ${event.code}`);
@@ -1427,25 +1634,38 @@ export default class HudesClient {
             log("[HudesClient] Cannot start Speed Run while disconnected", null, 'warn');
             return;
         }
+        if (this._speedRunCountdownTimer) {
+            this._cancelSpeedRunCountdown();
+            return;
+        }
         if (this.speedRunActive || this._speedRunRequestPending) {
             this.cancelSpeedRun();
             return;
         }
+        this._speedRunRequestPending = true;
+        this._runSpeedRunCountdown();
+    }
+
+    _sendSpeedRunStart() {
         this.highScoreSubmitted = false;
-        if (this._srsInterval) { try { clearInterval(this._srsInterval); } catch {} this._srsInterval = null; }
+        if (this._srsInterval) {
+            try {
+                clearInterval(this._srsInterval);
+            } catch {}
+            this._srsInterval = null;
+        }
         this._srsEndAt = null;
         this.speedRunActive = true;
         this.state.speedRunActive = true;
         this.state.speedRunSecondsRemaining = 0;
         this.state.bestScore = Infinity;
-        this._speedRunRequestPending = true;
-        // Do not change mesh grid configuration during Speed Run.
+        document.body.classList.remove('speedrun-countdown');
+        document.body.classList.add('speedrun-active');
         const payload = {
             type: this.ControlType.values.CONTROL_SPEED_RUN_START,
         };
         this.sendQ(payload);
         log("[HudesClient] Speed Run started.");
-        // No fallback timer; countdown will start on first server reply with speedRunSecondsRemaining
     }
 
     cancelSpeedRun() {
@@ -1457,6 +1677,7 @@ export default class HudesClient {
             log("[HudesClient] Cannot cancel Speed Run while disconnected", null, 'warn');
             return;
         }
+        this._cancelSpeedRunCountdown();
         if (!this.speedRunActive && !this._speedRunRequestPending) {
             return;
         }
@@ -1470,6 +1691,7 @@ export default class HudesClient {
             this._srsInterval = null;
         }
         this._srsEndAt = null;
+        document.body.classList.remove('speedrun-active', 'speedrun-countdown');
         const payload = {
             type: this.ControlType.values.CONTROL_SPEED_RUN_CANCEL,
         };

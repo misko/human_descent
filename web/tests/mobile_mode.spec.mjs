@@ -19,6 +19,8 @@ async function bootstrapMobile(page) {
 }
 
 test.describe('Mobile 3D mode', () => {
+  test.use({ viewport: { width: 375, height: 667 }, deviceScaleFactor: 2 });
+
   test('renders single grid and mobile HUD controls', async ({ page }) => {
     await bootstrapMobile(page);
 

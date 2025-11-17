@@ -89,7 +89,9 @@ export const formatHudMarkup = (
   const separator = '<span class="separator">•</span>';
   const controlsMarkup = controlGroups.map(formatControlGroup).join(separator);
   const buttonMarkup = formatHudButtons(options.buttons);
-  const statusMarkup = safeStatus
+  const statusMarkup = options.statusHtml
+    ? `<div class="hud-status">${options.statusHtml}</div>`
+    : safeStatus
     ? `<div class="hud-status">${safeStatus}</div>`
     : '';
   const titleMarkup = safeTitle

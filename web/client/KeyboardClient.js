@@ -1,5 +1,6 @@
 import HudesClient from './HudesClient.js';
 import { log } from '../utils/logger.js';
+import { HELP_TOUR_SCREENS } from './helpTour.js';
 
 export default class KeyboardClient extends HudesClient {
   constructor(addr, port, options = {}) {
@@ -64,13 +65,7 @@ export default class KeyboardClient extends HudesClient {
     this.state.setBatchSize(defaultBatchSize);
     this.state.setDtype('float16');
 
-    this.state.setHelpScreenFns([
-      'help_screens/hudes_help_start.png',
-      'help_screens/hudes_1.png',
-      'help_screens/hudes_2.png',
-      'help_screens/hudes_3.png',
-      'help_screens/hudes_1d_keyboard_controls.png',
-    ]);
+    this.state.setHelpScreenFns(HELP_TOUR_SCREENS);
 
   }
 

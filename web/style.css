@@ -153,21 +153,19 @@ body {
 }
 
 .help-overlay {
-    position: relative;
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    max-width: min(92vw, 960px);
-    max-height: min(80vh, 720px);
-    padding: clamp(12px, 3vw, 28px);
-    border-radius: 14px;
-    background: rgba(18, 10, 0, 0.88);
-    border: 1px solid rgba(255, 190, 80, 0.45);
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65);
+    padding: 0;
     opacity: 0;
     transform: scale(0.97);
     transition: opacity 200ms ease, transform 200ms ease;
     pointer-events: none;
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 .help-overlay.visible {
@@ -211,6 +209,236 @@ body {
 .help-overlay__close:focus-visible {
     outline: 2px solid rgba(255, 215, 120, 0.9);
     outline-offset: 2px;
+}
+
+.help-overlay__content {
+    width: min(92vw, 820px);
+    background: rgba(5, 10, 20, 0.92);
+    border: 1px solid rgba(255, 190, 80, 0.35);
+    border-radius: 20px;
+    padding: clamp(18px, 4vw, 32px);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(24px);
+    position: relative;
+}
+
+.help-overlay__body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.tour-screen {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    color: #f3fbff;
+}
+
+.tour-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.24em;
+    font-size: 0.75rem;
+    color: rgba(255, 214, 102, 0.9);
+    margin: 0;
+}
+
+.tour-hero {
+    display: flex;
+    flex-direction: row;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.tour-hero__visual {
+    flex: 1 1 260px;
+    min-height: 220px;
+    border-radius: 16px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.tour-hero__visual img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tour-hero__body {
+    flex: 1 1 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.tour-pitch,
+.tour-desc {
+    margin: 0;
+    color: rgba(228, 241, 255, 0.92);
+}
+
+.tour-cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+}
+
+.tour-mobile-note {
+    margin: 0;
+    color: rgba(200, 220, 255, 0.85);
+    font-size: 0.9rem;
+}
+
+.tour-btn {
+    border: 1px solid rgba(255, 214, 102, 0.65);
+    border-radius: 999px;
+    padding: 0.55rem 1.45rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: rgba(255, 214, 102, 0.15);
+    color: #ffd666;
+    transition: background 160ms ease, transform 160ms ease;
+}
+
+.tour-btn.primary {
+    background: linear-gradient(135deg, #ffd666, #ffae4d);
+    color: #0a0f1d;
+    border-color: transparent;
+}
+
+.tour-btn.ghost {
+    background: transparent;
+    color: rgba(255, 214, 102, 0.8);
+}
+
+.tour-btn:active {
+    transform: translateY(1px);
+}
+
+.tour-btn.resume {
+    border-color: rgba(180, 210, 255, 0.4);
+    background: rgba(10, 20, 40, 0.9);
+    color: rgba(200, 230, 255, 0.9);
+}
+
+.tour-resume-row {
+    margin-top: 0.65rem;
+}
+
+.tour-modes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.tour-mode-card {
+    border: 1px solid rgba(255, 214, 102, 0.25);
+    border-radius: 14px;
+    padding: 1rem;
+    background: rgba(10, 16, 30, 0.85);
+    color: #f1fbff;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.tour-mode-card.is-selected {
+    border-color: rgba(255, 214, 102, 0.9);
+    box-shadow: 0 0 0 2px rgba(255, 214, 102, 0.2);
+}
+
+.tour-mode-heading h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.05rem;
+}
+
+.tour-mode-heading p,
+.tour-mode-body {
+    margin: 0;
+    color: rgba(228, 241, 255, 0.9);
+    font-size: 0.9rem;
+}
+
+.tour-mode-nudge {
+    display: inline-block;
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255, 214, 102, 0.9);
+}
+
+.tour-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0.75rem;
+}
+
+.tour-legend li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.4rem 0.5rem;
+    border-left: 2px solid rgba(255, 214, 102, 0.6);
+    background: rgba(12, 20, 38, 0.65);
+}
+
+.tour-key {
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+
+.tour-label {
+    color: rgba(214, 230, 255, 0.85);
+    font-size: 0.85rem;
+}
+
+.tour-footer {
+    text-align: center;
+    color: rgba(228, 241, 255, 0.85);
+    margin: 0;
+}
+
+.help-info-sheet {
+    position: absolute;
+    inset: clamp(16px, 4vw, 48px);
+    background: rgba(5, 10, 22, 0.95);
+    border: 1px solid rgba(255, 214, 102, 0.35);
+    border-radius: 20px;
+    padding: clamp(18px, 4vw, 28px);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+    transform: translateY(10px) scale(0.97);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 160ms ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.help-info-sheet ul {
+    margin: 0;
+    padding-left: 1rem;
+    color: rgba(228, 241, 255, 0.9);
+}
+
+.help-overlay.showing-info .help-info-sheet {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+.tour-screen--speed .tour-legend {
+    margin-top: 0.25rem;
 }
 
 /* Modal overlay and glass card */
@@ -467,6 +695,68 @@ body {
     white-space: normal;
     text-align: center;
     width: 100%;
+}
+
+body.speedrun-countdown #bottomTextContainer .hud-status .hud-timer {
+    color: #ffed9c;
+    font-weight: 600;
+}
+
+body.speedrun-active #bottomTextContainer .hud-status .hud-timer {
+    color: #ff5a5a;
+    font-weight: 700;
+}
+
+#speedrunCountdownOverlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.9);
+    transition: opacity 180ms ease, transform 180ms ease;
+    z-index: 999;
+}
+
+#speedrunCountdownOverlay.visible {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.speedrun-countdown__box {
+    width: 80vw;
+    height: 55vh;
+    max-width: 1100px;
+    max-height: 600px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(12px, 4vw, 32px);
+}
+
+.speedrun-countdown__text {
+    display: block;
+    font-size: min(12vh, 18vw);
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #ffd666;
+    text-shadow: 0 0 45px rgba(0, 0, 0, 0.7);
+    line-height: 1.05;
+    white-space: normal;
+    text-align: center;
+    word-break: break-word;
+}
+
+#speedrunCountdownOverlay.count .speedrun-countdown__text {
+    font-size: min(16vh, 24vw);
+    color: #ff4d4d;
+}
+
+#speedrunCountdownOverlay.ready .speedrun-countdown__text {
+    color: #ffed8c;
 }
 
 #bottomTextContainer .hud-controls {
