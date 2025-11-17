@@ -47,6 +47,8 @@ export default class KeyboardClientGL extends KeyboardClient {
         this._mouseControls = null;
         this._touchControls = null;
         this._touchRotateCleanup = null;
+        this._boundTouchRotatePageHide = null;
+        this._touchRotateCleanup = null;
 
         this.view.resetAngle(); // Set initial angles
 
@@ -58,6 +60,7 @@ export default class KeyboardClientGL extends KeyboardClient {
                 });
                 this.__applyTouchVector = (vector) => this._applyTouchVector(vector);
                 this._installMobileUi();
+                this._installTouchRotationControls(canvas);
                 this._installTouchRotationControls(canvas);
             } else {
                 debugMouse('[KeyboardClientGL] installing mouse controls');
@@ -350,12 +353,7 @@ export default class KeyboardClientGL extends KeyboardClient {
         if (!canvas || typeof window === 'undefined') {
             return;
         }
-        if (this._touchRotateCleanup) {
-            try {
-                this._touchRotateCleanup();
-            } catch {}
-            this._touchRotateCleanup = null;
-        }
+        this._cleanupTouchRotation();
         const state = { active: false, prevX: 0, prevY: 0 };
         const getMidpoint = (touchList) => {
             if (!touchList || touchList.length < 2) {
@@ -419,6 +417,10 @@ export default class KeyboardClientGL extends KeyboardClient {
             canvas.removeEventListener('touchend', handleEnd);
             canvas.removeEventListener('touchcancel', handleCancel);
         };
+        if (typeof window !== 'undefined' && !this._boundTouchRotatePageHide) {
+            this._boundTouchRotatePageHide = () => this._cleanupTouchRotation();
+            window.addEventListener('pagehide', this._boundTouchRotatePageHide, { passive: true });
+        }
     }
 
     _handleTouchRotationDrag(deltaX, deltaY) {
@@ -433,6 +435,22 @@ export default class KeyboardClientGL extends KeyboardClient {
         }
         if (vertical) {
             this.view.adjustAngles(0, vertical);
+        }
+    }
+
+    _cleanupTouchRotation() {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        if (this._touchRotateCleanup) {
+            try {
+                this._touchRotateCleanup();
+            } catch {}
+            this._touchRotateCleanup = null;
+        }
+        if (this._boundTouchRotatePageHide) {
+            window.removeEventListener('pagehide', this._boundTouchRotatePageHide);
+            this._boundTouchRotatePageHide = null;
         }
     }
 
@@ -523,6 +541,9 @@ export default class KeyboardClientGL extends KeyboardClient {
         );
         setText(buttons.batch, `Batch ${this.state.batchSize ?? ''}`);
         setText(buttons.sgd, 'SGD');
+        if (buttons.sgd) {
+            buttons.sgd.disabled = Boolean(this.state.speedRunActive);
+        }
     }
 
 }

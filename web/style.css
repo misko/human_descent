@@ -622,6 +622,10 @@ body {
 }
 
 #mobileActionPanel {
+    display: none;
+}
+
+body.hudes-mobile #mobileActionPanel {
     position: fixed;
     top: 50%;
     right: clamp(6px, 3vw, 28px);
@@ -632,15 +636,11 @@ body {
     border-radius: 12px;
     background: transparent;
     box-shadow: none;
-    display: none;
+    display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0;
     z-index: 600;
     pointer-events: auto;
-}
-
-body.hudes-mobile #mobileActionPanel {
-    display: flex;
 }
 
 body.hudes-mobile .container {
@@ -688,6 +688,12 @@ body.hudes-mobile #plot3 #confusionMatrixChart {
     white-space: nowrap;
     text-align: center;
     min-width: 92px;
+}
+
+#mobileActionPanel button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: rgba(30, 40, 70, 0.25);
 }
 
 #mobileActionPanel button:active {

@@ -2037,15 +2037,17 @@ export default class LandscapeView {
         if (!this.helpOverlay) {
             const overlay = document.createElement('div');
             overlay.className = 'help-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-label', 'Help screens');
 
             const closeBtn = document.createElement('button');
             closeBtn.type = 'button';
             closeBtn.className = 'help-overlay__close';
             closeBtn.setAttribute('aria-label', 'Close help screens');
             closeBtn.innerHTML = '&times;';
-            closeBtn.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
+            const dismissHelp = (event) => {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
                 if (this.state) {
                     if (typeof this.state.closeHelpScreens === 'function') {
                         this.state.closeHelpScreens();
@@ -2054,11 +2056,17 @@ export default class LandscapeView {
                     }
                 }
                 this.hideImage();
-            });
+            };
+            closeBtn.addEventListener('click', dismissHelp);
+            overlay.addEventListener('click', dismissHelp);
 
             const img = document.createElement('img');
             img.className = 'help-overlay__image';
             img.alt = 'Help screen';
+            img.addEventListener('click', (event) => {
+                event?.stopPropagation?.();
+                dismissHelp(event);
+            });
 
             overlay.appendChild(closeBtn);
             overlay.appendChild(img);
