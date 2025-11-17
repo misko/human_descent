@@ -109,6 +109,7 @@ export default class LandscapeView {
         this.altKeysMode = Boolean(options.altKeys);
 
         this.mobileMode = Boolean(options.mobile);
+        this.hideHud = Boolean(options.hideHud);
         if (this.mobileMode && this.numGrids > 1) {
             this.numGrids = 1;
             this.effectiveGrids = 1;
@@ -763,6 +764,12 @@ export default class LandscapeView {
         if (!bottomTextContainer) {
             return;
         }
+        if (this.hideHud) {
+            bottomTextContainer.innerHTML = '';
+            bottomTextContainer.style.display = 'none';
+            return;
+        }
+        bottomTextContainer.style.display = '';
         let controls;
         let hudButtons = [];
         if (this.mode === '1d') {

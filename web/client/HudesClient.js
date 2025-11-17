@@ -14,9 +14,11 @@ export default class HudesClient {
                 const qpHost = params.get('host');
                 const qpPort = params.get('port');
                 const qpMode = params.get('mode');
+                const qpHideHud = params.get('hideHUD');
                 if (qpHost) addr = qpHost;
                 if (qpPort) port = Number(qpPort);
                 if (qpMode) options.renderMode = qpMode.toLowerCase();
+                if (qpHideHud) options.hideHud = /^(1|true|yes|on)$/i.test(qpHideHud);
             }
         } catch {}
 
@@ -50,6 +52,7 @@ export default class HudesClient {
         this.isMobile = Boolean(options.isMobile);
         this.debug = Boolean(options.debug);
         this.renderMode = renderMode === '1d' ? '1d' : '3d';
+        this.hideHud = Boolean(options.hideHud);
         this.meshEnabled = this.renderMode !== '1d';
         this.lossLines = this.renderMode === '1d' ? (options.lossLines ?? 6) : 0;
         this.alt1d = this.renderMode === '1d' && Boolean(options.alt1d);
@@ -82,7 +85,11 @@ export default class HudesClient {
             alt1d: this.alt1d,
             altKeys: this.altKeys,
             mobile: this.isMobile,
+            hideHud: this.hideHud,
         });
+        if (this.hideHud && typeof document !== 'undefined') {
+            document.body.classList.add('hudes-hide-hud');
+        }
         this.view.initializeCharts(); // Initialize charts
         this.Control = null;
         this.ControlType = null;

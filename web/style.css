@@ -733,3 +733,7 @@ body.hudes-mobile #bottomTextContainer .hud-mobile-actions {
 #bottomTextContainer .hud-mobile-actions button:active {
     transform: translateY(1px);
 }
+
+body.hudes-hide-hud #bottomTextContainer {
+    display: none !important;
+}
