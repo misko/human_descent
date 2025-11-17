@@ -2040,6 +2040,31 @@ export default class LandscapeView {
             overlay.setAttribute('role', 'dialog');
             overlay.setAttribute('aria-label', 'Help screens');
 
+            const advanceHelp = (event) => {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                if (!this.state) {
+                    this.hideImage();
+                    return;
+                }
+                const prevIdx = this.state.helpScreenIdx;
+                if (typeof this.state.nextHelpScreen === 'function') {
+                    this.state.nextHelpScreen();
+                } else {
+                    this.state.helpScreenIdx = -1;
+                }
+                if (this.state.helpScreenIdx === -1 || this.state.helpScreenIdx === prevIdx) {
+                    this.hideImage();
+                    return;
+                }
+                const nextImage = this.state.helpScreenFns?.[this.state.helpScreenIdx];
+                if (nextImage) {
+                    this.showImage(nextImage);
+                } else {
+                    this.hideImage();
+                }
+            };
+
             const closeBtn = document.createElement('button');
             closeBtn.type = 'button';
             closeBtn.className = 'help-overlay__close';
@@ -2058,16 +2083,21 @@ export default class LandscapeView {
                 this.hideImage();
             };
             closeBtn.addEventListener('click', dismissHelp);
-            overlay.addEventListener('click', dismissHelp);
+            overlay.addEventListener('click', (event) => {
+                if (event.target.closest('.help-overlay__close')) {
+                    return;
+                }
+                advanceHelp(event);
+            });
 
             const img = document.createElement('img');
             img.className = 'help-overlay__image';
             img.alt = 'Help screen';
             img.addEventListener('click', (event) => {
+                event?.preventDefault?.();
                 event?.stopPropagation?.();
-                dismissHelp(event);
+                advanceHelp(event);
             });
-
             overlay.appendChild(closeBtn);
             overlay.appendChild(img);
             container.appendChild(overlay);
