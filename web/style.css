@@ -54,7 +54,12 @@ body {
     transform: translateY(-50%);
     display: flex;
     align-items: center;
-    gap: 0.9rem;
+    gap: 1.6rem;
+    flex-wrap: wrap;
+}
+
+body.hudes-mobile .header-left-actions .header-source {
+    display: none;
 }
 
 .connection-status {
@@ -79,7 +84,9 @@ body {
 }
 
 .header-controls button.header-pill,
-.header-left-actions .header-pill {
+.header-left-actions .header-pill,
+.header-left-actions .header-pill:link,
+.header-left-actions .header-pill:visited {
     padding: 0;
     border: none;
     background: none;
@@ -89,6 +96,7 @@ body {
     font-size: 0.68rem;
     cursor: pointer;
     transition: color 180ms ease, text-shadow 180ms ease;
+    text-decoration: none;
 }
 
 .header-controls button.header-pill:focus,
