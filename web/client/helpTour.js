@@ -1,6 +1,6 @@
 export const BRAND_TAGLINE = 'You are the optimizer.';
 export const SPLASH_LOGO_URL = '/hudes_logo_splash.jpg';
-export const SPLASH_MEDIA_URL = '/dist/help_screens/loss_landscape.gif';
+export const SPLASH_MEDIA_URL = new URL('../dist/help_screens/loss_landscape.gif', import.meta.url).href;
 
 export const WELCOME_BULLETS = [
     'Steer a CNN through weight space—walk along random directions, find valleys and saddles, and set a 2-minute MNIST speed-run record.',
