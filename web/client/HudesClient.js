@@ -455,11 +455,30 @@ export default class HudesClient {
                 message,
                 'speedRunFinished',
             );
+            const serverActiveFlag = Object.prototype.hasOwnProperty.call(
+                message,
+                'speedRunActive',
+            )
+                ? Boolean(message.speedRunActive)
+                : null;
             log(
                 `[HudesClient] speed-run update: finishFlag=${hasFinished ? message.speedRunFinished : 'n/a'} ` +
                     `srs=${Object.prototype.hasOwnProperty.call(message, 'speedRunSecondsRemaining') ? message.speedRunSecondsRemaining : 'n/a'} ` +
                     `reqIdx=${message.requestIdx ?? 'n/a'}`,
             );
+            if (serverActiveFlag !== null) {
+                if (serverActiveFlag && !this.speedRunActive) {
+                    this.speedRunActive = true;
+                    this.state.speedRunActive = true;
+                    document.body.classList.add('speedrun-active');
+                } else if (!serverActiveFlag && this.speedRunActive && !(hasFinished && message.speedRunFinished)) {
+                    this.speedRunActive = false;
+                    this.state.speedRunActive = false;
+                    this.speedRunSecondsRemaining = 0;
+                    this.state.speedRunSecondsRemaining = 0;
+                    document.body.classList.remove('speedrun-active');
+                }
+            }
             if (hasFinished && message.speedRunFinished) {
                 // Authoritative end-of-run signal from server
                 if (this._srsInterval) { try { clearInterval(this._srsInterval); } catch {} this._srsInterval = null; }
@@ -585,9 +604,7 @@ export default class HudesClient {
         const planes = Math.max(1, Math.floor((this.state?.dimsUsed || 0) / (this.state?.n || 1)));
         const secondary = [
             { label: 'Eval steps', value: evalSteps || '—' },
-            { label: 'Batch size', value: this.state?.batchSize ?? '—' },
-            { label: 'Precision', value: this.state?.dtype ?? '—' },
-            { label: 'Planes sampled', value: planes },
+            { label: 'Subspaces sampled', value: planes },
         ];
         secondary.forEach(({ label, value }) => {
             const li = document.createElement('li');
@@ -606,27 +623,22 @@ export default class HudesClient {
                 <button type="submit">Submit score</button>
             </div>
         `;
-        const actions = document.createElement('div');
-        actions.className = 'results-actions';
-        const retryBtn = document.createElement('button');
-        retryBtn.type = 'button';
-        retryBtn.textContent = 'Retry';
-        const exploreBtn = document.createElement('button');
-        exploreBtn.type = 'button';
-        exploreBtn.textContent = 'Keep exploring';
-        const leaderboardBtn = document.createElement('button');
-        leaderboardBtn.type = 'button';
-        leaderboardBtn.textContent = 'Leaderboard';
-        [retryBtn, exploreBtn, leaderboardBtn].forEach((btn) => {
-            btn.disabled = true;
-            actions.appendChild(btn);
-        });
-        const enableActions = () => {
-            [retryBtn, exploreBtn, leaderboardBtn].forEach((btn) => {
-                btn.disabled = false;
-            });
-        };
+        const enableActions = () => {};
         form.addEventListener('submit', (event) => {
+            event.preventDefault();
+        });
+        form.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (!submitBtn) {
+            log('[HudesClient] Missing submit button in speed-run modal');
+            return;
+        }
+        submitBtn.addEventListener('click', (event) => {
             event.preventDefault();
             const input = form.querySelector('#nameInput');
             const clean = (input.value || 'USER').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
@@ -640,23 +652,7 @@ export default class HudesClient {
             this.highScoreSubmitted = true;
             try { this.requestLeaderboard(); } catch {}
         });
-        retryBtn.addEventListener('click', () => {
-            if (retryBtn.disabled) return;
-            overlay.classList.remove('open');
-            this.startSpeedRun();
-        });
-        exploreBtn.addEventListener('click', () => {
-            if (exploreBtn.disabled) return;
-            overlay.classList.remove('open');
-            this._setTextCaptureActive(false);
-        });
-        leaderboardBtn.addEventListener('click', () => {
-            if (leaderboardBtn.disabled) return;
-            this._setTextCaptureActive(false);
-            overlay.classList.remove('open');
-            try { this.requestLeaderboard(); } catch {}
-        });
-        card.append(title, metrics, share, form, actions);
+        card.append(title, metrics, share, form);
         overlay.appendChild(card);
         overlay.classList.add('open');
         const input = form.querySelector('#nameInput');

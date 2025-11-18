@@ -55,3 +55,15 @@ Iteratively selecting between new training batches and different random subspace
 For example its possible to train a 26,000 parameter MNIST model using a 6 dimensional keyboard input in about 10 minutes.
 
 ![Example snapshot](images/01_demo.jpg)
+
+## Testing
+
+- Run all frontend checks with `cd web && npm test` (wrap in the repo's virtualenv so the backend can start).
+- When iterating on the speed-run or highscores flows, capture deterministic Playwright logs with:
+
+```
+cd web
+(npm run -s test:e2e:chromium -- tests/speedrun.spec.mjs) 2>&1 3>&1 | tee /tmp/play-speedrun.log >/dev/null
+```
+
+That command mirrors what we use in CI so any browser/server output is preserved under `/tmp/play-speedrun.log` for later debugging.

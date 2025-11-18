@@ -89,6 +89,7 @@ message Control {
   optional int32 speed_run_seconds_remaining = 212;
   // True when a VAL message marks the end of the Speed Run window
   optional bool speed_run_finished = 213;
+  optional bool speed_run_active = 221;
   // Top leaderboard (NAME/SCORE only). Parallel arrays; same length.
   // Only set in CONTROL_LEADERBOARD_RESPONSE.
   repeated string leaderboard_names = 214;

@@ -81,11 +81,13 @@ def _countdown_kwargs(client) -> dict:
 
     Returns a dict that can be splatted into a Control constructor.
     """
+    data = {"speed_run_active": bool(getattr(client, "speed_run_active", False))}
     if not getattr(client, "speed_run_end_time", 0):
-        return {}
+        return data
     remaining = max(0, int(client.speed_run_end_time - time.time()))
-    srs = remaining if getattr(client, "speed_run_active", False) else 0
-    return {"speed_run_seconds_remaining": srs}
+    srs = remaining if data["speed_run_active"] else 0
+    data["speed_run_seconds_remaining"] = srs
+    return data
 
 
 def _generate_resume_token() -> str:
