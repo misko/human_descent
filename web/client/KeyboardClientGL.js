@@ -2,7 +2,7 @@ import KeyboardClient from './KeyboardClient.js';
 import { log } from '../utils/logger.js';
 import { installMouseControls, computeStepVector } from './mouseControls.js';
 import { installTouchControls } from './touchControls.js';
-import { HELP_TOUR_SCREENS } from './helpTour.js';
+import { TOUR_FLOWS } from './helpTour.js';
 
 const DEBUG_MOUSE = false;
 
@@ -22,9 +22,6 @@ export default class KeyboardClientGL extends KeyboardClient {
         this.isMobile = Boolean(options.isMobile);
         this.initInput();
 
-    if (this.state.helpScreenIdx != -1) {
-        this.view.showImage(this.state.helpScreenFns[this.state.helpScreenIdx]);
-    }
     }
 
     initInput() {
@@ -87,6 +84,7 @@ export default class KeyboardClientGL extends KeyboardClient {
                     if (vertical) {
                         this.view.adjustAngles(0, vertical);
                     }
+                    this._notifyTutorialStep?.('rotate');
 
                     const after = this.view.getAngles();
                     debugMouse(
@@ -142,8 +140,6 @@ export default class KeyboardClientGL extends KeyboardClient {
         //window.addEventListener('keydown', (event) => this.processKeyPress(event));
         //window.addEventListener('keyup', (event) => this.updateKeyHolds());
 
-                this.state.setHelpScreenFns(HELP_TOUR_SCREENS);
-
     }
 
       // Step in the selected grid with given s0 and s1 values
@@ -186,6 +182,7 @@ export default class KeyboardClientGL extends KeyboardClient {
         const { angleH } = this.view.getAngles();
         const rotated = this._rotateVector(baseX, baseY, -angleH);
         this.stepInSelectedGrid(rotated.x, rotated.y);
+        this._notifyTutorialStep?.('move');
     }
 
     _startDirectionalRepeat(key, baseX, baseY) {
@@ -197,6 +194,7 @@ export default class KeyboardClientGL extends KeyboardClient {
             return;
         }
         this.view.adjustAngles(deltaH, deltaV);
+        this._notifyTutorialStep?.('rotate');
     }
 
     _startAngleRepeat(key, deltaH, deltaV) {
@@ -321,6 +319,7 @@ export default class KeyboardClientGL extends KeyboardClient {
     }
 
     _applyTouchVector(vector) {
+        this._updateJoystickVisual(vector);
         if (!vector || this.state.helpScreenIdx !== -1) {
             return;
         }
@@ -339,6 +338,7 @@ export default class KeyboardClientGL extends KeyboardClient {
         const { angleH } = this.view.getAngles();
         const rotated = this._rotateVector(baseX, baseY, -angleH);
         this.stepInSelectedGrid(-rotated.x, -rotated.y);
+        this._notifyTutorialStep?.('move');
     }
 
     _installTouchRotationControls(canvas) {
@@ -428,6 +428,9 @@ export default class KeyboardClientGL extends KeyboardClient {
         if (vertical) {
             this.view.adjustAngles(0, vertical);
         }
+        if (horizontal || vertical) {
+            this._notifyTutorialStep?.('rotate');
+        }
     }
 
     _cleanupTouchRotation() {
@@ -480,7 +483,13 @@ export default class KeyboardClientGL extends KeyboardClient {
             this._updateMobileUi();
         });
 
-        addButton('batch', () => {
+        addButton('top10', () => {
+            try {
+                this.requestLeaderboard?.();
+            } catch {}
+        });
+
+        addButton('batchCycle', () => {
             this.state.toggleBatchSize();
             this.sendConfig();
             this._updateMobileUi();
@@ -490,15 +499,63 @@ export default class KeyboardClientGL extends KeyboardClient {
             this.getSGDStep();
         });
 
+        addButton('stepMinus', () => {
+            this.state.decreaseStepSize(this.stepSizeMultiplier || 1);
+            this.sendConfig();
+            this._updateMobileUi();
+        });
+
+        addButton('stepPlus', () => {
+            this.state.increaseStepSize(this.stepSizeMultiplier || 1);
+            this.sendConfig();
+            this._updateMobileUi();
+        });
+
+        addButton('fp', () => {
+            this.state.toggleDtype();
+            this.sendConfig();
+            this._updateMobileUi();
+        });
+
+        addButton('dims', () => {
+            this.getNextDims();
+        });
+
+        addButton('batchNew', () => {
+            this.getNextBatch();
+        });
+
         const matrixContainer = document.getElementById('confusionMatrixChart');
         if (matrixContainer?.parentElement) {
             matrixContainer.parentElement.appendChild(panel);
         } else {
             document.body.appendChild(panel);
         }
+        this._installMobileJoystick();
         this._mobileUi = { panel, buttons };
         this._updateMobileUi();
         this._mobileUiTicker = setInterval(() => this._updateMobileUi(), 800);
+    }
+    _installMobileJoystick() {
+        const existing = document.getElementById('joystickPad');
+        if (existing) {
+            this._joystickPad = existing;
+            this._joystickThumb = existing.querySelector('#joystickThumb');
+            this._joystickHint = existing.querySelector('.joystick-hint');
+            return;
+        }
+        const pad = document.createElement('div');
+        pad.id = 'joystickPad';
+        const thumb = document.createElement('div');
+        thumb.id = 'joystickThumb';
+        const hint = document.createElement('p');
+        hint.className = 'joystick-hint';
+        hint.textContent = 'Drag to move';
+        pad.append(thumb, hint);
+        document.body.appendChild(pad);
+        this._joystickPad = pad;
+        this._joystickThumb = thumb;
+        this._joystickHint = hint;
     }
 
     _cycleHelpScreens() {
@@ -525,16 +582,55 @@ export default class KeyboardClientGL extends KeyboardClient {
             }
             btn.textContent = text;
         };
-        setText(
-            buttons.speed,
-            this.state.speedRunActive
-                ? `🔥 ${Number(this.state.speedRunSecondsRemaining ?? 0).toFixed(1)}s`
-                : 'SPEED 🔥'
-        );
-        setText(buttons.batch, `Batch ${this.state.batchSize ?? ''}`);
-        setText(buttons.sgd, 'SGD');
+        if (buttons.speed) {
+            setText(
+                buttons.speed,
+                this.state.speedRunActive
+                    ? `🔥 ${Number(this.state.speedRunSecondsRemaining ?? 0).toFixed(1)}s`
+                    : 'SPEED 🔥'
+            );
+        }
+        if (buttons.top10) {
+            setText(buttons.top10, 'TOP 10');
+        }
+        if (buttons.batchCycle) {
+            setText(buttons.batchCycle, `Batch ${this.state.batchSize ?? ''}`);
+        }
+        if (buttons.stepMinus) {
+            setText(buttons.stepMinus, 'STEP -');
+        }
+        if (buttons.stepPlus) {
+            setText(buttons.stepPlus, 'STEP +');
+        }
+        if (buttons.fp) {
+            const dtype = (this.state?.dtype || '').replace('float', '').toUpperCase();
+            setText(buttons.fp, dtype ? `FP${dtype}` : 'FP');
+        }
+        if (buttons.dims) {
+            setText(buttons.dims, 'DIMS');
+        }
+        if (buttons.batchNew) {
+            setText(buttons.batchNew, 'BATCH');
+        }
         if (buttons.sgd) {
+            setText(buttons.sgd, 'SGD');
             buttons.sgd.disabled = Boolean(this.state.speedRunActive);
+        }
+    }
+
+    _updateJoystickVisual(vector = { x: 0, y: 0 }) {
+        if (!this._joystickPad || !this._joystickThumb) {
+            return;
+        }
+        const radius = this._joystickPad.clientWidth / 2;
+        const scale = radius * 0.6;
+        const clamp = (value) => Math.max(-1, Math.min(1, value || 0));
+        const dx = clamp(vector.x) * scale;
+        const dy = clamp(vector.y) * scale;
+        this._joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+        if (this._joystickHint) {
+            const moving = Math.abs(dx) > 1 || Math.abs(dy) > 1;
+            this._joystickHint.classList.toggle('hidden', moving);
         }
     }
 

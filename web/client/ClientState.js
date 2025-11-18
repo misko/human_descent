@@ -13,13 +13,7 @@ export default class ClientState {
         this.stepSizeResolution = stepSizeResolution;
         this.stepSizeIdx = initialStepSizeIdx;
         this.helpScreenIdx = 0;
-        this.hasSeenKeysOverlay = false;
-        this.resumeMode = null;
-        this.tutorialState = {
-            completed: false,
-            currentIdx: 0,
-            totalSteps: 0,
-        };
+        this.dimsUsed = 0;
         this.updateStepSize();
     }
 
@@ -89,51 +83,20 @@ export default class ClientState {
         console.log(`Dtype set to ${dtype}`);
     }
     setHelpScreenFns(helpScreenFns) {
-        this.helpScreenFns = helpScreenFns;
-    }
-
-    setHasSeenKeysOverlay(flag = true) {
-        this.hasSeenKeysOverlay = Boolean(flag);
-    }
-
-    setResumeMode(mode) {
-        this.resumeMode = mode || null;
-    }
-
-    resetTutorial(totalSteps = 0) {
-        this.tutorialState = {
-            completed: false,
-            currentIdx: 0,
-            totalSteps: Math.max(0, totalSteps),
-        };
-    }
-
-    advanceTutorialStep() {
-        if (!this.tutorialState) {
-            this.resetTutorial();
-            return;
+        if (Array.isArray(helpScreenFns)) {
+            this.helpScreenFns = [...helpScreenFns];
+            if (this.helpScreenFns.length === 0) {
+                this.helpScreenIdx = -1;
+            } else if (
+                this.helpScreenIdx === -1 ||
+                this.helpScreenIdx >= this.helpScreenFns.length
+            ) {
+                this.helpScreenIdx = 0;
+            }
+        } else {
+            this.helpScreenFns = [];
+            this.helpScreenIdx = -1;
         }
-        const nextIdx = Math.min(
-            (this.tutorialState.currentIdx ?? 0) + 1,
-            Math.max(this.tutorialState.totalSteps ?? 0, 0),
-        );
-        this.tutorialState = {
-            ...this.tutorialState,
-            currentIdx: nextIdx,
-            completed:
-                nextIdx >= (this.tutorialState.totalSteps ?? 0) && (this.tutorialState.totalSteps ?? 0) > 0,
-        };
-    }
-
-    markTutorialCompleted() {
-        if (!this.tutorialState) {
-            this.resetTutorial();
-        }
-        this.tutorialState = {
-            ...(this.tutorialState ?? { totalSteps: 0 }),
-            completed: true,
-            currentIdx: this.tutorialState?.totalSteps ?? 0,
-        };
     }
 
     closeHelpScreens() {

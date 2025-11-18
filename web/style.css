@@ -53,7 +53,7 @@ body {
     transform: translateY(-50%);
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.9rem;
 }
 
 .connection-status {
@@ -166,12 +166,14 @@ body {
     background: transparent;
     border: none;
     box-shadow: none;
+    visibility: hidden;
 }
 
 .help-overlay.visible {
     opacity: 1;
     transform: scale(1);
     pointer-events: auto;
+    visibility: visible;
 }
 
 .help-overlay__image {
@@ -228,6 +230,66 @@ body {
     gap: 1.5rem;
 }
 
+body.hudes-mobile .help-overlay__content {
+    width: calc(100vw - 24px);
+    margin: 0 12px;
+    padding: clamp(16px, 6vw, 24px);
+}
+
+body.hudes-mobile .help-overlay__body {
+    gap: 1rem;
+}
+
+.help-overlay.is-splash {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.help-overlay.is-splash .help-overlay__content {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.help-overlay.is-splash .help-overlay__close {
+    display: none;
+}
+
+.help-overlay__tabs {
+    display: none;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.help-overlay__tabs.is-visible {
+    display: flex;
+}
+
+.help-overlay__tabs button {
+    flex: 1;
+    border: 1px solid rgba(255, 214, 102, 0.4);
+    background: rgba(12, 20, 40, 0.7);
+    color: rgba(255, 214, 102, 0.8);
+    border-radius: 999px;
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+}
+
+.help-overlay__tabs button.is-active {
+    background: rgba(255, 214, 102, 0.2);
+    color: #fff1cc;
+    border-color: rgba(255, 214, 102, 0.7);
+}
+
 .tour-screen {
     display: flex;
     flex-direction: column;
@@ -272,6 +334,16 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
+}
+
+body.hudes-mobile .tour-hero__body {
+    gap: 0.45rem;
+}
+
+body.hudes-mobile .tour-hero__body .tour-eyebrow,
+body.hudes-mobile .tour-hero__body .tour-welcome__list,
+body.hudes-mobile .tour-hero__body .tour-welcome__list li {
+    margin: 0;
 }
 
 .tour-pitch,
@@ -441,6 +513,144 @@ body {
     margin-top: 0.25rem;
 }
 
+.tour-screen--splash {
+    align-items: center;
+    text-align: center;
+    justify-content: center;
+    min-height: 60vh;
+    width: 100%;
+    height: 100%;
+}
+
+.tour-splash__logo {
+    width: auto;
+    height: min(80vh, 80vw);
+    max-height: 85vh;
+    max-width: 90vw;
+    object-fit: contain;
+    align-self: center;
+}
+
+.tour-splash__media {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin: 0.5rem 0;
+}
+
+.tour-splash__subcopy {
+    margin: 0;
+    letter-spacing: 0.2em;
+    color: rgba(255, 214, 102, 0.8);
+}
+
+.tour-splash__prompt {
+    margin-top: 1rem;
+    color: rgba(255, 214, 102, 0.85);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+}
+
+.tour-screen--splash-active {
+    animation: splashPulse 1.5s ease-in-out infinite alternate;
+}
+
+.tour-screen--splash-fade {
+    animation: splashFade 0.45s ease forwards;
+}
+
+@keyframes splashPulse {
+    0% {
+        opacity: 0.75;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+@keyframes splashFade {
+    to {
+        opacity: 0;
+    }
+}
+
+.tour-screen--welcome .tour-welcome__list {
+    list-style: disc;
+    padding-left: 1.2rem;
+    color: rgba(228, 241, 255, 0.9);
+    margin: 0;
+}
+
+.tour-checklist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.tour-checklist li {
+    border-left: 3px solid rgba(255, 214, 102, 0.4);
+    padding-left: 0.75rem;
+    color: rgba(228, 241, 255, 0.85);
+}
+
+.tour-checklist li.is-complete {
+    border-color: rgba(123, 255, 180, 0.9);
+    color: rgba(160, 255, 200, 0.95);
+}
+
+.tour-checklist__head {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+body.hudes-mobile .tour-checklist {
+    gap: 0.4rem;
+}
+
+body.hudes-mobile .tour-checklist li {
+    line-height: 1.2;
+}
+
+.tour-rules {
+    list-style: decimal;
+    margin: 0;
+    padding-left: 1.2rem;
+    color: rgba(228, 241, 255, 0.9);
+}
+
+.tour-compact-keys {
+    font-size: 0.85rem;
+    color: rgba(255, 214, 102, 0.85);
+    border-left: 2px solid rgba(255, 214, 102, 0.5);
+    padding-left: 0.65rem;
+}
+
+.help-tab {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.help-tab--how ul {
+    margin: 0;
+    padding-left: 1rem;
+}
+
+.help-tab--how li {
+    color: rgba(228, 241, 255, 0.9);
+    margin-bottom: 0.5rem;
+}
+
+.help-tab--controls .tour-legend {
+    margin: 0;
+}
+
 /* Modal overlay and glass card */
 #modalOverlay {
     position: fixed;
@@ -498,6 +708,66 @@ body {
     gap: 10px;
     margin-top: 8px;
 }
+.results-card {
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.results-metrics {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.5rem;
+}
+.results-metrics li {
+    background: rgba(10, 18, 40, 0.6);
+    border-radius: 10px;
+    padding: 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    border: 1px solid rgba(255, 214, 102, 0.2);
+}
+.results-metrics li span {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(255, 214, 102, 0.7);
+}
+.results-metrics li strong {
+    font-size: 1rem;
+    color: rgba(240, 248, 255, 0.95);
+}
+.results-share {
+    font-size: 0.82rem;
+    color: rgba(228, 241, 255, 0.85);
+    border-left: 2px solid rgba(255, 214, 102, 0.4);
+    padding-left: 0.6rem;
+}
+.results-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.results-actions button {
+    flex: 1;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 214, 102, 0.5);
+    background: rgba(12, 20, 38, 0.8);
+    color: rgba(255, 214, 102, 0.9);
+    padding: 0.4rem 0.75rem;
+    text-transform: uppercase;
+    font-size: 0.66rem;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+}
+.results-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
 .glass-card button, .glass-card .link-btn {
     padding: 8px 14px;
     border-radius: 10px;
@@ -534,6 +804,13 @@ body {
     height: calc(100vh - var(--header-height));
     z-index: 1; /* Lower index to be behind the plotly and other containers */
     pointer-events: auto; /* Allow direct interaction with the GL canvas */
+}
+
+body.hudes-mobile #glContainer {
+    --mobile-gl-top: max(-30vh, calc(var(--header-height) * 0.5 - 30vh));
+    top: calc(var(--mobile-gl-top) - var(--header-height));
+    height: calc(100vh - var(--mobile-gl-top) + var(--header-height));
+    width: 100%;
 }
 
 #sideContainer {
@@ -759,6 +1036,28 @@ body.speedrun-active #bottomTextContainer .hud-status .hud-timer {
     color: #ffed8c;
 }
 
+#tutorialToast {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: rgba(5, 10, 20, 0.9);
+    border: 1px solid rgba(123, 255, 200, 0.4);
+    color: rgba(210, 255, 235, 0.95);
+    padding: 0.6rem 1rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    opacity: 0;
+    transition: opacity 180ms ease, transform 180ms ease;
+    z-index: 500;
+}
+
+#tutorialToast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
 #bottomTextContainer .hud-controls {
     width: 100%;
     display: flex;
@@ -916,12 +1215,17 @@ body.speedrun-active #bottomTextContainer .hud-status .hud-timer {
 }
 
 body.hudes-mobile #mobileActionPanel {
-    position: fixed;
-    top: 50%;
-    right: clamp(6px, 3vw, 28px);
-    transform: translateY(-50%);
-    width: auto;
-    padding: 0;
+    position: relative;
+    top: auto;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    transform: none;
+    width: max-content;
+    margin-top: 0.6rem;
+    margin-left: auto;
+    margin-right: 2px;
+    padding: 0 2px 0 0;
     border: none;
     border-radius: 12px;
     background: transparent;
@@ -929,8 +1233,63 @@ body.hudes-mobile #mobileActionPanel {
     display: flex;
     flex-direction: column;
     gap: 0;
-    z-index: 600;
+    z-index: 1;
     pointer-events: auto;
+}
+
+#joystickPad {
+    position: fixed;
+    bottom: 8vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: clamp(120px, 30vw, 220px);
+    height: clamp(120px, 30vw, 220px);
+    border-radius: 50%;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.06), rgba(8, 16, 32, 0.85));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 400;
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+}
+
+body.hudes-mobile #joystickPad {
+    display: flex;
+}
+
+body.help-overlay-open #joystickPad {
+    display: none !important;
+}
+
+#joystickThumb {
+    width: clamp(48px, 12vw, 96px);
+    height: clamp(48px, 12vw, 96px);
+    border-radius: 50%;
+    background: rgba(255, 214, 102, 0.25);
+    border: 1px solid rgba(255, 214, 102, 0.45);
+    box-shadow: inset 0 0 6px rgba(255, 214, 102, 0.35);
+    transform: translate(0, 0);
+    transition: transform 120ms ease;
+}
+
+.joystick-hint {
+    position: absolute;
+    bottom: -2.2rem;
+    width: max-content;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0;
+}
+
+.joystick-hint.hidden {
+    opacity: 0;
 }
 
 body.hudes-mobile .container {
@@ -939,6 +1298,7 @@ body.hudes-mobile .container {
     padding-right: 2px;
     padding-left: 0;
     gap: 0;
+    height: 20vh;
 }
 
 body.hudes-mobile #plot1 {
@@ -957,12 +1317,13 @@ body.hudes-mobile #plot3 #confusionMatrixChart {
 }
 
 #mobileActionPanel .mobile-panel__grid {
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
-    align-items: flex-end;
-    gap: 35px;
+    align-items: stretch;
+    gap: 12px;
     padding: 0;
     background: transparent;
+    width: max-content;
 }
 
 #mobileActionPanel button {
@@ -974,10 +1335,10 @@ body.hudes-mobile #plot3 #confusionMatrixChart {
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    width: auto;
+    width: 100%;
+    min-width: max-content;
     white-space: nowrap;
     text-align: center;
-    min-width: 92px;
 }
 
 #mobileActionPanel button:disabled {

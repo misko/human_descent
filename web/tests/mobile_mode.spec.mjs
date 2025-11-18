@@ -34,15 +34,16 @@ test.describe('Mobile 3D mode', () => {
 
     await expect(page.locator('#sideContainer')).toBeHidden();
 
-    const hud = page.locator('#bottomTextContainer');
-    await expect(hud.locator('[data-hud-action="step-plus"]')).toBeVisible();
-    await expect(hud.locator('[data-hud-action="step-minus"]')).toBeVisible();
-    await expect(hud.locator('[data-hud-action="toggle-fp"]')).toBeVisible();
-    const hudText = await hud.innerText();
-    expect(/WASD/i.test(hudText)).toBeFalsy();
+    await expect(page.locator('#bottomTextContainer')).toHaveCount(0);
+    const panel = page.locator('#mobileActionPanel');
+    await expect(panel.locator('[data-mobile-action="stepPlus"]')).toBeVisible();
+    await expect(panel.locator('[data-mobile-action="stepMinus"]')).toBeVisible();
+    await expect(panel.locator('[data-mobile-action="fp"]')).toBeVisible();
+    await expect(panel.locator('[data-mobile-action="dims"]')).toBeVisible();
+    await expect(panel.locator('[data-mobile-action="batchNew"]')).toBeVisible();
 
     const matrixBox = await page.locator('#confusionMatrixChart').boundingBox();
-    const panelBox = await page.locator('#mobileActionPanel').boundingBox();
+    const panelBox = await panel.boundingBox();
     expect(matrixBox).not.toBeNull();
     expect(panelBox).not.toBeNull();
     if (matrixBox && panelBox) {
@@ -53,8 +54,9 @@ test.describe('Mobile 3D mode', () => {
   test('mobile controls dispatch actions and analog steps', async ({ page }) => {
     await bootstrapMobile(page);
 
-    const dimsBtn = page.locator('[data-hud-action="next-dims"]');
-    const batchBtnHud = page.locator('[data-hud-action="next-batch"]');
+    const panel = page.locator('#mobileActionPanel');
+    const dimsBtn = panel.locator('[data-mobile-action="dims"]');
+    const batchBtnHud = panel.locator('[data-mobile-action="batchNew"]');
     await expect(dimsBtn).toBeVisible();
     await expect(batchBtnHud).toBeVisible();
 
@@ -82,7 +84,7 @@ test.describe('Mobile 3D mode', () => {
     await batchBtnHud.click();
     await page.waitForFunction(() => (window.__batchCalls || 0) > 0, { timeout: 5000 });
 
-    const batchPanelButton = page.locator('#mobileActionPanel button[data-mobile-action="batch"]');
+    const batchPanelButton = page.locator('#mobileActionPanel button[data-mobile-action="batchCycle"]');
     await expect(batchPanelButton).toBeVisible();
     const initialLabel = await batchPanelButton.innerText();
     await batchPanelButton.click();

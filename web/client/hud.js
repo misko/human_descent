@@ -20,9 +20,6 @@ export const CONTROL_GROUPS = [
 export const MOBILE_CONTROL_GROUPS = [];
 
 export const MOBILE_HUD_BUTTONS = [
-  { action: 'step-minus', label: 'Step -' },
-  { action: 'step-plus', label: 'Step +' },
-  { action: 'toggle-fp', label: 'FP' },
   { action: 'show-top', label: 'Top 10' },
 ];
 

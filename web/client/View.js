@@ -92,11 +92,20 @@ export default class ViewRouter {
         return this.impl?.highlightLossLine?.(...args);
     }
 
-    openKeyOverlay(...args) {
-        return this.impl?.openKeyOverlay?.(...args);
+    openHelpOverlay(...args) {
+        return this.impl?.openHelpOverlay?.(...args);
     }
 
     isManualKeyOverlayVisible(...args) {
         return this.impl?.isManualKeyOverlayVisible?.(...args);
     }
+
+    notifyTutorialEvent(...args) {
+        return this.impl?.notifyTutorialEvent?.(...args);
+    }
+
+    openTutorialOverlay(...args) {
+        return this.impl?.openTutorialOverlay?.(...args);
+    }
+
 }

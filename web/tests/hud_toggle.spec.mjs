@@ -13,7 +13,7 @@ test.describe('HUD toggle flag', () => {
       () => window.__hudesClient && window.__hudesClient.ControlType,
       { timeout: 10000 },
     );
-    await expect(page.locator('#bottomTextContainer')).toBeHidden();
+    await expect(page.locator('#bottomTextContainer')).toHaveCount(0);
   });
 
   test('hideHUD=1 hides HUD on mobile', async ({ page }) => {
@@ -33,6 +33,6 @@ test.describe('HUD toggle flag', () => {
       () => window.__hudesClient && window.__hudesClient.ControlType,
       { timeout: 10000 },
     );
-    await expect(page.locator('#bottomTextContainer')).toBeHidden();
+    await expect(page.locator('#bottomTextContainer')).toHaveCount(0);
   });
 });

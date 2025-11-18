@@ -1,6 +1,6 @@
 import HudesClient from './HudesClient.js';
 import { log } from '../utils/logger.js';
-import { HELP_TOUR_SCREENS } from './helpTour.js';
+import { TOUR_FLOWS } from './helpTour.js';
 
 export default class KeyboardClient extends HudesClient {
   constructor(addr, port, options = {}) {
@@ -14,10 +14,6 @@ export default class KeyboardClient extends HudesClient {
     this._handleKeyUpOverride = this._handleKeyUpOverride.bind(this);
     this.initInput();
 
-
-    if (this.state.helpScreenIdx != -1) {
-      this.view.showImage(this.state.helpScreenFns[this.state.helpScreenIdx]);
-  }
 
     // Replace base key up handler with extended behaviour.
     window.removeEventListener('keyup', this._handleKeyUp);
@@ -64,8 +60,6 @@ export default class KeyboardClient extends HudesClient {
       this.renderMode === '1d' ? 512 : this.isMobile ? 32 : 256;
     this.state.setBatchSize(defaultBatchSize);
     this.state.setDtype('float16');
-
-    this.state.setHelpScreenFns(HELP_TOUR_SCREENS);
 
   }
 
@@ -151,6 +145,7 @@ GOOD LUCK!
       }
     }
     this.sendDimsAndSteps({ [dim]: delta });
+    this._notifyTutorialStep?.('move');
     if (this.debug) {
       const after = Array.isArray(this.dimsAndStepsOnCurrentDims)
         ? [...this.dimsAndStepsOnCurrentDims]

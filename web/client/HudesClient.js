@@ -3,6 +3,7 @@ import { loadProto } from './ProtoLoader.js';
 import { sleep } from '../utils/sleep.js';
 import { log } from '../utils/logger.js';
 import View from './View.js';
+import { SHARE_TEXT } from './helpTour.js';
 
 export default class HudesClient {
     constructor(addr, port, options = {}) {
@@ -37,9 +38,6 @@ export default class HudesClient {
         this._sessionStorageAvailable = typeof window !== 'undefined' && !!window.sessionStorage;
         this._sessionTokenKey = 'hudes.tab.sessionToken';
         this._resumeTokenKey = 'hudes.resume.token';
-        this._tourKeysSeenKey = 'hudes.tour.keysSeen';
-        this._tourResumeModeKey = 'hudes.tour.resumeMode';
-        this._tourTutorialStateKey = 'hudes.tour.tutorial';
         this._clientSessionToken = this._loadSessionToken();
         this._pendingSessionToken = null;
         this._resumeToken = this._loadPersistedResumeToken();
@@ -63,15 +61,18 @@ export default class HudesClient {
 
         this.state = new ClientState(-0.05, 6);
         // Optional: allow skipping help screens via URL query, e.g., ?help=off
+        let disableInitialTour = false;
         try {
             if (typeof window !== 'undefined' && window.location && window.location.search) {
                 const params = new URLSearchParams(window.location.search);
                 const help = params.get('help');
                 if (help && /^(off|0|false|no)$/i.test(help)) {
                     this.state.helpScreenIdx = -1;
+                    disableInitialTour = true;
                 }
             }
         } catch {}
+        disableInitialTour = disableInitialTour || this.state.helpScreenIdx === -1;
     this.grids = this.meshEnabled ? (options.meshGrids ?? 3) : 0;
         this.grid_size = options.gridSize ?? 31;
         this.rowSpacing = options.rowSpacing;
@@ -89,6 +90,7 @@ export default class HudesClient {
             altKeys: this.altKeys,
             mobile: this.isMobile,
             hideHud: this.hideHud,
+            disableInitialTour,
         });
         if (this.hideHud && typeof document !== 'undefined') {
             document.body.classList.add('hudes-hide-hud');
@@ -118,12 +120,6 @@ export default class HudesClient {
         this.trainSteps = [];
         this.valSteps = [];
 
-        this._helpDismissKey = 'hudes.help.dismissed';
-        this._helpDismissed = false;
-        this._patchHelpStateTracking();
-        this._initHelpDismissState();
-        this._loadTourState();
-
         this._handleHudAction = this._handleHudAction.bind(this);
         this._speedRunCountdownOverlay = null;
         this._speedRunCountdownText = null;
@@ -150,6 +146,7 @@ export default class HudesClient {
             case 'next-dims':
                 event.preventDefault();
                 this.getNextDims();
+                this._notifyTutorialStep('new_dims');
                 break;
             case 'next-batch':
                 event.preventDefault();
@@ -162,6 +159,7 @@ export default class HudesClient {
                     try { this.sendConfig(); } catch {}
                     refreshHud();
                 }
+                this._notifyTutorialStep('step');
                 break;
             case 'step-minus':
                 event.preventDefault();
@@ -170,6 +168,7 @@ export default class HudesClient {
                     try { this.sendConfig(); } catch {}
                     refreshHud();
                 }
+                this._notifyTutorialStep('step');
                 break;
             case 'toggle-fp':
                 event.preventDefault();
@@ -178,6 +177,7 @@ export default class HudesClient {
                     try { this.sendConfig(); } catch {}
                     refreshHud();
                 }
+                this._notifyTutorialStep('precision');
                 break;
             case 'show-top':
                 event.preventDefault();
@@ -185,10 +185,11 @@ export default class HudesClient {
                 break;
             case 'toggle-help':
                 event.preventDefault();
-                if (typeof this._cycleHelpScreens === 'function') {
-                    this._cycleHelpScreens();
-                    refreshHud();
-                }
+                this.view?.openHelpOverlay?.('controls');
+                break;
+            case 'show-tutorial':
+                event.preventDefault();
+                this.view?.openTutorialOverlay?.();
                 break;
             default:
         }
@@ -539,7 +540,7 @@ export default class HudesClient {
         log('[HudesClient] _promptAndSubmitHighScore invoked');
         if (this.highScoreSubmitted) return;
         try {
-            this._showNameModal(finalValLoss);
+            this._showSpeedRunResults({ finalValLoss });
         } catch {}
     }
 
@@ -563,55 +564,104 @@ export default class HudesClient {
         return overlay;
     }
 
-    _showNameModal(finalValLoss) {
+    _showSpeedRunResults({ finalValLoss }) {
         this._setTextCaptureActive(true);
         const overlay = this._createOverlay();
         overlay.innerHTML = '';
-
         const card = document.createElement('div');
-        card.className = 'glass-card';
+        card.className = 'glass-card results-card';
         const title = document.createElement('h2');
-        title.textContent = 'Speed Run complete!';
-        const subtitle = document.createElement('p');
-        subtitle.className = 'muted';
-        const scoreTxt = (typeof finalValLoss === 'number')
-            ? `Your final validation loss: ${finalValLoss.toFixed(4)}`
-            : 'Great job!';
-        subtitle.textContent = scoreTxt;
-
+        title.textContent = 'Run complete';
+        const metrics = document.createElement('ul');
+        metrics.className = 'results-metrics';
+        const primary = document.createElement('li');
+        primary.innerHTML = `<span>Final validation loss</span><strong>${
+            typeof finalValLoss === 'number' && Number.isFinite(finalValLoss)
+                ? finalValLoss.toFixed(4)
+                : '—'
+        }</strong>`;
+        metrics.appendChild(primary);
+        const evalSteps = this.state?.evalSteps ?? 0;
+        const planes = Math.max(1, Math.floor((this.state?.dimsUsed || 0) / (this.state?.n || 1)));
+        const secondary = [
+            { label: 'Eval steps', value: evalSteps || '—' },
+            { label: 'Batch size', value: this.state?.batchSize ?? '—' },
+            { label: 'Precision', value: this.state?.dtype ?? '—' },
+            { label: 'Planes sampled', value: planes },
+        ];
+        secondary.forEach(({ label, value }) => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+            metrics.appendChild(li);
+        });
+        const share = document.createElement('p');
+        share.className = 'results-share';
+        share.textContent = SHARE_TEXT(finalValLoss, evalSteps, planes);
         const form = document.createElement('form');
         form.className = 'name-form';
         form.innerHTML = `
-          <label for="nameInput">Enter a 4-character name</label>
-          <input id="nameInput" maxlength="4" placeholder="USER" autocomplete="off" />
-          <div class="actions">
-            <button type="submit">Submit</button>
-          </div>
+            <label for="nameInput">Enter a 4-character name to submit</label>
+            <input id="nameInput" maxlength="4" placeholder="USER" autocomplete="off" />
+            <div class="actions">
+                <button type="submit">Submit score</button>
+            </div>
         `;
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const el = form.querySelector('#nameInput');
-            const clean = (el.value || 'USER').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+        const actions = document.createElement('div');
+        actions.className = 'results-actions';
+        const retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.textContent = 'Retry';
+        const exploreBtn = document.createElement('button');
+        exploreBtn.type = 'button';
+        exploreBtn.textContent = 'Keep exploring';
+        const leaderboardBtn = document.createElement('button');
+        leaderboardBtn.type = 'button';
+        leaderboardBtn.textContent = 'Leaderboard';
+        [retryBtn, exploreBtn, leaderboardBtn].forEach((btn) => {
+            btn.disabled = true;
+            actions.appendChild(btn);
+        });
+        const enableActions = () => {
+            [retryBtn, exploreBtn, leaderboardBtn].forEach((btn) => {
+                btn.disabled = false;
+            });
+        };
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const input = form.querySelector('#nameInput');
+            const clean = (input.value || 'USER').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
             if (clean.length !== 4) {
-                el.classList.add('invalid');
+                input.classList.add('invalid');
                 return;
             }
+            input.classList.remove('invalid');
             this.submitHighScore(clean);
-            // In production we use only WebSocket. Request the Top 10 over WS
-            // and let CONTROL_LEADERBOARD_RESPONSE render the modal.
+            enableActions();
+            this.highScoreSubmitted = true;
             try { this.requestLeaderboard(); } catch {}
         });
-
-        card.appendChild(title);
-        card.appendChild(subtitle);
-        card.appendChild(form);
+        retryBtn.addEventListener('click', () => {
+            if (retryBtn.disabled) return;
+            overlay.classList.remove('open');
+            this.startSpeedRun();
+        });
+        exploreBtn.addEventListener('click', () => {
+            if (exploreBtn.disabled) return;
+            overlay.classList.remove('open');
+            this._setTextCaptureActive(false);
+        });
+        leaderboardBtn.addEventListener('click', () => {
+            if (leaderboardBtn.disabled) return;
+            this._setTextCaptureActive(false);
+            overlay.classList.remove('open');
+            try { this.requestLeaderboard(); } catch {}
+        });
+        card.append(title, metrics, share, form, actions);
         overlay.appendChild(card);
         overlay.classList.add('open');
-
         const input = form.querySelector('#nameInput');
-        if (input) { input.focus(); }
-        log('[HudesClient] name entry modal shown');
+        input?.focus();
+        log('[HudesClient] speed-run results modal shown');
     }
 
     _showLeaderboardModal(top10, me) {
@@ -908,149 +958,13 @@ export default class HudesClient {
         } catch {}
     }
 
-    _patchHelpStateTracking() {
-        const state = this.state;
-        if (!state) return;
-        const originalClose = state.closeHelpScreens?.bind(state);
-        if (originalClose) {
-            state.closeHelpScreens = (...args) => {
-                const result = originalClose(...args);
-                this._handleHelpStateChanged();
-                return result;
-            };
-        }
-        const originalNext = state.nextHelpScreen?.bind(state);
-        if (originalNext) {
-            state.nextHelpScreen = (...args) => {
-                const prev = state.helpScreenIdx;
-                const result = originalNext(...args);
-                if (state.helpScreenIdx !== prev) {
-                    this._handleHelpStateChanged();
-                }
-                return result;
-            };
-        }
-    }
-
-    _initHelpDismissState() {
-        if (!this._sessionStorageAvailable) {
+    _notifyTutorialStep(stepId) {
+        if (!stepId) {
             return;
         }
         try {
-            if (window.sessionStorage?.getItem(this._helpDismissKey) === '1') {
-                this._helpDismissed = true;
-                if (typeof this.state.closeHelpScreens === 'function') {
-                    this.state.closeHelpScreens();
-                } else {
-                    this.state.helpScreenIdx = -1;
-                }
-            }
+            this.view?.notifyTutorialEvent?.(stepId);
         } catch {}
-    }
-
-    _handleHelpStateChanged() {
-        if (this.state?.helpScreenIdx === -1) {
-            this._markHelpDismissed();
-        }
-    }
-
-    _markHelpDismissed() {
-        if (this._helpDismissed) {
-            return;
-        }
-        this._helpDismissed = true;
-        if (this._sessionStorageAvailable) {
-            try {
-                window.sessionStorage?.setItem(this._helpDismissKey, '1');
-            } catch {}
-        }
-    }
-
-    _loadTourState() {
-        if (!this._sessionStorageAvailable) {
-            return;
-        }
-        try {
-            if (window.sessionStorage?.getItem(this._tourKeysSeenKey) === '1') {
-                this.state?.setHasSeenKeysOverlay(true);
-            }
-            const resumeMode = window.sessionStorage?.getItem(this._tourResumeModeKey);
-            if (resumeMode) {
-                this.state?.setResumeMode(resumeMode);
-            }
-            const tutorialRaw = window.sessionStorage?.getItem(this._tourTutorialStateKey);
-            if (tutorialRaw) {
-                try {
-                    const parsed = JSON.parse(tutorialRaw);
-                    if (parsed && typeof parsed === 'object') {
-                        this.state.tutorialState = {
-                            completed: Boolean(parsed.completed),
-                            currentIdx: Number(parsed.currentIdx) || 0,
-                            totalSteps: Number(parsed.totalSteps) || 0,
-                        };
-                    }
-                } catch {
-                    // ignore malformed stored data
-                }
-            }
-        } catch {}
-    }
-
-    _persistTourValue(key, value) {
-        if (!this._sessionStorageAvailable) {
-            return;
-        }
-        try {
-            if (value === null || value === undefined) {
-                window.sessionStorage?.removeItem(key);
-            } else {
-                window.sessionStorage?.setItem(key, value);
-            }
-        } catch {}
-    }
-
-    _persistTutorialState() {
-        if (!this.state?.tutorialState) {
-            this._persistTourValue(this._tourTutorialStateKey, null);
-            return;
-        }
-        const payload = JSON.stringify({
-            completed: Boolean(this.state.tutorialState.completed),
-            currentIdx: Number(this.state.tutorialState.currentIdx) || 0,
-            totalSteps: Number(this.state.tutorialState.totalSteps) || 0,
-        });
-        this._persistTourValue(this._tourTutorialStateKey, payload);
-    }
-
-    markKeysOverlaySeen() {
-        if (this.state?.hasSeenKeysOverlay) {
-            return;
-        }
-        this.state?.setHasSeenKeysOverlay(true);
-        this._persistTourValue(this._tourKeysSeenKey, '1');
-    }
-
-    rememberResumeMode(mode) {
-        if (!mode) {
-            return;
-        }
-        this.state?.setResumeMode(mode);
-        this._persistTourValue(this._tourResumeModeKey, mode);
-    }
-
-    resetTutorialProgress(totalSteps = 0) {
-        this.state?.resetTutorial(totalSteps);
-        this._persistTutorialState();
-    }
-
-    advanceTutorialProgress() {
-        this.state?.advanceTutorialStep();
-        this._persistTutorialState();
-    }
-
-    completeTutorialProgress() {
-        this.state?.markTutorialCompleted();
-        this._persistTutorialState();
     }
 
     toggleKeyOverlay(mode) {
@@ -1062,8 +976,7 @@ export default class HudesClient {
             view.hideImage?.();
             return;
         }
-        const targetMode = mode || this.state?.resumeMode || 'explore';
-        view.openKeyOverlay?.(targetMode);
+        view.openHelpOverlay?.('controls');
     }
 
     _ensureCountdownOverlay() {
@@ -1403,6 +1316,7 @@ export default class HudesClient {
                     if (currentTime - keyInfo.lastExec > this.keySecondsPressed) {
                         log("[HudesClient] Getting next dimensions.");
                         this.getNextDims();
+                        this._notifyTutorialStep('new_dims');
                     }
                     break;
 
@@ -1410,24 +1324,28 @@ export default class HudesClient {
                     log("[HudesClient] Increasing step size.");
                     this.state.increaseStepSize(this.stepSizeMultiplier);
                     this.sendConfig();
+                    this._notifyTutorialStep('step');
                     break;
 
                 case "BracketRight":
                     log("[HudesClient] Decreasing step size.");
                     this.state.decreaseStepSize(this.stepSizeMultiplier);
                     this.sendConfig();
+                    this._notifyTutorialStep('step');
                     break;
 
                 case "Quote":
                     log("[HudesClient] Toggling dtype.");
                     this.state.toggleDtype();
                     this.sendConfig();
+                    this._notifyTutorialStep('precision');
                     break;
 
                 case "Semicolon":
                     log("[HudesClient] Toggling batch size.");
                     this.state.toggleBatchSize();
                     this.sendConfig();
+                    this._notifyTutorialStep('batch');
                     break;
 
                 case "Enter":
