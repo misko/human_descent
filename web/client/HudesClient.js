@@ -651,6 +651,8 @@ export default class HudesClient {
             enableActions();
             this.highScoreSubmitted = true;
             try { this.requestLeaderboard(); } catch {}
+            overlay.classList.remove('open');
+            this._setTextCaptureActive(false);
         });
         card.append(title, metrics, share, form);
         overlay.appendChild(card);
