@@ -27,11 +27,12 @@ from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
 from hudes.high_scores import (
-    get_all_scores,
-    get_rank,
     get_top_scores,
     init_db,
     insert_high_score,
+    delete_high_score,
+    get_all_scores,
+    get_rank,
 )
 from hudes.model_data_and_subspace import ModelDataAndSubspace
 from hudes.models_and_datasets.mnist import (
@@ -614,18 +615,30 @@ async def inference_result_sender(results_q, stop):
                 if remaining <= 0:
                     client.speed_run_active = False
                     speed_finished = True
+            rank = None
+            total_scores = None
             if speed_finished:
                 logging.info(
                     "Speed run finished for client %s; sending VAL loss %.6f",
                     client.client_id,
                     res["val"]["val_loss"],
                 )
+                try:
+                    init_db()
+                    r, t = get_rank(res["val"]["val_loss"])
+                    rank = r
+                    total_scores = t + 1  # +1 because we are about to add this score
+                except Exception as e:
+                    logging.error("Failed to calculate rank: %s", e)
+
             await _send_control_message(
                 client,
                 hudes_pb2.Control(
                     type=hudes_pb2.Control.CONTROL_VAL_LOSS,
                     val_loss=hudes_pb2.ValLoss(
                         val_loss=res["val"]["val_loss"],
+                        rank=rank,
+                        total_scores=total_scores,
                     ),
                     request_idx=client.active_request_idx,
                     speed_run_finished=speed_finished,
@@ -736,14 +749,16 @@ async def inference_runner(
     stop,
     run_in: str = "process",
 ):
-    inference_q = mp.Queue()
-    results_q = mp.Queue()
-
     if run_in == "process":
-        process_or_thread = mp.Process(
+        ctx = mp.get_context("spawn")
+        inference_q = ctx.Queue()
+        results_q = ctx.Queue()
+        process_or_thread = ctx.Process(
             target=listen_and_run, args=(inference_q, results_q, mad)
         )
     elif run_in == "thread":  # useful for debuggin
+        inference_q = mp.Queue()
+        results_q = mp.Queue()
         process_or_thread = Thread(
             target=listen_and_run, args=(inference_q, results_q, mad)
         )
@@ -1041,10 +1056,39 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
                 f"Content-Length: {len(body)}\r\n"
                 "Connection: close\r\n"
                 "Access-Control-Allow-Origin: *\r\n"
-                "Access-Control-Allow-Methods: GET, OPTIONS\r\n"
+                "Access-Control-Allow-Methods: GET, OPTIONS, DELETE\r\n"
                 "Access-Control-Allow-Headers: *\r\n\r\n"
             ).encode("utf-8")
             writer.write(headers + body)
+
+        if first.startswith(b"OPTIONS"):
+            send_json("", status="204 No Content")
+            return
+
+        if first.startswith(b"DELETE") and path.startswith("/api/highscores"):
+            try:
+                import urllib.parse as _url
+
+                qs = ""
+                if "?" in path:
+                    _, qs = path.split("?", 1)
+                params = _url.parse_qs(qs)
+                row_id = int(params.get("id", [0])[0])
+                if row_id > 0:
+                    init_db()
+                    success = delete_high_score(row_id)
+                    if success:
+                        send_json('{"status": "deleted"}')
+                    else:
+                        send_json('{"error": "not found"}', status="404 Not Found")
+                else:
+                    send_json('{"error": "invalid id"}', status="400 Bad Request")
+            except Exception:
+                send_json(
+                    '{"error": "failed"}',
+                    status="500 Internal Server Error",
+                )
+            return
 
         if path == "/health":
             response = (

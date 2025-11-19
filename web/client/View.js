@@ -108,4 +108,8 @@ export default class ViewRouter {
         return this.impl?.openTutorialOverlay?.(...args);
     }
 
+    showLevelUp(...args) {
+        return this.impl?.showLevelUp?.(...args);
+    }
+
 }

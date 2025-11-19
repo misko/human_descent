@@ -18,8 +18,8 @@ export default class ClientState {
     }
 
     updateBestScoreOrNot(newScore) {
-        if (newScore<this.bestScore) {
-            this.bestScore=newScore;
+        if (newScore < this.bestScore) {
+            this.bestScore = newScore;
         }
     }
 
@@ -104,9 +104,10 @@ export default class ClientState {
     }
 
     nextHelpScreen() {
-        this.helpScreenIdx +=1;
-        if (this.helpScreenIdx ==this.helpScreenFns.length) {
-            this.helpScreenIdx=-1;
+        if (this.helpScreenIdx === -1) return;
+        this.helpScreenIdx += 1;
+        if (this.helpScreenIdx >= this.helpScreenFns.length) {
+            this.helpScreenIdx = -1;
         }
     }
 }

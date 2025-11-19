@@ -131,9 +131,8 @@ export const TOUR_SCREENS = Array.from(
     new Set(Object.values(TOUR_FLOWS).flat()),
 );
 
-export const SHARE_TEXT = (valLoss, evalSteps, planes) => {
+export const SHARE_TEXT = (valLoss, levelNumber, levelTitle) => {
     const loss = typeof valLoss === 'number' && Number.isFinite(valLoss) ? valLoss.toFixed(4) : '—';
-    const evalPart = evalSteps ? `${evalSteps} eval-steps` : 'eval-steps pending';
-    const planePart = planes ? `${planes} planes` : 'planes pending';
-    return `Descended MNIST to ${loss} in 2:00—can you beat it? ${evalPart} ${planePart}`;
+    const levelPart = levelNumber ? `(Level ${levelNumber}: ${levelTitle})` : '';
+    return `Descended MNIST to ${loss} ${levelPart} in 2:00—can you beat it?`;
 };

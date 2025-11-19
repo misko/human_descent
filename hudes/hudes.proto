@@ -30,6 +30,8 @@ message TrainLossAndPreds {
 }
 message ValLoss {
   required double val_loss = 1;
+  optional int32 rank = 2;
+  optional int32 total_scores = 3;
 }
 
 message BatchExamples {

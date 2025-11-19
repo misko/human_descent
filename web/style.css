@@ -6,8 +6,10 @@ body {
     margin: 0;
     padding: 0;
     font-family: Arial, sans-serif;
-    background-color: #000; /* Set the background color to black */
-    color: #fff; /* Optional: Set the text color to white for better contrast */
+    background-color: #000;
+    /* Set the background color to black */
+    color: #fff;
+    /* Optional: Set the text color to white for better contrast */
 }
 
 body.hudes-mobile #plot2 {
@@ -22,7 +24,8 @@ html,
 body {
     width: 100%;
     height: 100%;
-    overflow: hidden; /* Prevent browser scrollbars; all scrollable panes are explicit */
+    overflow: hidden;
+    /* Prevent browser scrollbars; all scrollable panes are explicit */
     touch-action: manipulation;
 }
 
@@ -574,6 +577,7 @@ body.hudes-mobile .tour-hero__body .tour-welcome__list li {
     0% {
         opacity: 0.75;
     }
+
     100% {
         opacity: 1;
     }
@@ -672,7 +676,9 @@ body.hudes-mobile .tour-checklist li {
     z-index: 1000;
 }
 
-#modalOverlay.open { display: flex; }
+#modalOverlay.open {
+    display: flex;
+}
 
 .glass-card {
     width: min(92vw, 560px);
@@ -689,40 +695,53 @@ body.hudes-mobile .tour-checklist li {
     margin: 0 0 6px;
     font-size: 1.25rem;
 }
+
 .glass-card .muted {
     margin: 0 0 14px;
     opacity: 0.85;
 }
+
 .glass-card .name-form {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
-.glass-card label { font-size: 0.9rem; opacity: 0.9; }
+
+.glass-card label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
 .glass-card input {
     padding: 10px 12px;
     border-radius: 10px;
     border: 1px solid rgba(86, 198, 255, 0.35);
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
     outline: none;
     font-size: 1rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
 }
-.glass-card input.invalid { border-color: #ff4d4d; }
+
+.glass-card input.invalid {
+    border-color: #ff4d4d;
+}
+
 .glass-card .actions {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
     margin-top: 8px;
 }
+
 .results-card {
     max-width: 420px;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
 }
+
 .results-metrics {
     list-style: none;
     margin: 0;
@@ -731,6 +750,7 @@ body.hudes-mobile .tour-checklist li {
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 0.5rem;
 }
+
 .results-metrics li {
     background: rgba(10, 18, 40, 0.6);
     border-radius: 10px;
@@ -740,27 +760,32 @@ body.hudes-mobile .tour-checklist li {
     gap: 0.2rem;
     border: 1px solid rgba(255, 214, 102, 0.2);
 }
+
 .results-metrics li span {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: rgba(255, 214, 102, 0.7);
 }
+
 .results-metrics li strong {
     font-size: 1rem;
     color: rgba(240, 248, 255, 0.95);
 }
+
 .results-share {
     font-size: 0.82rem;
     color: rgba(228, 241, 255, 0.85);
     border-left: 2px solid rgba(255, 214, 102, 0.4);
     padding-left: 0.6rem;
 }
+
 .results-actions {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
 }
+
 .results-actions button {
     flex: 1;
     border-radius: 999px;
@@ -773,11 +798,14 @@ body.hudes-mobile .tour-checklist li {
     letter-spacing: 0.15em;
     cursor: pointer;
 }
+
 .results-actions button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }
-.glass-card button, .glass-card .link-btn {
+
+.glass-card button,
+.glass-card .link-btn {
     padding: 8px 14px;
     border-radius: 10px;
     border: 1px solid rgba(86, 198, 255, 0.35);
@@ -786,33 +814,43 @@ body.hudes-mobile .tour-checklist li {
     cursor: pointer;
     text-decoration: none;
 }
-.glass-card button:hover, .glass-card .link-btn:hover {
+
+.glass-card button:hover,
+.glass-card .link-btn:hover {
     background: rgba(40, 90, 140, 0.5);
 }
+
 .glass-card .top10-list {
     margin: 8px 0 0;
     padding-left: 18px;
     list-style: none;
 }
+
 .glass-card .scroll-wrap {
     max-height: 50vh;
     overflow-y: auto;
     margin: 8px 0;
     padding-right: 6px;
 }
-.glass-card .top100-list { /* legacy selector; keep behavior sane */
+
+.glass-card .top100-list {
+    /* legacy selector; keep behavior sane */
     margin: 0;
     padding-left: 18px;
     list-style: none;
 }
+
 #glContainer {
     position: absolute;
     top: var(--header-height);
     left: 0;
-    width: 90%; /* Set to 80% of width to make space for the side container */
+    width: 90%;
+    /* Set to 80% of width to make space for the side container */
     height: calc(100vh - var(--header-height));
-    z-index: 1; /* Lower index to be behind the plotly and other containers */
-    pointer-events: auto; /* Allow direct interaction with the GL canvas */
+    z-index: 1;
+    /* Lower index to be behind the plotly and other containers */
+    pointer-events: auto;
+    /* Allow direct interaction with the GL canvas */
 }
 
 body.hudes-mobile #glContainer {
@@ -826,16 +864,24 @@ body.hudes-mobile #glContainer {
     position: absolute;
     top: calc(var(--header-height) + 20vh);
     right: 0;
-    width: 17%; /* The container should take up the right 20% */
-    height: calc(80vh - var(--header-height)); /* Adjust to account for header space */
-    pointer-events: auto; /* Ensure the side container can be interacted with */
-    z-index: 3; /* Higher index to be on top of the GL container */
-    background: transparent; /* Transparent background */
-    overflow-y: auto; /* Allow scrolling if content exceeds height */
+    width: 17%;
+    /* The container should take up the right 20% */
+    height: calc(80vh - var(--header-height));
+    /* Adjust to account for header space */
+    pointer-events: auto;
+    /* Ensure the side container can be interacted with */
+    z-index: 3;
+    /* Higher index to be on top of the GL container */
+    background: transparent;
+    /* Transparent background */
+    overflow-y: auto;
+    /* Allow scrolling if content exceeds height */
     display: flex;
     flex-direction: column;
-    box-sizing: border-box; /* Ensures padding and borders are included */
-    padding: 10px; /* Add some padding to the container */
+    box-sizing: border-box;
+    /* Ensures padding and borders are included */
+    padding: 10px;
+    /* Add some padding to the container */
 }
 
 .container {
@@ -854,10 +900,13 @@ body.hudes-mobile #glContainer {
 }
 
 .plot {
-    width: 33%; /* There are two plots, each should take up half of the container width */
+    width: 33%;
+    /* There are two plots, each should take up half of the container width */
     height: 100%;
-    box-sizing: border-box; /* Ensures padding and border are included in the element's total width and height */
-    padding: 1px; /* Optional padding */
+    box-sizing: border-box;
+    /* Ensures padding and border are included in the element's total width and height */
+    padding: 1px;
+    /* Optional padding */
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -885,16 +934,19 @@ body.hudes-mobile #glContainer {
 }
 
 .example-cell {
-    position: relative; /* Allow absolute positioning of children */
+    position: relative;
+    /* Allow absolute positioning of children */
     width: 100%;
-    height: 25%; /* Adjusted for 4 cells in the side container */
+    height: 25%;
+    /* Adjusted for 4 cells in the side container */
     box-sizing: border-box;
 }
 
 .example-item {
     width: 100%;
     height: 100%;
-    position: relative; /* Allow absolute positioning for the image and chart */
+    position: relative;
+    /* Allow absolute positioning for the image and chart */
 }
 
 .example-chart {
@@ -903,7 +955,8 @@ body.hudes-mobile #glContainer {
     position: absolute;
     top: 0;
     left: 0;
-    z-index: 2; /* Higher z-index to be above the image */
+    z-index: 2;
+    /* Higher z-index to be above the image */
     background: transparent;
 }
 
@@ -915,13 +968,16 @@ body.hudes-mobile #glContainer {
 }
 
 .example-image {
-    width: 50%; /* Half the width of the cell */
-    height: 50%; /* Half the height of the cell */
+    width: 50%;
+    /* Half the width of the cell */
+    height: 50%;
+    /* Half the height of the cell */
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 1; /* Lower z-index to be behind the chart */
+    z-index: 1;
+    /* Lower z-index to be behind the chart */
     background: transparent;
 }
 
@@ -1147,9 +1203,12 @@ body.speedrun-active #bottomTextContainer .hud-status .hud-timer {
 
 /* Special styling for SPEED RUN label */
 #bottomTextContainer .control-group .label .speed-run-label {
-    color: #ff4d4d; /* red */
-    font-weight: 800; /* bold */
-    font-style: italic; /* italic */
+    color: #ff4d4d;
+    /* red */
+    font-weight: 800;
+    /* bold */
+    font-style: italic;
+    /* italic */
 }
 
 #bottomTextContainer .key-pill {
@@ -1359,6 +1418,7 @@ body.hudes-mobile #plot3 #confusionMatrixChart {
 #mobileActionPanel button:active {
     background: rgba(40, 60, 90, 0.9);
 }
+
 #bottomTextContainer .hud-card {
     padding-left: 1rem;
     padding-right: 1rem;
@@ -1396,4 +1456,255 @@ body.hudes-mobile #bottomTextContainer .hud-mobile-actions {
 
 body.hudes-hide-hud #bottomTextContainer {
     display: none !important;
+}
+
+/* Level Modal (Explore Mode) */
+.level-modal {
+    position: fixed;
+    top: 140px;
+    /* Below the loss chart */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    display: none;
+    pointer-events: auto;
+}
+
+.level-modal.visible {
+    display: block;
+    animation: slideDownFade 0.4s ease-out;
+}
+
+.level-modal-content {
+    width: min(90vw, 400px);
+    padding: 1.2rem;
+    border: 1px solid rgba(255, 214, 102, 0.4);
+    background: rgba(12, 18, 30, 0.9);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    text-align: center;
+}
+
+.level-modal h2 {
+    color: #ffd666;
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.level-modal p {
+    color: rgba(228, 241, 255, 0.9);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin: 0 0 1rem;
+}
+
+.level-modal .actions {
+    display: flex;
+    justify-content: center;
+}
+
+.level-modal button {
+    background: rgba(255, 214, 102, 0.15);
+    color: #ffd666;
+    border: 1px solid rgba(255, 214, 102, 0.5);
+    padding: 0.4rem 1.2rem;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.level-modal button:hover {
+    background: rgba(255, 214, 102, 0.25);
+}
+
+/* Level Toast (Speed Run Mode) */
+.level-toast {
+    position: fixed;
+    top: 160px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 950;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid rgba(255, 214, 102, 0.6);
+    color: #ffd666;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.level-toast.visible {
+    opacity: 1;
+    animation: toastPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.level-toast-sep {
+    opacity: 0.6;
+}
+
+@keyframes slideDownFade {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+@keyframes toastPop {
+    from {
+        transform: translateX(-50%) scale(0.8);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(-50%) scale(1);
+        opacity: 1;
+    }
+}
+
+/* Mobile Adjustments */
+body.hudes-mobile .level-modal {
+    top: auto;
+    bottom: 120px;
+    width: 100%;
+    padding: 0 1rem;
+}
+
+body.hudes-mobile .level-toast {
+    top: 100px;
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+}
+
+/* New Level Modal Styles */
+.level-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.6);
+    transition: color 0.2s;
+}
+
+.level-close-btn:hover {
+    color: #fff;
+}
+
+.level-eyebrow {
+    color: #4caf50;
+    /* Success green */
+    font-size: 0.75rem;
+    font-weight: bold;
+    letter-spacing: 0.2em;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+/* Update modal content padding for close button */
+.level-modal-content {
+    position: relative;
+    padding-top: 1.5rem;
+}
+
+/* Results Card Metrics Row */
+.results-metrics-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 0.8rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+.metric-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.metric-item span {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.metric-item strong {
+    font-size: 1.1rem;
+    color: #fff;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.metric-sep {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Share Actions */
+.share-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.8rem;
+    margin: 1rem 0;
+}
+
+.share-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    border: none;
+    outline: none;
+}
+
+.x-btn {
+    background: #000;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.x-btn:hover {
+    background: #111;
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.copy-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.copy-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
 }

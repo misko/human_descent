@@ -171,6 +171,9 @@ export default class LandscapeView {
         if (!this.initialTourDisabled && typeof window !== 'undefined') {
             window.requestAnimationFrame(() => this._setTourFlow('initial'));
         }
+        this.levelToastTimeout = null;
+        this.levelModalTimeout = null;
+        this._levelDismissHandler = null;
 
 
         // Grid properties
@@ -1630,11 +1633,11 @@ export default class LandscapeView {
         this.effectiveGrids = count || 1;
         const columns = Math.max(1, Math.min(3, count));
         const rows = Math.max(1, Math.ceil(count / columns));
-	        const cellWidth = this.gridSize * 0.9;
-	        const cellHeight = this.gridSize * 0.6;
-	        const gapX = this.gridSize * 0.05;
-	        const gapY = this.rowSpacing != null ? this.rowSpacing : this.gridSize * 0.3;
-	        const depthStep = this.depthStep != null ? this.depthStep : 0.01;
+        const cellWidth = this.gridSize * 0.9;
+        const cellHeight = this.gridSize * 0.6;
+        const gapX = this.gridSize * 0.05;
+        const gapY = this.rowSpacing != null ? this.rowSpacing : this.gridSize * 0.3;
+        const depthStep = this.depthStep != null ? this.depthStep : 0.01;
 
         while (this.lineObjects.length < count) {
             const material = new LineBasicMaterial({ color: 0xffffff, linewidth: 2.5 });
@@ -1648,50 +1651,50 @@ export default class LandscapeView {
             frameMaterial.opacity = 0.9;
             frame.scale.set(1, 1, 1);
 
-	        const centerMaterial = new LineDashedMaterial({
-	                color: 0xffffff,
-	                linewidth: 1,
-	                dashSize: 1,
-	                gapSize: 1,
-	                transparent: true,
-	                opacity: 0.5,
-	                depthWrite: false,
-	            });
-	        centerMaterial.depthTest = false;
-	        const centerGeometry = new BufferGeometry();
-	        const centerLine = new Line(centerGeometry, centerMaterial);
+            const centerMaterial = new LineDashedMaterial({
+                color: 0xffffff,
+                linewidth: 1,
+                dashSize: 1,
+                gapSize: 1,
+                transparent: true,
+                opacity: 0.5,
+                depthWrite: false,
+            });
+            centerMaterial.depthTest = false;
+            const centerGeometry = new BufferGeometry();
+            const centerLine = new Line(centerGeometry, centerMaterial);
 
-	            const hMaterial = new LineDashedMaterial({
-	                color: 0xffffff,
-	                linewidth: 1,
-	                dashSize: 1,
-	                gapSize: 1,
-	                transparent: true,
-	                opacity: 0.5,
-	                depthWrite: false,
-	            });
-	            hMaterial.depthTest = false;
-	            const hGeometry = new BufferGeometry();
-	            const hLine = new Line(hGeometry, hMaterial);
+            const hMaterial = new LineDashedMaterial({
+                color: 0xffffff,
+                linewidth: 1,
+                dashSize: 1,
+                gapSize: 1,
+                transparent: true,
+                opacity: 0.5,
+                depthWrite: false,
+            });
+            hMaterial.depthTest = false;
+            const hGeometry = new BufferGeometry();
+            const hLine = new Line(hGeometry, hMaterial);
 
-	            const container = new Group();
-	            container.add(frame);
-	            container.add(centerLine);
-	            container.add(hLine);
-	            container.add(line);
-	            this.lineGroup.add(container);
+            const container = new Group();
+            container.add(frame);
+            container.add(centerLine);
+            container.add(hLine);
+            container.add(line);
+            this.lineGroup.add(container);
 
-	            frame.renderOrder = 1;
-	            centerLine.renderOrder = 0;
-	            hLine.renderOrder = 0;
-	            line.renderOrder = 2;
+            frame.renderOrder = 1;
+            centerLine.renderOrder = 0;
+            hLine.renderOrder = 0;
+            line.renderOrder = 2;
 
-	            this.lineContainers.push(container);
-	            this.lineFrames.push(frame);
-	            this.centerLines.push(centerLine);
-	            this.horizontalLines.push(hLine);
-	            this.lineObjects.push(line);
-	        }
+            this.lineContainers.push(container);
+            this.lineFrames.push(frame);
+            this.centerLines.push(centerLine);
+            this.horizontalLines.push(hLine);
+            this.lineObjects.push(line);
+        }
 
         while (this.lineObjects.length > count) {
             const line = this.lineObjects.pop();
@@ -1834,34 +1837,34 @@ export default class LandscapeView {
             frame.geometry.computeBoundingSphere();
             frame.geometry.setDrawRange(0, 8);
 
-	            const centerLine = this.centerLines[i];
-	            const centerPositions = new Float32Array([
-	                0, halfHeight, -0.01,
-	                0, -halfHeight, -0.01,
-	            ]);
-	            centerLine.geometry.setAttribute('position', new BufferAttribute(centerPositions, 3));
-	            centerLine.geometry.attributes.position.needsUpdate = true;
-	            centerLine.material.dashSize = Math.max(0.02 * cellHeight, 0.5);
-	            centerLine.material.gapSize = Math.max(0.04 * cellHeight, 0.8);
-	            centerLine.material.needsUpdate = true;
-	            centerLine.computeLineDistances();
-	            centerLine.material.opacity = 0.8;
+            const centerLine = this.centerLines[i];
+            const centerPositions = new Float32Array([
+                0, halfHeight, -0.01,
+                0, -halfHeight, -0.01,
+            ]);
+            centerLine.geometry.setAttribute('position', new BufferAttribute(centerPositions, 3));
+            centerLine.geometry.attributes.position.needsUpdate = true;
+            centerLine.material.dashSize = Math.max(0.02 * cellHeight, 0.5);
+            centerLine.material.gapSize = Math.max(0.04 * cellHeight, 0.8);
+            centerLine.material.needsUpdate = true;
+            centerLine.computeLineDistances();
+            centerLine.material.opacity = 0.8;
 
-	            if (hLine) {
-	                const hPositions = new Float32Array([
-	                    -halfWidth, 0, -0.01,
-	                    halfWidth, 0, -0.01,
-	                ]);
-	                hLine.geometry.setAttribute('position', new BufferAttribute(hPositions, 3));
-	                hLine.geometry.attributes.position.needsUpdate = true;
-	                hLine.material.dashSize = Math.max(0.02 * cellWidth, 0.5);
-	                hLine.material.gapSize = Math.max(0.04 * cellWidth, 0.8);
-	                hLine.material.needsUpdate = true;
-	                hLine.computeLineDistances();
-	                hLine.material.opacity = 0.6;
-	                hLine.material.depthTest = false;
-	                hLine.material.depthWrite = false;
-	            }
+            if (hLine) {
+                const hPositions = new Float32Array([
+                    -halfWidth, 0, -0.01,
+                    halfWidth, 0, -0.01,
+                ]);
+                hLine.geometry.setAttribute('position', new BufferAttribute(hPositions, 3));
+                hLine.geometry.attributes.position.needsUpdate = true;
+                hLine.material.dashSize = Math.max(0.02 * cellWidth, 0.5);
+                hLine.material.gapSize = Math.max(0.04 * cellWidth, 0.8);
+                hLine.material.needsUpdate = true;
+                hLine.computeLineDistances();
+                hLine.material.opacity = 0.6;
+                hLine.material.depthTest = false;
+                hLine.material.depthWrite = false;
+            }
 
             const col = i % columns;
             const row = Math.floor(i / columns);
@@ -2413,6 +2416,7 @@ export default class LandscapeView {
         this._setBodyHelpOpen(true);
         this.helpOverlay.classList.add('visible');
         this.helpOverlay.setAttribute('data-mode', 'tabs');
+        this._setOverlayMode('default');
         this._toggleTabs(true);
         this._setActiveHelpTab(tabId);
         this._renderHelpTab(tabId);
@@ -2808,6 +2812,68 @@ export default class LandscapeView {
         document.body.appendChild(toast);
         this.tutorialToastEl = toast;
         return toast;
+    }
+
+    showLevelUp(level, isSpeedRun) {
+        console.log('[LandscapeView] showLevelUp:', level, 'isSpeedRun:', isSpeedRun);
+        if (typeof document === 'undefined') return;
+
+        if (isSpeedRun) {
+            const toast = document.getElementById('levelToast');
+            const scoreEl = document.getElementById('levelToastScore');
+            const titleEl = document.getElementById('levelToastTitle');
+            if (toast && scoreEl && titleEl) {
+                scoreEl.textContent = level.loss.toFixed(2);
+                titleEl.textContent = level.title;
+                toast.classList.add('visible');
+
+                if (this.levelToastTimeout) {
+                    clearTimeout(this.levelToastTimeout);
+                }
+                this.levelToastTimeout = setTimeout(() => {
+                    toast.classList.remove('visible');
+                    this.levelToastTimeout = null;
+                }, 1500);
+            }
+        } else {
+            const modal = document.getElementById('levelModal');
+            const titleEl = document.getElementById('levelTitle');
+            const insightEl = document.getElementById('levelInsight');
+            const closeBtn = document.getElementById('levelCloseBtn');
+            const eyebrowEl = modal?.querySelector('.level-eyebrow');
+
+            if (modal && titleEl && insightEl) {
+                if (eyebrowEl) {
+                    eyebrowEl.textContent = `LEVEL UP! YOU REACHED LEVEL ${level.levelNumber}`;
+                }
+                titleEl.textContent = `${level.loss.toFixed(2)} — ${level.title}`;
+                insightEl.textContent = level.insight;
+                modal.classList.add('visible');
+
+                // Clear any existing auto-close timer
+                if (this.levelModalTimeout) {
+                    clearTimeout(this.levelModalTimeout);
+                }
+
+                // Auto-close after 5 seconds
+                this.levelModalTimeout = setTimeout(() => {
+                    modal.classList.remove('visible');
+                    this.levelModalTimeout = null;
+                }, 5000);
+
+                // Ensure we don't stack listeners
+                if (!this._levelDismissHandler) {
+                    this._levelDismissHandler = () => {
+                        modal.classList.remove('visible');
+                        if (this.levelModalTimeout) {
+                            clearTimeout(this.levelModalTimeout);
+                            this.levelModalTimeout = null;
+                        }
+                    };
+                    closeBtn?.addEventListener('click', this._levelDismissHandler);
+                }
+            }
+        }
     }
 
 }

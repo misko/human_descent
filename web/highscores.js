@@ -11,10 +11,26 @@ async function detectBackend() {
       const httpPort = wsPort + 1;
       const res = await fetch(`${proto}://${host}:${httpPort}/health`, { method: 'GET' });
       if (res.ok) return `${proto}://${host}:${httpPort}/api`;
-    } catch {}
+    } catch { }
   }
   // Fallback
   return `${proto}://${host}:${10002}/api`;
+}
+
+async function deleteScore(id) {
+  if (!confirm('Are you sure you want to delete this score?')) return;
+  const api = await detectBackend();
+  try {
+    const res = await fetch(`${api}/highscores?id=${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      document.getElementById('loadBtn').click(); // Reload current view
+    } else {
+      alert('Failed to delete score');
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Error deleting score');
+  }
 }
 
 async function load(offset = 0, limit = 1000) {
@@ -27,7 +43,7 @@ async function load(offset = 0, limit = 1000) {
     return;
   }
   const rows = await resp.json();
-  status.textContent = `Loaded ${rows.length} rows`;
+  status.textContent = `Loaded ${rows.length} rows (Offset: ${offset})`;
   const tbody = document.querySelector('#scoresTable tbody');
   tbody.innerHTML = '';
   let rank = offset + 1;
@@ -41,19 +57,48 @@ async function load(offset = 0, limit = 1000) {
       <td>${r.ts}</td>
       <td>${r.duration}</td>
       <td>${r.requestIdx ?? ''}</td>
+      <td><button class="delete-btn" data-id="${r.id}">Delete</button></td>
     `;
     tbody.appendChild(tr);
     rank += 1;
   }
+
+  // Bind delete buttons
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      deleteScore(e.target.dataset.id);
+    });
+  });
 }
 
 (function init() {
   const offsetInput = document.getElementById('offset');
   const limitInput = document.getElementById('limit');
-  document.getElementById('loadBtn').addEventListener('click', () => {
+
+  const getParams = () => {
     const o = Math.max(0, parseInt(offsetInput.value || '0', 10));
     const l = Math.max(1, Math.min(10000, parseInt(limitInput.value || '1000', 10)));
+    return { o, l };
+  };
+
+  document.getElementById('loadBtn').addEventListener('click', () => {
+    const { o, l } = getParams();
     load(o, l);
   });
+
+  document.getElementById('prevBtn').addEventListener('click', () => {
+    const { o, l } = getParams();
+    const newOffset = Math.max(0, o - l);
+    offsetInput.value = newOffset;
+    load(newOffset, l);
+  });
+
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    const { o, l } = getParams();
+    const newOffset = o + l;
+    offsetInput.value = newOffset;
+    load(newOffset, l);
+  });
+
   load(0, 1000);
 })();
