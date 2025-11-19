@@ -3,21 +3,26 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Human Descent</title>
     <link rel="icon" href="data:,">
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
     <header class="site-header">
+        <div class="header-left-actions">
+            <button type="button" class="header-pill" data-hud-action="toggle-help">Help</button>
+            <button type="button" class="header-pill" data-hud-action="show-tutorial">Tutorial</button>
+            <a class="header-pill header-source" href="https://github.com/misko/human_descent" target="_blank"
+                rel="noreferrer noopener">Source</a>
+        </div>
         <img class="site-logo" src="/header.png" alt="humandescent.net">
     </header>
     <div id="glContainer"></div>
 
-    <!-- Top Container for Plotly Charts -->
+    <!-- Top Container for Charts -->
     <div class="container">
         <div id="plot1" class="plot">
             <canvas id="lossChart"></canvas>
@@ -27,7 +32,8 @@
         </div>
 
         <div id="plot3" class="plot">
-        <div id="confusionMatrixChart" style="width:100%;height:100%;"></div>
+            <div class="plot-title">Confusion Matrix</div>
+            <div id="confusionMatrixChart" style="width:100%;height:100%;"></div>
         </div>
     </div>
 
@@ -54,8 +60,26 @@
     </div>
 
 
-    <div id="bottomTextContainer" class="floating-text"></div>
+    <div id="bottomTextContainer"></div>
     <div id="imageContainer"></div>
+
+    <!-- Level Modal (Explore Mode) -->
+    <div id="levelModal" class="level-modal">
+        <div class="level-modal-content glass-card">
+            <div id="levelCloseBtn" class="level-close-btn">×</div>
+            <div class="level-eyebrow">LEVEL UP!</div>
+            <h2 id="levelTitle"></h2>
+            <p id="levelInsight"></p>
+        </div>
+    </div>
+
+    <!-- Level Toast (Speed Run Mode) -->
+    <div id="levelToast" class="level-toast">
+        <span id="levelToastScore"></span>
+        <span class="level-toast-sep"> — </span>
+        <span id="levelToastTitle"></span>
+    </div>
+
     <script type="module" src="./app.js"></script>
 </body>
 

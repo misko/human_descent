@@ -2,7 +2,8 @@
 
 ## Featured videos
 
-- [Human Descent speed run — October 20, 2025](https://youtu.be/PIFJnmvqMIk)
+- [3D speed run — November 18, 2025](https://www.youtube.com/watch?v=4exJirHbESM)
+- [1D speed run — November 18, 2025](https://www.youtube.com/watch?v=t4DESt8-PwQ)
 - [Human Descent — How to play](https://youtu.be/tspa15Ei3KI)
 
 **Live server:** The web version runs at [humandescent.net](https://humandescent.net) on an RTX 4090 GPU. Expect instability if many people connect simultaneously.
@@ -13,6 +14,11 @@ Human Descent opens the door for you to explore neural network optimization in h
 
 ### Older demo
 [Demo video](https://youtu.be/mqAmaBP3-Q4)
+
+## Game modes
+
+- **3D landscape (default):** renders three coupled loss surfaces that update in real time while you explore six random directions.
+- **1D slices (experimental):** renders six fast-updating loss curves, one per dimension. Launch with `?mode=1d` (e.g. `http://localhost:5173/?mode=1d`) or use the View toggle in the header to switch between modes.
 
 ## Batch-parameterized PyTorch layers
 
@@ -50,3 +56,15 @@ Iteratively selecting between new training batches and different random subspace
 For example its possible to train a 26,000 parameter MNIST model using a 6 dimensional keyboard input in about 10 minutes.
 
 ![Example snapshot](images/01_demo.jpg)
+
+## Testing
+
+- Run all frontend checks with `cd web && npm test` (wrap in the repo's virtualenv so the backend can start).
+- When iterating on the speed-run or highscores flows, capture deterministic Playwright logs with:
+
+```
+cd web
+(npm run -s test:e2e:chromium -- tests/speedrun.spec.mjs) 2>&1 3>&1 | tee /tmp/play-speedrun.log >/dev/null
+```
+
+That command mirrors what we use in CI so any browser/server output is preserved under `/tmp/play-speedrun.log` for later debugging.

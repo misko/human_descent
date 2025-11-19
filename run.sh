@@ -9,3 +9,4 @@ python hudes/hudes_play.py --input keyboard
 #python hudes/hudes_play.py --input xtouch
 kill ${server_pid}
 kill -9 ${server_pid}
+# /home/mouse9911/gits/human_descent/hudes_env/bin/python websocket_server.py --device=cuda --model=cnn3 --port=10000 --ssl-pem=hudes.pem --run-in=process

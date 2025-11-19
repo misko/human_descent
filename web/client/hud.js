@@ -1,16 +1,26 @@
-export const CONTROL_GROUPS = [
-  { icon: null, keys: ['W', 'A', 'S', 'D', 'Scroll'], label: 'Move' },
-  { icon: null, keys: ['⬆️', '⬇️', '⬅️', '➡️', '🐁'], label: 'Rotate' },
-  { icon: null, keys: ['Spacebar'], label: 'New Dims' },
+const SHARED_COMMANDS = [
+  { icon: null, keys: ['SPACE'], label: 'New Dims' },
   { icon: null, keys: ['Enter'], label: 'New Batch' },
-  { icon: null, keys: ['R'], label: '<span class="speed-run-label">SPEED RUN</span>' },
+  { icon: null, keys: ['Del'], label: 'SGD Step' },
+  { icon: null, keys: ['Z'], label: '<span class="speed-run-label">SPEED RUN 🔥</span>' },
   { icon: null, keys: ['⇧','🐁'], label: 'Cycle Plane' },
   { icon: null, keys: ['[', ']'], label: 'Step ±' },
   { icon: null, keys: [';'], label: 'Batch-size' },
   { icon: null, keys: ["'"], label: 'FP16/32' },
   { icon: null, keys: ['Y'], label: 'Top 10' },
   { icon: null, keys: ['X'], label: 'Help' },
-  { icon: null, keys: ['Q'], label: 'Hold to quit' },
+];
+
+export const CONTROL_GROUPS = [
+  { icon: null, keys: ['W', 'A', 'S', 'D', 'Scroll'], label: 'Move' },
+  { icon: null, keys: ['⬆️', '⬇️', '⬅️', '➡️', '🐁'], label: 'Rotate' },
+  ...SHARED_COMMANDS,
+];
+
+export const MOBILE_CONTROL_GROUPS = [];
+
+export const MOBILE_HUD_BUTTONS = [
+  { action: 'show-top', label: 'Top 10' },
 ];
 
 export const HUD_TITLE = '🧠 Human Descent: MNIST';
@@ -47,6 +57,20 @@ const formatControlGroup = (group) => {
   `;
 };
 
+const formatHudButtons = (buttons = []) => {
+  if (!Array.isArray(buttons) || buttons.length === 0) {
+    return '';
+  }
+  const items = buttons
+    .map(({ action, label }) => {
+      const safeAction = action ? ` data-hud-action="${escapeHtml(action)}"` : '';
+      const safeLabel = escapeHtml(label ?? '');
+      return `<button type="button"${safeAction}>${safeLabel}</button>`;
+    })
+    .join('');
+  return `<div class="hud-inline-actions">${items}</div>`;
+};
+
 export const formatHudMarkup = (
   statusText = '',
   controlGroups = CONTROL_GROUPS,
@@ -61,20 +85,27 @@ export const formatHudMarkup = (
   const safeTitle = escapeHtml(options.title ?? '');
   const separator = '<span class="separator">•</span>';
   const controlsMarkup = controlGroups.map(formatControlGroup).join(separator);
-  const statusMarkup = safeStatus
+  const buttonMarkup = formatHudButtons(options.buttons);
+  const statusMarkup = options.statusHtml
+    ? `<div class="hud-status">${options.statusHtml}</div>`
+    : safeStatus
     ? `<div class="hud-status">${safeStatus}</div>`
     : '';
   const titleMarkup = safeTitle
     ? `<div class="hud-title" aria-hidden="true">${safeTitle}</div>`
     : '';
-
   return `
     <div class="hud-card">
       ${statusMarkup}
       <div class="hud-controls">
         ${controlsMarkup}
+        ${buttonMarkup}
       </div>
       ${titleMarkup}
+      <div class="hud-mobile-actions">
+        <button type="button" data-hud-action="next-dims">New Dims</button>
+        <button type="button" data-hud-action="next-batch">New Batch</button>
+      </div>
     </div>
   `;
 };

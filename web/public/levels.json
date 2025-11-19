@@ -1,0 +1,108 @@
+[
+    {
+        "loss": 100.0,
+        "title": "Active Saboteur",
+        "insight": "You are actively unlearning. The model would perform better if you just walked away.",
+        "hidden": true
+    },
+    {
+        "loss": 2.31,
+        "title": "My RNG is Smarter",
+        "insight": "Static Noise. The network has no filters yet. It is effectively blind, assigning equal probability (10%) to every digit."
+    },
+    {
+        "loss": 2.23,
+        "title": "The Coin Flip",
+        "insight": "Slight Bias. You've found a direction that isn't terrible. Maybe you realized most pixels are black."
+    },
+    {
+        "loss": 2.16,
+        "title": "Cute. You Found a Button.",
+        "insight": "Mean Intensity. The model has learned that \"most pixels are black.\" It’s just predicting the average brightness of the dataset."
+    },
+    {
+        "loss": 2.09,
+        "title": "A Blurry Mess",
+        "insight": "Variance. The weights are starting to capture the spread of pixel intensities, but no structure yet."
+    },
+    {
+        "loss": 2.02,
+        "title": "Still Mostly Noise",
+        "insight": "Center Detection. The weights are starting to focus on the center of the image where digits usually live."
+    },
+    {
+        "loss": 1.95,
+        "title": "Is That a Seven?",
+        "insight": "Blob Detection. The model can vaguely distinguish \"ink\" from \"background\" but has no concept of shape."
+    },
+    {
+        "loss": 1.88,
+        "title": "Acceptable... For a Human",
+        "insight": "Edge Detectors. Primitive filters are forming. The network can see vertical lines vs. horizontal lines."
+    },
+    {
+        "loss": 1.81,
+        "title": "The Horizontal Line",
+        "insight": "Simple Features. It can likely separate a 1 (vertical stick) from a 0 (round blob)."
+    },
+    {
+        "loss": 1.74,
+        "title": "Not Embarrassing",
+        "insight": "Coarse Shapes. The model is learning \"loops\" vs \"sticks.\""
+    },
+    {
+        "loss": 1.67,
+        "title": "Loop vs Stick",
+        "insight": "Topology. It can separate the 0/6/8/9 group from the 1/7 group, but confuses 8 with 0 constantly."
+    },
+    {
+        "loss": 1.60,
+        "title": "You Might Actually Be Useful",
+        "insight": "Feature Combinations. It’s seeing \"top loops\" vs \"bottom loops.\""
+    },
+    {
+        "loss": 1.53,
+        "title": "The Upper Loop",
+        "insight": "Digit Discrimination. It can now distinguish a 6 (bottom loop) from a 9 (top loop)."
+    },
+    {
+        "loss": 1.46,
+        "title": "I'm Almost Impressed",
+        "insight": "Curvature. The filters are refining curves. It’s starting to untangle the 3 vs 5 mess (both are squiggly)."
+    },
+    {
+        "loss": 1.39,
+        "title": "The Squiggle",
+        "insight": "Complex Shapes. The model is starting to understand the weird Z-shape of the digit 2."
+    },
+    {
+        "loss": 1.32,
+        "title": "Did You Cheat?",
+        "insight": "Fine Details. The network is looking at stroke endings."
+    },
+    {
+        "loss": 1.25,
+        "title": "The Stroke Ending",
+        "insight": "Endpoints. It’s finally resolving 4 vs 9—the difference often comes down to whether the top loop is closed or open."
+    },
+    {
+        "loss": 1.18,
+        "title": "System Threat Detected",
+        "insight": "Ambiguity Resolution. The model is handling sloppy handwriting."
+    },
+    {
+        "loss": 1.11,
+        "title": "The Slanted Two",
+        "insight": "Rotation Invariance. It can tell a \"hooked\" 1 from a 7, and a slanted 2 from a 7."
+    },
+    {
+        "loss": 1.04,
+        "title": "Grandmaster",
+        "insight": "Memorization. The filters are crisp and specialized. These are subtle distinctions."
+    },
+    {
+        "loss": 1.00,
+        "title": "Singularity Achieved",
+        "insight": "Manifold Mastery. The network has effectively memorized the topology of the MNIST manifold."
+    }
+]

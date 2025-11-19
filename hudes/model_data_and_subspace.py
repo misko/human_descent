@@ -269,20 +269,38 @@ class ModelDataAndSubspace:
     def dim_idxs_and_ranges_to_models_parms(
         self,
         base_weights,
-        dims: torch.Tensor,
-        arange: torch.Tensor,
-        brange: torch.Tensor,
-        dtype: torch.dtype,
+        dims,
+        arange,
+        brange=None,
+        dtype=torch.float32,
     ):
-        assert len(dims) == 2
-        vs = torch.vstack([self.get_dim_vec(dim, dtype=dtype) for dim in dims])
+        if isinstance(dims, torch.Tensor):
+            dims_iter = dims.tolist()
+        else:
+            dims_iter = list(dims)
+        assert len(dims_iter) in (1, 2), "dims must contain 1 or 2 entries"
 
-        agrid, bgrid = torch.meshgrid(torch.tensor(arange), torch.tensor(brange))
+        vecs = [self.get_dim_vec(dim, dtype=dtype) for dim in dims_iter]
+        vs = torch.vstack(vecs)
+        base = base_weights.to(device=vs.device, dtype=dtype)
+
+        arange_t = torch.as_tensor(arange, device=vs.device)
+        if len(dims_iter) == 1:
+            coords = arange_t.unsqueeze(1).to(dtype=dtype)  # (grid, 1)
+            mp = coords @ vs + base.reshape(1, -1)
+            return mp
+
+        assert brange is not None, "brange must be provided for 2D sweeps"
+        agrid, bgrid = torch.meshgrid(
+            torch.as_tensor(arange, device=vs.device),
+            torch.as_tensor(brange, device=vs.device),
+            indexing="ij",
+        )
         agrid = agrid.unsqueeze(2)
         bgrid = bgrid.unsqueeze(2)
-        return torch.concatenate([agrid, bgrid], dim=2).to(
-            dtype
-        ) @ vs + base_weights.reshape(1, 1, -1)
+        return torch.concatenate([agrid, bgrid], dim=2).to(dtype) @ vs + base.reshape(
+            1, 1, -1
+        )
 
     @torch.no_grad
     def get_loss_grid(
@@ -351,3 +369,65 @@ class ModelDataAndSubspace:
         loss = torch.concatenate(grid_losses, dim=0).cpu()
         logging.info(f"get_loss: return loss {loss[:, grid_size // 2, grid_size // 2]}")
         return loss
+
+    @torch.no_grad
+    def get_loss_lines(
+        self,
+        base_weights,
+        batch_idx,
+        dims_offset,
+        lines,
+        grid_size,
+        step_size,
+        batch_size,
+        dtype,
+        max_models=256,
+    ):
+        assert grid_size % 2 == 1
+        assert grid_size > 3
+        assert lines > 0
+
+        batch = self.get_batch(
+            batch_size=batch_size,
+            batch_idx=batch_idx,
+            dtype=dtype,
+            train_or_val="train",
+        )
+        data = batch[0].unsqueeze(0).expand(max_models, *batch[0].shape)
+        batch_size = data.shape[1]
+        label = batch[1]
+        r = (torch.arange(grid_size, device=self.device) - grid_size // 2) * step_size
+
+        line_losses = []
+        for line_idx in range(lines):
+            dim = dims_offset + line_idx
+            mp = self.dim_idxs_and_ranges_to_models_parms(
+                base_weights,
+                dims=[dim],
+                arange=r,
+                dtype=dtype,
+            )
+
+            mp_reshaped = mp.reshape(-1, self.num_params).contiguous()
+            offset = 0
+            predictions = []
+            while offset < mp_reshaped.shape[0]:
+                effective_models = min(mp_reshaped.shape[0] - offset, max_models)
+                predictions.append(
+                    self.param_models[dtype].forward(
+                        mp_reshaped[offset : offset + effective_models],
+                        data[:effective_models],
+                    )[1]
+                )
+                offset += effective_models
+
+            predictions = torch.vstack(predictions).reshape(mp.shape[0], batch_size, -1)
+            gathered = torch.gather(
+                predictions,
+                2,
+                label.reshape(1, -1, 1).expand(mp.shape[0], batch_size, 1),
+            )
+            loss = -gathered.mean(dim=(1, 2))
+            line_losses.append(loss)
+
+        return torch.stack(line_losses, dim=0).cpu()

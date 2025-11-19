@@ -2,6 +2,7 @@ export default class ClientState {
     constructor(stepSizeResolution, initialStepSizeIdx) {
         this.bestScore = Infinity;
         this.sgdSteps = 0;
+        this.evalSteps = 0;
         this.speedRunActive = false;
         this.speedRunSecondsRemaining = 0;
         this.dtypes = ["float16", "float32"];
@@ -12,21 +13,22 @@ export default class ClientState {
         this.stepSizeResolution = stepSizeResolution;
         this.stepSizeIdx = initialStepSizeIdx;
         this.helpScreenIdx = 0;
+        this.dimsUsed = 0;
         this.updateStepSize();
     }
 
     updateBestScoreOrNot(newScore) {
-        if (newScore<this.bestScore) {
-            this.bestScore=newScore;
+        if (newScore < this.bestScore) {
+            this.bestScore = newScore;
         }
     }
 
     toString() {
-    const secs = Number(this.speedRunSecondsRemaining ?? 0);
-    const timer = this.speedRunActive
-        ? ` | SpeedRun: ${secs.toFixed(1)}s`
-        : '';
-    return `Best-val-loss: ${this.bestScore.toFixed(3)}, Batch-size: ${this.batchSize}, StepSize: ${this.stepSize.toExponential(3)}, SGD-steps: ${this.sgdSteps} , Dtype: ${this.dtype}${timer}`
+        const secs = Number(this.speedRunSecondsRemaining ?? 0);
+        const timer = this.speedRunActive
+            ? `, SPEED RUN: ${secs.toFixed(1)}s`
+            : '';
+        return `Best-val-loss: ${this.bestScore.toFixed(3)}, Batch-size: ${this.batchSize}, StepSize: ${this.stepSize.toExponential(3)}, SGD-steps: ${this.sgdSteps}, Eval-steps: ${this.evalSteps}, Dtype: ${this.dtype}${timer}`;
     }
 
     updateStepSize() {
@@ -35,6 +37,9 @@ export default class ClientState {
             this.maxLogStepSize
         );
         this.stepSize = Math.pow(10, logStepSize);
+    }
+    setEvalSteps(count) {
+        this.evalSteps = count;
     }
 
     increaseStepSize(mag = 1) {
@@ -78,7 +83,20 @@ export default class ClientState {
         console.log(`Dtype set to ${dtype}`);
     }
     setHelpScreenFns(helpScreenFns) {
-        this.helpScreenFns = helpScreenFns;
+        if (Array.isArray(helpScreenFns)) {
+            this.helpScreenFns = [...helpScreenFns];
+            if (this.helpScreenFns.length === 0) {
+                this.helpScreenIdx = -1;
+            } else if (
+                this.helpScreenIdx === -1 ||
+                this.helpScreenIdx >= this.helpScreenFns.length
+            ) {
+                this.helpScreenIdx = 0;
+            }
+        } else {
+            this.helpScreenFns = [];
+            this.helpScreenIdx = -1;
+        }
     }
 
     closeHelpScreens() {
@@ -86,9 +104,10 @@ export default class ClientState {
     }
 
     nextHelpScreen() {
-        this.helpScreenIdx +=1;
-        if (this.helpScreenIdx ==this.helpScreenFns.length) {
-            this.helpScreenIdx=-1;
+        if (this.helpScreenIdx === -1) return;
+        this.helpScreenIdx += 1;
+        if (this.helpScreenIdx >= this.helpScreenFns.length) {
+            this.helpScreenIdx = -1;
         }
     }
 }

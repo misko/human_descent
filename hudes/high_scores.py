@@ -125,4 +125,10 @@ def get_rank(score: float, path: str | None = None) -> tuple[int, int]:
             (float(score),),
         )
         less = int(cur.fetchone()[0])
-        return less + 1 if total > 0 else 0, total
+        return less + 1, total
+
+
+def delete_high_score(row_id: int, path: str | None = None) -> bool:
+    with _conn(path) as conn:
+        cur = conn.execute("DELETE FROM high_scores WHERE id=?", (row_id,))
+        return cur.rowcount > 0
