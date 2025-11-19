@@ -556,6 +556,7 @@ _updateSpeedRunFromMessage(message) {
                 this.speedRunActive = true;
                 this.state.speedRunActive = true;
                 document.body.classList.add('speedrun-active');
+                this.lastNotifiedLevelLoss = undefined;
             } else if (!serverActiveFlag && this.speedRunActive && !(hasFinished && message.speedRunFinished)) {
                 this.speedRunActive = false;
                 this.state.speedRunActive = false;

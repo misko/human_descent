@@ -2817,11 +2817,12 @@ export default class LandscapeView {
 
         if (isSpeedRun) {
             const toast = document.getElementById('levelToast');
-            const scoreEl = document.getElementById('levelToastScore');
-            const titleEl = document.getElementById('levelToastTitle');
-            if (toast && scoreEl && titleEl) {
-                scoreEl.textContent = level.loss.toFixed(2);
-                titleEl.textContent = level.title;
+            const eyebrowEl = document.getElementById('levelToastEyebrow');
+            const levelEl = document.getElementById('levelToastLevel');
+            if (toast && levelEl && eyebrowEl) {
+                const levelNum = String(level.levelNumber ?? '').padStart(2, '0');
+                eyebrowEl.textContent = `LEVEL UP! YOU REACHED LEVEL ${levelNum}`;
+                levelEl.textContent = `${level.loss.toFixed(2)} — ${level.title}`;
                 toast.classList.add('visible');
 
                 if (this.levelToastTimeout) {
@@ -2830,7 +2831,7 @@ export default class LandscapeView {
                 this.levelToastTimeout = setTimeout(() => {
                     toast.classList.remove('visible');
                     this.levelToastTimeout = null;
-                }, 1500);
+                }, 4000);
             }
         } else {
             const modal = document.getElementById('levelModal');

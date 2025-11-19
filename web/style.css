@@ -1536,22 +1536,21 @@ body.hudes-hide-hud #bottomTextContainer {
     left: 50%;
     transform: translateX(-50%);
     z-index: 950;
-    background: rgba(0, 0, 0, 0.85);
-    border: 1px solid rgba(255, 214, 102, 0.6);
-    color: #ffd666;
-    padding: 0.6rem 1.2rem;
+    background: rgba(12, 18, 30, 0.9);
+    border: 1px solid rgba(255, 214, 102, 0.4);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    color: rgba(228, 241, 255, 0.9);
+    padding: 1.2rem;
     border-radius: 8px;
-    font-size: 1rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease-out;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
-    white-space: nowrap;
+    gap: 0.1rem;
+    white-space: normal;
+    text-align: center;
 }
 
 .level-toast.visible {
@@ -1559,8 +1558,20 @@ body.hudes-hide-hud #bottomTextContainer {
     animation: toastPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.level-toast-sep {
-    opacity: 0.6;
+.level-toast-eyebrow {
+    color: #4caf50;
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+}
+
+#levelToastLevel {
+    color: #ffd666;
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
 
 @keyframes slideDownFade {
