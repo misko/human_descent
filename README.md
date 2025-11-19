@@ -2,7 +2,8 @@
 
 ## Featured videos
 
-- [Human Descent speed run — October 20, 2025](https://youtu.be/PIFJnmvqMIk)
+- [3D speed run — November 18, 2025](https://www.youtube.com/watch?v=4exJirHbESM)
+- [1D speed run — November 18, 2025](https://www.youtube.com/watch?v=t4DESt8-PwQ)
 - [Human Descent — How to play](https://youtu.be/tspa15Ei3KI)
 
 **Live server:** The web version runs at [humandescent.net](https://humandescent.net) on an RTX 4090 GPU. Expect instability if many people connect simultaneously.
