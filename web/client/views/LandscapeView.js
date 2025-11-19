@@ -2302,10 +2302,7 @@ export default class LandscapeView {
         logo.className = 'tour-splash__logo';
         logo.src = SPLASH_LOGO_URL;
         logo.alt = 'Human Descent logo';
-        const prompt = document.createElement('p');
-        prompt.className = 'tour-splash__prompt';
-        prompt.textContent = 'Press any key / tap to begin';
-        screen.append(logo, prompt);
+        screen.append(logo);
         const dismiss = () => {
             if (!screen.classList.contains('tour-screen--splash-active')) return;
             screen.classList.remove('tour-screen--splash-active');
@@ -2318,7 +2315,7 @@ export default class LandscapeView {
         const handlePointer = () => dismiss();
         window.addEventListener('keydown', handleKey, true);
         window.addEventListener('pointerdown', handlePointer, true);
-        const autoTimer = setTimeout(dismiss, 1500);
+        const autoTimer = setTimeout(dismiss, 500);
         return screen;
     }
 

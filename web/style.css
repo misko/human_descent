@@ -20,6 +20,14 @@ body.hudes-mobile #sideContainer {
     display: none !important;
 }
 
+body.hudes-mobile button,
+body.hudes-mobile .header-pill,
+body.hudes-mobile [data-hud-action] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
 html,
 body {
     width: 100%;
@@ -1581,10 +1589,20 @@ body.hudes-hide-hud #bottomTextContainer {
 
 /* Mobile Adjustments */
 body.hudes-mobile .level-modal {
-    top: auto;
-    bottom: 120px;
+    top: calc(env(safe-area-inset-top, 0) + 16px);
+    bottom: auto;
     width: 100%;
     padding: 0 1rem;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+body.hudes-mobile .level-modal.visible {
+    display: flex;
+}
+
+body.hudes-mobile .level-modal .level-modal-content {
+    width: min(100%, 420px);
 }
 
 body.hudes-mobile .level-toast {
