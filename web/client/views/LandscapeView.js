@@ -2831,7 +2831,7 @@ export default class LandscapeView {
                 this.levelToastTimeout = setTimeout(() => {
                     toast.classList.remove('visible');
                     this.levelToastTimeout = null;
-                }, 4000);
+                }, 8000);
             }
         } else {
             const modal = document.getElementById('levelModal');
@@ -2853,11 +2853,11 @@ export default class LandscapeView {
                     clearTimeout(this.levelModalTimeout);
                 }
 
-                // Auto-close after 5 seconds
+                // Auto-close after 15 seconds
                 this.levelModalTimeout = setTimeout(() => {
                     modal.classList.remove('visible');
                     this.levelModalTimeout = null;
-                }, 5000);
+                }, 15000);
 
                 // Ensure we don't stack listeners
                 if (!this._levelDismissHandler) {
