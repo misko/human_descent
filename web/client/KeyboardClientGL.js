@@ -493,6 +493,7 @@ export default class KeyboardClientGL extends KeyboardClient {
             this.state.toggleBatchSize();
             this.sendConfig();
             this._updateMobileUi();
+            this._notifyTutorialStep('batch');
         });
 
         addButton('sgd', () => {
@@ -503,22 +504,26 @@ export default class KeyboardClientGL extends KeyboardClient {
             this.state.decreaseStepSize(this.stepSizeMultiplier || 1);
             this.sendConfig();
             this._updateMobileUi();
+            this._notifyTutorialStep('step');
         });
 
         addButton('stepPlus', () => {
             this.state.increaseStepSize(this.stepSizeMultiplier || 1);
             this.sendConfig();
             this._updateMobileUi();
+            this._notifyTutorialStep('step');
         });
 
         addButton('fp', () => {
             this.state.toggleDtype();
             this.sendConfig();
             this._updateMobileUi();
+            this._notifyTutorialStep('precision');
         });
 
         addButton('dims', () => {
             this.getNextDims();
+            this._notifyTutorialStep('new_dims');
         });
 
         addButton('batchNew', () => {
