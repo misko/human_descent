@@ -847,6 +847,16 @@ body.hudes-mobile .tour-checklist li {
     padding-left: 18px;
     list-style: none;
 }
+.glass-card .top10-list li {
+    margin: 2px 0;
+}
+.glass-card .top10-mono {
+    font-family: "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "Courier New", monospace;
+    white-space: pre;
+}
+.glass-card .top10-title {
+    margin-left: 6px;
+}
 
 #glContainer {
     position: absolute;

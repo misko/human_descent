@@ -1082,15 +1082,33 @@ _didReload() {
                 return performance.navigation.type === TYPE_RELOAD;
             }
         }
-    } catch { }
-    return false;
-}
+        } catch { }
+        return false;
+    }
 
-_clearResumeToken() {
-    this._resumeToken = null;
-    try {
-        if (this._sessionStorageAvailable) {
-            window.sessionStorage?.removeItem(this._resumeTokenKey);
+    _getLevelForScore(score, { includeHidden = false } = {}) {
+        if (!this.levels || !Array.isArray(this.levels) || !Number.isFinite(score)) {
+            return null;
+        }
+        let best = null;
+        for (const level of this.levels) {
+            if (!level || (!includeHidden && level.hidden) || typeof level.loss !== 'number') {
+                continue;
+            }
+            if (score <= level.loss) {
+                if (!best || level.loss < best.loss) {
+                    best = level;
+                }
+            }
+        }
+        return best;
+    }
+
+    _clearResumeToken() {
+        this._resumeToken = null;
+        try {
+            if (this._sessionStorageAvailable) {
+                window.sessionStorage?.removeItem(this._resumeTokenKey);
         }
     } catch { }
 }
@@ -1498,28 +1516,49 @@ processCommonKeys(event) {
         }
     }
 }
-_showTop100Modal(rows) {
-    const overlay = this._createOverlay();
-    overlay.innerHTML = '';
-    const card = document.createElement('div');
-    card.className = 'glass-card';
+    _showTop100Modal(rows) {
+        const overlay = this._createOverlay();
+        overlay.innerHTML = '';
+        const card = document.createElement('div');
+        card.className = 'glass-card';
     const title = document.createElement('h2');
     title.textContent = 'Top 10 Leaderboard';
     const listWrap = document.createElement('div');
-    listWrap.className = 'scroll-wrap';
-    const list = document.createElement('ol');
-    list.className = 'top10-list';
-    (rows || []).forEach((r, idx) => {
-        const li = document.createElement('li');
-        const rank = (idx + 1);
-        const s = (typeof r.score === 'number') ? r.score.toFixed(4) : (r.score ?? '—');
-        // Render explicit numbering to avoid browser marker inconsistencies
-        li.textContent = `${rank} ${r.name} — ${s}`;
-        list.appendChild(li);
-    });
-    listWrap.appendChild(list);
-    const actions = document.createElement('div');
-    actions.className = 'actions';
+        listWrap.className = 'scroll-wrap';
+        const list = document.createElement('ol');
+        list.className = 'top10-list';
+        (rows || []).forEach((r, idx) => {
+            const li = document.createElement('li');
+            const rank = idx + 1;
+            const score = Number.isFinite(r.score) ? r.score : null;
+            const lossStr = score == null ? '---' : score.toFixed(3);
+            const levelInfo = this._getLevelForScore(score, { includeHidden: true });
+            const levelLabel = levelInfo ? `L${levelInfo.levelNumber ?? '—'}` : 'L—';
+            const nameRaw = (typeof r.name === 'string' && r.name.trim()) ? r.name.trim() : '—';
+            const maxNameWidth = 5;
+            const nameFixed = nameRaw.length > maxNameWidth ? nameRaw.slice(0, maxNameWidth) : nameRaw;
+            const mono = document.createElement('span');
+            mono.className = 'top10-mono';
+            const monoParts = [
+                String(rank).padStart(2, ' '),
+                nameFixed.padEnd(maxNameWidth, ' '),
+                lossStr.padStart(6, ' '),
+                levelLabel.padEnd(4, ' ')
+            ];
+            mono.textContent = monoParts.join(' ');
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'top10-title';
+            const levelTitle = levelInfo?.title;
+            titleSpan.textContent = levelTitle ? ` ${levelTitle}` : '';
+            li.appendChild(mono);
+            if (titleSpan.textContent.trim()) {
+                li.appendChild(titleSpan);
+            }
+            list.appendChild(li);
+        });
+        listWrap.appendChild(list);
+        const actions = document.createElement('div');
+        actions.className = 'actions';
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Close';
     closeBtn.addEventListener('click', () => overlay.classList.remove('open'));

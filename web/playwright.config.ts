@@ -7,6 +7,7 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   reporter: [['list']],
+  globalTeardown: './tests/global-teardown.mjs',
   use: {
     baseURL: 'http://localhost:6173',
     trace: 'on-first-retry',
