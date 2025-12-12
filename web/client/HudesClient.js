@@ -24,11 +24,17 @@ export default class HudesClient {
         } catch { }
 
         // Remember backend for API calls
-        this.backendHost = addr;
+        this.backendHost = addr || (typeof window !== 'undefined' ? window.location?.hostname : 'localhost');
         this.backendPort = port;
+        this.httpBase = options.httpBase || null;
         const isHttps = (typeof window !== 'undefined' && window.location?.protocol === 'https:');
         this.wsScheme = isHttps ? 'wss' : 'ws';
-        this.socketUrl = addr?.startsWith('ws') ? addr : `${this.wsScheme}://${this.backendHost}:${this.backendPort}`;
+        const wsPath = options.wsPath ?? '/ws';
+        const normalizedWsPath = wsPath?.startsWith('/') ? wsPath : `/${wsPath ?? ''}`;
+        this.socketUrl = options.wsUrl
+            ?? (addr?.startsWith?.('ws')
+                ? addr
+                : `${this.wsScheme}://${this.backendHost}${this.backendPort ? `:${this.backendPort}` : ''}${normalizedWsPath}`);
         this.socket = null;
         this.requestIdx = 0;
         this.running = true;
@@ -48,6 +54,7 @@ export default class HudesClient {
         this._readyForInput = false;
         this._serverAckRequestIdx = 0;
         this._protoReadyPromise = this.loadProto();
+        this.apiBase = this.httpBase || this._apiBase(this.backendHost, this.backendPort);
 
         const renderMode = (options.renderMode || '3d').toLowerCase();
         this.isMobile = Boolean(options.isMobile);
@@ -59,7 +66,7 @@ export default class HudesClient {
         this.alt1d = this.renderMode === '1d' && Boolean(options.alt1d);
         this.altKeys = Boolean(options.altKeys);
 
-        this.state = new ClientState(-0.05, 6);
+        this.state = new ClientState(-0.05, 12);
         // Optional: allow skipping help screens via URL query, e.g., ?help=off
         let disableInitialTour = false;
         try {
@@ -853,16 +860,21 @@ _showLeaderboardModal(top10, me) {
 _detectBackend() {
     const params = new URLSearchParams(window.location.search);
     const host = params.get('host') || this.backendHost || window.location.hostname || 'localhost';
-    // Prefer provided query param; else use the port used for WebSocket; default to 10001
-    const port = params.get('port') ? Number(params.get('port'))
-        : (this.backendPort || 10001);
-    return { host, port };
+    const port = params.get('port') ? Number(params.get('port')) : this.backendPort;
+    return { host, port, httpBase: this.apiBase };
 }
 
 _apiBase(host, port) {
-    const httpPort = (Number(port) + 1);
-    const proto = window.location.protocol === 'https:' ? 'https' : 'http';
-    return `${proto}://${host}:${httpPort}/api`;
+    if (this.httpBase) return this.httpBase;
+    const proto = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? 'https' : 'http';
+    if (Number.isFinite(Number(port))) {
+        const httpPort = Number(port) + 1;
+        return `${proto}://${host}:${httpPort}/api`;
+    }
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return `${window.location.origin}/api`;
+    }
+    return `${proto}://${host || 'localhost'}/api`;
 }
 _buildLossLineLabels(count) {
     this.lossLineLabels = Array.from({ length: count }, (_, idx) => {

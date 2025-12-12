@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "prebuild": "npm run -s proto:compile",
-    "build": "VITE_BUILD_ID=${VITE_BUILD_ID:-$(date +%s)} VITE_WS_PORT=${VITE_WS_PORT:-10000} VITE_HTTP_PORT=${VITE_HTTP_PORT:-10001} vite build",
+    "build": "VITE_BUILD_ID=${VITE_BUILD_ID:-$(date +%s)} VITE_WS_URL=${VITE_WS_URL:-/ws} VITE_HTTP_API=${VITE_HTTP_API:-/api} vite build",
     "prebuild:port10000": "npm run -s proto:compile",
-    "build:port10000": "VITE_WS_PORT=10000 VITE_HTTP_PORT=10001 vite build",
+    "build:port10000": "VITE_WS_URL=/ws VITE_HTTP_API=/api vite build",
     "proto:compile": "npm run -s proto:compile:py && npm run -s proto:compile:js",
     "proto:compile:py": "protoc --proto_path=../hudes --python_out=../hudes ../hudes/hudes.proto",
     "proto:compile:js": "mkdir -p generated && npx pbjs -t static-module -w es6 -o generated/hudes_pb.js ../hudes/hudes.proto && npx pbts -o generated/hudes_pb.d.ts generated/hudes_pb.js",

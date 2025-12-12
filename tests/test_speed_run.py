@@ -107,7 +107,7 @@ async def run_speed_server_thread(tmp_path):
 async def test_speed_run_flow_and_db(run_speed_server_thread):
     port, db_path = run_speed_server_thread
 
-    async with websockets.connect(f"ws://localhost:{port}") as websocket:
+    async with websockets.connect(f"ws://localhost:{port}/ws") as websocket:
         # Send a config to initialize
         cfg = hudes_pb2.Control(
             type=hudes_pb2.Control.CONTROL_CONFIG,
@@ -223,7 +223,7 @@ async def test_speed_run_flow_and_db(run_speed_server_thread):
 async def test_speed_run_cancel_and_restart(run_speed_server_thread):
     port, _ = run_speed_server_thread
 
-    async with websockets.connect(f"ws://localhost:{port}") as websocket:
+    async with websockets.connect(f"ws://localhost:{port}/ws") as websocket:
         cfg = hudes_pb2.Control(
             type=hudes_pb2.Control.CONTROL_CONFIG,
             config=hudes_pb2.Config(

@@ -1,20 +1,41 @@
+const DEFAULT_API_PATH = import.meta.env?.VITE_HTTP_API ?? '/api';
+const ensureLeadingSlash = (p) => (p?.startsWith('/') ? p : `/${p ?? ''}`);
+
 async function detectBackend() {
   const params = new URLSearchParams(window.location.search);
-  const host = params.get('host') || window.location.hostname || 'localhost';
   const proto = window.location.protocol === 'https:' ? 'https' : 'http';
-  const qpPort = params.get('port');
-  if (qpPort) return `${proto}://${host}:${Number(qpPort) + 1}/api`;
+  const origin = window.location.origin;
+  const qpApi = params.get('api') || params.get('apiBase');
+  const qpHost = params.get('host');
+  const qpPortRaw = params.get('port');
+  const qpPort = qpPortRaw ? Number(qpPortRaw) : undefined;
 
-  const candidates = [10001, 8765];
-  for (const wsPort of candidates) {
-    try {
-      const httpPort = wsPort + 1;
-      const res = await fetch(`${proto}://${host}:${httpPort}/health`, { method: 'GET' });
-      if (res.ok) return `${proto}://${host}:${httpPort}/api`;
-    } catch { }
+  const toAbsoluteApi = (value) => {
+    if (!value) return null;
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    if (value.startsWith('/')) return `${origin}${value}`;
+    return `${origin}/${value.replace(/^\/+/, '')}`;
+  };
+
+  if (qpApi) {
+    const api = toAbsoluteApi(qpApi);
+    if (api) return api;
   }
-  // Fallback
-  return `${proto}://${host}:${10002}/api`;
+
+  if (qpHost || qpPortRaw) {
+    const host = qpHost || window.location.hostname || 'localhost';
+    const httpPort = Number.isFinite(qpPort) ? qpPort + 1 : undefined;
+    if (httpPort) return `${proto}://${host}:${httpPort}${ensureLeadingSlash(DEFAULT_API_PATH)}`;
+    return `${proto}://${host}${ensureLeadingSlash(DEFAULT_API_PATH)}`;
+  }
+
+  const envApi = import.meta.env?.VITE_HTTP_API;
+  if (envApi) {
+    const api = toAbsoluteApi(envApi);
+    if (api) return api;
+  }
+
+  return `${origin}${ensureLeadingSlash(DEFAULT_API_PATH)}`;
 }
 
 async function deleteScore(id) {

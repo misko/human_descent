@@ -31,7 +31,9 @@ async def run_server_thread():
     )
 
     async with websockets.serve(
-        partial(process_client, client_runner_q=client_runner_q), "localhost", 8767
+        partial(process_client, client_runner_q=client_runner_q),
+        "localhost",
+        8767,
     ):
         yield
 
@@ -54,7 +56,9 @@ async def run_server_process():
         )
     )
     async with websockets.serve(
-        partial(process_client, client_runner_q=client_runner_q), "localhost", 8767
+        partial(process_client, client_runner_q=client_runner_q),
+        "localhost",
+        8767,
     ):
         yield
     stop.set_result(True)
@@ -120,7 +124,7 @@ async def test_resume_handshake_success(run_server_thread):
     websocket, token, session_token = await _open_configured_client(uri)
     await websocket.close()
 
-    async with websockets.connect(uri) as resumed_ws:
+    async with websockets.connect("ws://localhost:8767") as resumed_ws:
         new_session_token = f"{session_token}-next"
         resume = hudes_pb2.Control(
             type=hudes_pb2.Control.CONTROL_RESUME,
