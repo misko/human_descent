@@ -1,5 +1,14 @@
 FROM python:3.14.9-slim-trixie AS python-runtime
 
+FROM ubuntu:26.04 AS pcre2-builder
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+       gcc make libc6-dev curl ca-certificates \
+    && sed -i '/^mozilla\/emSign_Root_CA_-_G1.crt$/s/^/!/; /^mozilla\/emSign_ECC_Root_CA_-_G3.crt$/s/^/!/' /etc/ca-certificates.conf \
+    && update-ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY docker/build-pcre2.sh /build-pcre2.sh
+RUN sh /build-pcre2.sh
+
 # Ubuntu 26.04 provides current native graphics/XML libraries. Copy the
 # official CPython build; Ubuntu's newer glibc supports its binary ABI.
 FROM ubuntu:26.04 AS python-base
@@ -43,8 +52,6 @@ RUN pip install --no-deps . && pip check
 RUN python -c "import certifi,pathlib,ssl; p=pathlib.Path(certifi.where()); p.unlink(); p.symlink_to('/etc/ssl/certs/ca-certificates.crt'); assert not any('emSign Root CA - G1' in str(c['subject']) or 'emSign ECC Root CA - G3' in str(c['subject']) for c in ssl.create_default_context(cafile=certifi.where()).get_ca_certs())"
 
 FROM python-base AS runtime
-ARG BUILD_REVISION=unknown
-LABEL org.opencontainers.image.revision=${BUILD_REVISION}
 ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 HIGH_SCORES_PATH=/data/high_scores.sqlite3 \
     HOME=/data MPLCONFIGDIR=/tmp/matplotlib
@@ -54,11 +61,19 @@ RUN apt-get update && apt-get upgrade -y \
        libsdl2-ttf-2.0-0 libportmidi2 libgl1 libgomp1 fontconfig fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data && chown 1000:1000 /data
+COPY --from=pcre2-builder /out/*.deb /tmp/pcre2.deb
+COPY --from=pcre2-builder /out/pcre2-build.json /usr/local/share/security/pcre2-build.json
+RUN dpkg -i /tmp/pcre2.deb && ldconfig && rm /tmp/pcre2.deb \
+    && apt-get update && apt-get install -y --no-install-recommends --allow-remove-essential \
+       coreutils-from-gnu coreutils-from-uutils- rust-coreutils- \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/venv /opt/venv
 # Package installation happens in the builder; the deployed service cannot
 # install dependencies. Remove both copies of pip, including vendored code.
 RUN /opt/venv/bin/python -m pip uninstall -y pip \
     && /usr/local/bin/python -m pip uninstall -y pip
+ARG BUILD_REVISION=unknown
+LABEL org.opencontainers.image.revision=${BUILD_REVISION}
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt SSL_CERT_DIR=/etc/ssl/certs \
     REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /data

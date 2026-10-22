@@ -87,6 +87,11 @@ The system and certifi CA bundles share the corrected OS trust store, with the
 affected emSign G1/G3 roots disabled. Build-time assertions check both trust paths;
 Requests, HTTPX and pip also receive explicit CA bundle settings.
 
+The runtime builds PCRE2 10.49 from its pinned upstream source digest and runs
+the upstream test suite before packaging the library. It uses Ubuntu's GNU
+coreutils provider to avoid the affected Rust coreutils implementation. These
+changes apply to the container; they do not replace host operating system tools.
+
 Keep ports 10000 (WebSocket) and 10001 (HTTP API) on loopback at the host and
 forward them through the TLS proxy. Persist the MNIST data and high score database
 under `/data`. Set `HIGH_SCORES_PATH` if using a different database location.
@@ -108,8 +113,10 @@ for testing, while `HUDES_PYTHON` selects the protobuf compiler's interpreter.
 
 A dependency refresh does not by itself certify the operating system. Retain
 container scan evidence and review unfixed distribution advisories before public
-cutover. The October 2026 rebuild has no critical or high container findings. Unfixed
-medium/low distribution findings remain in its audit report. Public cutover still
+cutover. Trivy reports no critical/high findings using Ubuntu's vendor priorities;
+some vendor-medium entries have higher CVSS base scores. Remaining distribution
+findings stay in the raw audit report, including stale PCRE2 records for versions
+older than the installed upstream security release. Public cutover still
 requires resolution of the proxy's end of life Ubuntu installation. The affected
 emSign G1/G3 trust anchors are explicitly disabled in the container system store;
-certifi is pinned to the corrected 2026.10.19 bundle.
+certifi 2026.10.19 links to the corrected system bundle.
