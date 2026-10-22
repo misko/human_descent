@@ -71,7 +71,8 @@ That command mirrors what we use in CI so any browser/server output is preserved
 
 ## Current runtime and security maintenance
 
-The production container uses Python 3.14.9 and PyTorch 2.14.1 with CUDA 12.6.
+The production container uses Ubuntu 26.04 LTS, Python 3.14.9 and PyTorch 2.14.1
+with CUDA 12.6.
 Python 3.14 is the newest version supported by the current native ML wheels.
 Node 26.12.1 is required for the web build. Install browser packages with
 `cd web && npm ci`; the checked-in lockfile fixes the dependency graph.
@@ -91,7 +92,8 @@ Store the token in a private environment file; never include it in a web build.
 
 Public game input has bounded message, client, dimension and SGD limits.
 Disconnected resume sessions expire after `HUDES_RESUME_TTL` (120 seconds by
-default), and their inference state is released. HTTP headers have a read timeout
+default), and their inference state is released. Tensor caches also evict old
+batches and dimension vectors so repeated navigation cannot grow them indefinitely. HTTP headers have a read timeout
 and size limit. Invalid tensor types and nonfinite numeric values are rejected
 before shared inference work is scheduled.
 
@@ -102,5 +104,8 @@ for testing, while `HUDES_PYTHON` selects the protobuf compiler's interpreter.
 
 A dependency refresh does not by itself certify the operating system. Retain
 container scan evidence and review unfixed distribution advisories before public
-cutover. The October 2026 audit still requires resolution of the public proxy's
-end of life Ubuntu installation and the reported Debian native-library findings.
+cutover. The October 2026 rebuild has no critical or high container findings. Unfixed
+medium/low distribution findings remain in its audit report. Public cutover still
+requires resolution of the proxy's end of life Ubuntu installation. The affected
+emSign G1/G3 trust anchors are explicitly disabled in the container system store;
+certifi is pinned to the corrected 2026.10.19 bundle.

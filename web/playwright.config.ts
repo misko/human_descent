@@ -22,7 +22,7 @@ export default defineConfig({
   // these processes automatically after the test run.
   webServer: [
     {
-      command: 'npm run dev',
+      command: 'npm run dev -- --host 127.0.0.1',
       url: 'http://localhost:6173',
       reuseExistingServer: false,
       timeout: 60_000,

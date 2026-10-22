@@ -1,7 +1,7 @@
 import copy
 import logging
 import math
-from functools import cache
+from functools import lru_cache
 
 import torch
 from torch import nn
@@ -19,12 +19,12 @@ class DatasetBatcher:
         g.manual_seed(self.seed)
         self.idxs = torch.randperm(len(self.ds), generator=g)
 
-    @cache
+    @lru_cache(maxsize=32)
     def get_len(self, batch_size: int):
         return math.ceil(len(self.ds) / batch_size)
 
     # TODO optionally cache this!
-    @cache
+    @lru_cache(maxsize=128)
     def get_batch(self, batch_size, batch_idx):
         logging.debug(f"get_batch size: {self} {batch_size} idx: {batch_idx}")
         batch_idx = batch_idx % self.get_len(batch_size=batch_size)
@@ -135,7 +135,7 @@ class ModelDataAndSubspace:
         self.fused = True
 
     # todo cache this?
-    @cache
+    @lru_cache(maxsize=256)
     @torch.no_grad
     def get_dim_vec(self, dim: int, dtype):
         assert self.fused
@@ -164,7 +164,7 @@ class ModelDataAndSubspace:
             return self.blank_weight_vec()
 
     # todo cache this?
-    @cache
+    @lru_cache(maxsize=128)
     @torch.no_grad
     def get_batch(self, batch_size: int, batch_idx: int, dtype, train_or_val: str):
         batch_size = min(batch_size, self.max_batch_size)
@@ -176,7 +176,7 @@ class ModelDataAndSubspace:
         )
 
     # TODO could optimize with one large chunk of shared memory? and slice it?
-    @cache
+    @lru_cache(maxsize=8)
     @torch.no_grad
     def blank_weight_vec(self):
         return torch.zeros(*self.model_params[torch.float32].shape, device=self.device)

@@ -1,4 +1,24 @@
-FROM python:3.14.9-slim-trixie AS builder
+FROM python:3.14.9-slim-trixie AS python-runtime
+
+# Ubuntu 26.04 provides current native graphics/XML libraries. Copy the
+# official CPython build; Ubuntu's newer glibc supports its binary ABI.
+FROM ubuntu:26.04 AS python-base
+ENV DEBIAN_FRONTEND=noninteractive PATH=/usr/local/bin:$PATH
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates libbz2-1.0 libexpat1 libffi8 libgdbm-compat4t64 libgdbm6t64 \
+       libncursesw6 libnsl2 libreadline8t64 libsqlite3-0 libssl3t64 libuuid1 \
+       liblzma5 zlib1g libzstd1 libtinfo6 \
+    && sed -i '/^mozilla\/emSign_Root_CA_-_G1.crt$/s/^/!/; /^mozilla\/emSign_ECC_Root_CA_-_G3.crt$/s/^/!/' /etc/ca-certificates.conf \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /usr/bin/pebble
+# This image is supervised by Docker and runs Python/Celery directly; the
+# unmanaged Pebble init binary bundled by Ubuntu is unused.
+COPY --from=python-runtime /usr/local /usr/local
+RUN python3 -c "import ssl,sqlite3,ctypes,bz2,lzma,zlib,uuid,readline; assert not any('emSign Root CA - G1' in str(c['subject']) or 'emSign ECC Root CA - G3' in str(c['subject']) for c in ssl.create_default_context().get_ca_certs())"
+
+FROM python-base AS builder
 
 ARG TORCH_BACKEND=cu126
 ARG TORCH_REQUIREMENTS=requirements.lock
@@ -6,27 +26,28 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
        build-essential libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev \
-       libsdl2-ttf-dev libfreetype-dev libportmidi-dev libjpeg62-turbo-dev \
+       libsdl2-ttf-dev libfreetype-dev libportmidi-dev libjpeg-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN python -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
-RUN pip install --upgrade pip==26.2.2 certifi==2026.10.19 \
-    && pip install torch==2.14.1 torchvision==0.29.1 \
-       --index-url https://download.pytorch.org/whl/${TORCH_BACKEND}
+RUN pip install --upgrade pip==26.2.2
 WORKDIR /src
-COPY pyproject.toml README.md requirements.lock requirements-cpu.lock ./
+COPY requirements.lock requirements-cpu.lock ./
 RUN pip install --require-hashes --extra-index-url https://download.pytorch.org/whl/${TORCH_BACKEND} -r ${TORCH_REQUIREMENTS}
+COPY pyproject.toml README.md ./
 COPY hudes ./hudes
 RUN pip install --no-deps . && pip check
 
-FROM python:3.14.9-slim-trixie AS runtime
+FROM python-base AS runtime
+ARG BUILD_REVISION=unknown
+LABEL org.opencontainers.image.revision=${BUILD_REVISION}
 ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 HIGH_SCORES_PATH=/data/high_scores.sqlite3 \
     HOME=/data MPLCONFIGDIR=/tmp/matplotlib
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
        libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 \
-       libsdl2-ttf-2.0-0 libportmidi0 libgl1 libgomp1 fontconfig fonts-dejavu-core \
+       libsdl2-ttf-2.0-0 libportmidi2 libgl1 libgomp1 fontconfig fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data && chown 1000:1000 /data
 COPY --from=builder /opt/venv /opt/venv

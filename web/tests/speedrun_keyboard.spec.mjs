@@ -31,19 +31,24 @@ test.describe('Speed Run keyboard restore', () => {
     await page.fill('#modalOverlay.open .glass-card .name-form input', 'TEST');
     await page.click('#modalOverlay.open .glass-card .name-form button[type="submit"]');
 
+    // Submission opens the leaderboard. Dismiss it before resuming play.
+    await expect(page.locator('#modalOverlay.open .top10-list')).toBeVisible();
+    await page.locator('#modalOverlay').getByRole('button', { name: 'Close', exact: true }).click();
     await expect(page.locator('#modalOverlay')).not.toHaveClass(/open/);
     await page.waitForFunction(
       () => window.__hudesClient && window.__hudesClient._textCaptureActive === false,
     );
 
+    const dimsBefore = await page.evaluate(() => window.__hudesClient.dimsOffset);
+    const responsesBefore = await page.evaluate(() => window.__hudesMsgCounts?.CONTROL_TRAIN_LOSS_AND_PREDS ?? 0);
     await page.keyboard.press('Space');
-    const trainStepsAfter = await page.evaluate(() => window.__hudesClient?.trainSteps?.length ?? 0);
+    await expect.poll(() => page.evaluate(() => window.__hudesClient.dimsOffset)).toBeGreaterThan(dimsBefore);
     await page.waitForFunction(
       (prev) => {
-        const current = window.__hudesClient?.trainSteps?.length ?? 0;
-        return current >= prev;
+        const current = window.__hudesMsgCounts?.CONTROL_TRAIN_LOSS_AND_PREDS ?? 0;
+        return current > prev;
       },
-      trainStepsAfter,
+      responsesBefore,
       { timeout: 5_000 },
     );
   });
