@@ -65,8 +65,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, 'index.html'),
-        highscores: path.resolve(__dirname, 'highscores.html'),
+        main: path.resolve(import.meta.dirname, 'index.html'),
+        highscores: path.resolve(import.meta.dirname, 'highscores.html'),
       },
     },
   },

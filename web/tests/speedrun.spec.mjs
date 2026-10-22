@@ -11,7 +11,7 @@ async function runSpeedRunScenario(page, { extraQuery = '', name = 'TEST' } = {}
   await page.goto(`${APP_ORIGIN}/?${search}`);
 
   await page.waitForFunction(
-    () => window.__hudesClient && window.__hudesClient.ControlType,
+    () => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
   );
 
   await page.keyboard.press('KeyZ');

@@ -230,7 +230,8 @@ def run_hudes_cli_controller(input_name: str, port: int, headless: bool = False)
     env.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
     cmd = [
         sys.executable,
-        "hudes/hudes_play.py",
+        "-m",
+        "hudes.hudes_play",
         "--input",
         input_name,
         "--port",
@@ -243,7 +244,8 @@ def run_hudes_cli_controller(input_name: str, port: int, headless: bool = False)
     ]
     cmd = [
         sys.executable,
-        "hudes/hudes_play.py",
+        "-m",
+        "hudes.hudes_play",
         "--input",
         input_name,
         "--port",
@@ -275,14 +277,14 @@ async def test_run_sh_headless_pygame():
     try:
         results = await asyncio.to_thread(run_clients_sequence, port)
 
-        assert results["keyboardGL"][
-            "train_losses"
-        ], "keyboardGL client received no train data"
+        assert results["keyboardGL"]["train_losses"], (
+            "keyboardGL client received no train data"
+        )
         assert results["keyboardGL"]["examples_updated"] > 0
 
-        assert results["keyboard"][
-            "train_losses"
-        ], "keyboard client received no train data"
+        assert results["keyboard"]["train_losses"], (
+            "keyboard client received no train data"
+        )
         assert results["keyboard"]["examples_updated"] > 0
     finally:
         if not stop_future.done():

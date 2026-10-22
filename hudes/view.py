@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import List
 
 # import cairo # uncomment if trying cairo
 import matplotlib
@@ -200,7 +199,7 @@ class View:
                 bar.set_height(new_height)
         self.axd["O"].redraw = True
 
-    def update_example_preds(self, train_preds: List[float]):
+    def update_example_preds(self, train_preds: list[float]):
         if not self.example_imshow_init:
             for idx, _ax in enumerate(("J", "K", "L", "N")):
                 ax = self.axd[_ax]
@@ -224,10 +223,10 @@ class View:
 
     def plot_train_and_val(
         self,
-        train_losses: List[float],
-        train_steps: List[int],
-        val_losses: List[float],
-        val_steps: List[int],
+        train_losses: list[float],
+        train_steps: list[int],
+        val_losses: list[float],
+        val_steps: list[int],
     ):
         self.update_top()
 
@@ -250,6 +249,18 @@ class View:
         self.axd["D"].set_yticks([])
         self.axd["D"].set_xlabel("Step")
         self.axd["D"].redraw = True
+
+    def update_mesh_grids(self, mesh_grids):
+        # The headless keyboardGL client uses this Matplotlib view. Render the
+        # available landscapes as heatmaps without requiring an OpenGL context.
+        for index, (grid, name) in enumerate(zip(mesh_grids, ("F", "G", "H", "M"))):
+            ax = self.axd[name]
+            ax.cla()
+            ax.imshow(grid, origin="lower")
+            ax.set_title(f"Landscape {index + 1}")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.redraw = True
 
     def draw_or_restore(self):
         for _, ax in self.axd.items():
@@ -284,9 +295,9 @@ class View:
                 self.draw_or_restore()
 
                 surf = pg.image.frombytes(
-                    self.renderer.tostring_rgb(),
+                    bytes(self.renderer.buffer_rgba()),
                     self.window_size,
-                    "RGB",
+                    "RGBA",
                 )
                 self.screen.blit(surf, (0, 0))
                 self.screen.blit(self.top_title_rendered, (0, 0))
@@ -504,7 +515,7 @@ class OpenGLView:
         self.axd["E"].set_xlabel("Prediction")
         self.axd["E"].set_title("Confusion matrix")
 
-    def update_example_preds(self, train_preds: List[float]):
+    def update_example_preds(self, train_preds: list[float]):
         self.axd["J"].cla()
         self.axd["J"].bar(torch.arange(10), train_preds[0])
         self.axd["J"].set_title("Ex. 1 pr(y)")
@@ -518,10 +529,10 @@ class OpenGLView:
 
     def plot_train_and_val(
         self,
-        train_losses: List[float],
-        train_steps: List[int],
-        val_losses: List[float],
-        val_steps: List[int],
+        train_losses: list[float],
+        train_steps: list[int],
+        val_losses: list[float],
+        val_steps: list[int],
     ):
         self.axd["B"].cla()
         self.axd["B"].plot(train_steps, train_losses, label="train")

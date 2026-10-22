@@ -9,7 +9,7 @@ const mobileUrl = `${APP_ORIGIN}/?mode=3d&mobile=1&host=${SERVER_HOST}&port=${SE
 async function bootstrapMobile(page) {
   await page.goto(mobileUrl);
   await page.waitForFunction(
-    () => window.__hudesClient && window.__hudesClient.ControlType,
+    () => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
     { timeout: 10000 },
   );
   await page.waitForFunction(

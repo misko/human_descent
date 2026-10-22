@@ -30,7 +30,7 @@ export default async function globalTeardown() {
       await Promise.all(
         candidates.map(async (r) => {
           try {
-            await fetch(`${apiBase}/highscores?id=${r.id}`, { method: 'DELETE' });
+            await fetch(`${apiBase}/highscores?id=${r.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${process.env.HUDES_ADMIN_TOKEN || ''}` } });
           } catch {}
         })
       );

@@ -1,0 +1,10 @@
+.git
+dev-data
+hudes_env
+web/node_modules
+web/dist
+scripts
+**/mnist_data
+**/*.sqlite3
+**/__pycache__
+**/*.pem

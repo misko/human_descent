@@ -11,7 +11,7 @@ test.describe('Mobile countdown overlay', () => {
     await page.goto(`${APP_ORIGIN}/?mode=3d&mobile=1&help=off&host=${SERVER_HOST}&port=${SERVER_PORT}`);
 
     await page.waitForFunction(
-      () => window.__hudesClient && window.__hudesClient.ControlType,
+      () => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
       { timeout: 10000 },
     );
 

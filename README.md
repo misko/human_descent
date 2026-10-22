@@ -68,3 +68,39 @@ cd web
 ```
 
 That command mirrors what we use in CI so any browser/server output is preserved under `/tmp/play-speedrun.log` for later debugging.
+
+## Current runtime and security maintenance
+
+The production container uses Python 3.14.9 and PyTorch 2.14.1 with CUDA 12.6.
+Python 3.14 is the newest version supported by the current native ML wheels.
+Node 26.12.1 is required for the web build. Install browser packages with
+`cd web && npm ci`; the checked-in lockfile fixes the dependency graph.
+
+Build the server with `docker build --target runtime -t human-descent .`.
+For CPU tests, pass `--target test --build-arg TORCH_BACKEND=cpu
+--build-arg TORCH_REQUIREMENTS=requirements-cpu.lock`. Python dependencies are
+installed from hashed locks. Production images omit pip; rebuild the image to
+update dependencies.
+
+Keep ports 10000 (WebSocket) and 10001 (HTTP API) on loopback at the host and
+forward them through the TLS proxy. Persist the MNIST data and high score database
+under `/data`. Set `HIGH_SCORES_PATH` if using a different database location.
+Deleting high scores requires an `Authorization: Bearer` header matching
+`HUDES_ADMIN_TOKEN`. When that environment variable is absent, deletion is disabled.
+Store the token in a private environment file; never include it in a web build.
+
+Public game input has bounded message, client, dimension and SGD limits.
+Disconnected resume sessions expire after `HUDES_RESUME_TTL` (120 seconds by
+default), and their inference state is released. HTTP headers have a read timeout
+and size limit. Invalid tensor types and nonfinite numeric values are rejected
+before shared inference work is scheduled.
+
+Browser tests use ports 18100/18101, a separate high score database, and wait for
+the connection to be ready before sending game controls. They never terminate a
+production listener. `HUDES_BACKEND_COMMAND` can supply a containerized GPU server
+for testing, while `HUDES_PYTHON` selects the protobuf compiler's interpreter.
+
+A dependency refresh does not by itself certify the operating system. Retain
+container scan evidence and review unfixed distribution advisories before public
+cutover. The October 2026 audit still requires resolution of the public proxy's
+end of life Ubuntu installation and the reported Debian native-library findings.

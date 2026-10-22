@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# noqa: E501
 
 import argparse
 import asyncio
@@ -26,14 +25,16 @@ import websockets
 from websockets.asyncio.server import serve
 
 from hudes import hudes_pb2
+from hudes.control_security import MAX_CLIENTS, MAX_PENDING_DIMS, validate_control
 from hudes.high_scores import (
-    get_top_scores,
-    init_db,
-    insert_high_score,
     delete_high_score,
     get_all_scores,
     get_rank,
+    get_top_scores,
+    init_db,
+    insert_high_score,
 )
+from hudes.http_security import admin_request_authorized
 from hudes.model_data_and_subspace import ModelDataAndSubspace
 from hudes.models_and_datasets.mnist import (
     MNISTCNN,
@@ -282,7 +283,7 @@ def listen_and_run(
     mad.init_param_model()
 
     client_weights = {}
-    # TODO memory leak, but prevents continuously copying models
+    # Bound cached model state across expired browser sessions.
 
     logging.info("listen_and_run: started")
     while True:
@@ -297,6 +298,9 @@ def listen_and_run(
         else:
             # prepare weights
             mode, client = v
+            if mode == "drop":
+                client_weights.pop(client, None)
+                continue
             # client_id = v["client_id"]
 
             res = {}
@@ -446,6 +450,19 @@ async def inference_runner_clients(mad, client_runner_q, inference_q, stop):
 
         while not client_runner_q.empty():
             client_runner_q.get()
+
+        # Expire disconnected sessions and their resume tokens.
+        now = time.time()
+        for client_id, client in list(active_clients.items()):
+            if (
+                client.disconnected_at is not None
+                and now - client.disconnected_at > RESUME_SESSION_TTL
+            ):
+                active_clients.pop(client_id, None)
+                inference_q.put(("drop", client_id))
+                if client.resume_token:
+                    resume_token_to_client_id.pop(client.resume_token, None)
+                _cancel_speedrun_timeout(client_id)
 
         # make requests
         for client_id, client in list(active_clients.items()):
@@ -778,11 +795,28 @@ async def inference_runner(
 async def process_client(websocket, client_runner_q):
     global client_idx
     client = None
+    window_started = time.monotonic()
+    messages_in_window = 0
+    log_bytes = 0
 
     try:
         async for message in websocket:
+            now = time.monotonic()
+            if now - window_started >= 1:
+                window_started, messages_in_window = now, 0
+            messages_in_window += 1
+            if messages_in_window > 240 or not isinstance(message, bytes):
+                await websocket.close(code=1008, reason="message limit exceeded")
+                return
             msg = hudes_pb2.Control()
-            msg.ParseFromString(message)
+            try:
+                msg.ParseFromString(message)
+                validate_control(msg)
+            except Exception as exc:
+                # Invalid protobuf/config must never reach the shared worker.
+                logging.debug("Rejected public control: %s", exc)
+                await websocket.close(code=1008, reason="invalid control message")
+                return
 
             if client is None:
                 if msg.type == hudes_pb2.Control.CONTROL_RESUME:
@@ -793,6 +827,9 @@ async def process_client(websocket, client_runner_q):
                         continue
                     # Resume handshake handled entirely; wait for next message
                     continue
+                if len(active_clients) >= MAX_CLIENTS:
+                    await websocket.close(code=1013, reason="server at capacity")
+                    return
                 current_client = client_idx
                 client_idx += 1
                 client = Client(
@@ -813,12 +850,27 @@ async def process_client(websocket, client_runner_q):
             if client.speed_run_active:
                 now = time.time()
                 if now < client.speed_run_end_time:
+                    log_bytes += len(message)
+                    if log_bytes > 2 * 1024 * 1024:
+                        await websocket.close(
+                            code=1008, reason="run log limit exceeded"
+                        )
+                        return
                     client.speed_run_log.append(message)
                 else:
                     client.speed_run_active = False
 
             if msg.type == hudes_pb2.Control.CONTROL_DIMS:
                 logging.debug("process_client: %s : control dims", client.client_id)
+                if (
+                    len(
+                        set(client.next_step)
+                        | {d.dim + client.dims_offset for d in msg.dims_and_steps}
+                    )
+                    > MAX_PENDING_DIMS
+                ):
+                    await websocket.close(code=1008, reason="dimension queue full")
+                    return
                 for dim_and_step in msg.dims_and_steps:
                     dim = dim_and_step.dim + client.dims_offset
                     client.next_step[dim] = (
@@ -879,7 +931,7 @@ async def process_client(websocket, client_runner_q):
                 if client.speed_run_active:
                     logging.debug("process_client: ignoring SGD during speed run")
                 else:
-                    client.sgd += msg.sgd_steps
+                    client.sgd = min(32, client.sgd + msg.sgd_steps)
                     client.total_sgd_steps += msg.sgd_steps
                     client.request_idx = msg.request_idx
             elif msg.type == hudes_pb2.Control.CONTROL_SPEED_RUN_START:
@@ -895,6 +947,7 @@ async def process_client(websocket, client_runner_q):
                 client.sgd = 0
                 client.best_val_loss_during_run = None
                 client.speed_run_log = []
+                log_bytes = 0
                 client.high_score_logged = False
                 duration = int(
                     os.environ.get(
@@ -1043,7 +1096,25 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
                 pass
 
     async def handle_api(reader, writer):
-        req = await reader.read(4096)
+        try:
+            await asyncio.wait_for(dispatch_api(reader, writer), timeout=10)
+            await writer.drain()
+        except (
+            TimeoutError,
+            asyncio.IncompleteReadError,
+            asyncio.LimitOverrunError,
+            UnicodeError,
+        ):
+            writer.write(
+                b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def dispatch_api(reader, writer):
+        req = await reader.readuntil(b"\r\n\r\n")
         first = (req or b"GET / HTTP/1.1\r\n").split(b"\r\n", 1)[0]
         parts = first.split()
         path = parts[1].decode("utf-8") if len(parts) >= 2 else "/health"
@@ -1058,7 +1129,7 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
                 "Access-Control-Allow-Origin: *\r\n"
                 "Access-Control-Allow-Methods: GET, OPTIONS, DELETE\r\n"
                 "Access-Control-Allow-Headers: *\r\n\r\n"
-            ).encode("utf-8")
+            ).encode()
             writer.write(headers + body)
 
         if first.startswith(b"OPTIONS"):
@@ -1066,6 +1137,11 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
             return
 
         if first.startswith(b"DELETE") and path.startswith("/api/highscores"):
+            if not admin_request_authorized(req):
+                send_json(
+                    '{"error": "admin authorization required"}', status="403 Forbidden"
+                )
+                return
             try:
                 import urllib.parse as _url
 
@@ -1195,7 +1271,7 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
     try:
         # Listen on all IPv4 addresses; for IPv6, consider also binding to '::'
         health_server = await asyncio.start_server(
-            handle_api, host="0.0.0.0", port=health_port
+            handle_api, host="0.0.0.0", port=health_port, limit=8192
         )
         logging.info(
             "API server listening on 0.0.0.0:%d (health at /health)",
@@ -1213,6 +1289,8 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
         None,
         server_port,
         ssl=ssl_context,
+        max_size=8192,
+        max_queue=16,
         # Do not intercept HTTP requests here; health server handles them
     ):
         try:

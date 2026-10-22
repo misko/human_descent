@@ -8,7 +8,7 @@ const APP_ORIGIN = process.env.HUDES_APP_ORIGIN || 'http://localhost:6173';
 test.describe('Leaderboard over WebSocket', () => {
   test('press Y shows top 100 modal', async ({ page }) => {
     await page.goto(`${APP_ORIGIN}/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
-    await page.waitForFunction(() => window.__hudesClient && window.__hudesClient.ControlType);
+    await page.waitForFunction(() => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands());
 
     // Press Y to request leaderboard
     await page.keyboard.press('KeyY');

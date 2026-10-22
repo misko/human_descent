@@ -17,20 +17,23 @@ test.describe('Keyboard overlay toggle', () => {
     await page.goto(`${APP_ORIGIN}/?mode=3d&help=off&host=${SERVER_HOST}&port=${SERVER_PORT}`);
 
     await page.waitForFunction(
-      () => window.__hudesClient && window.__hudesClient.ControlType,
+      () => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
       { timeout: 10000 },
     );
 
     const overlay = page.locator('.tour-screen--keys');
     await expect(overlay).toBeHidden();
 
-    await page.keyboard.press('Shift+Slash');
+    // Allow the game's keyboard debounce between intentional toggles.
+    await page.keyboard.press('Shift+Slash', { delay: 250 });
     await expect(overlay).toBeVisible();
 
-    await page.keyboard.press('Shift+Slash');
+    // Allow the game's keyboard debounce between intentional toggles.
+    await page.keyboard.press('Shift+Slash', { delay: 250 });
     await expect(overlay).toBeHidden();
 
-    await page.keyboard.press('Shift+Slash');
+    // Allow the game's keyboard debounce between intentional toggles.
+    await page.keyboard.press('Shift+Slash', { delay: 250 });
     await expect(overlay).toBeVisible();
 
     await page.keyboard.press('x');

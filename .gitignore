@@ -10,4 +10,5 @@ web/dist/
 web/test-results/
 web/generated/
 web/bundle-visualization.html
-web/package-lock.json
+
+dev-data/

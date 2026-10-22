@@ -6,7 +6,7 @@ const APP_ORIGIN = process.env.HUDES_APP_ORIGIN || 'http://localhost:6173';
 
 async function waitForClient(page) {
   await page.waitForFunction(
-    () => typeof window !== 'undefined' && window.__hudesClient && window.__hudesClient.ControlType,
+    () => typeof window !== 'undefined' && window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
     { timeout: 10000 },
   );
 }

@@ -9,7 +9,7 @@ test.describe('3D keyboard controls', () => {
     await page.goto(`${APP_ORIGIN}/?mode=3d&host=${SERVER_HOST}&port=${SERVER_PORT}&help=off&debug=1`);
 
   await page.waitForFunction(
-    () => window.__hudesClient && window.__hudesClient.ControlType,
+    () => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
     { timeout: 10000 },
   );
 
@@ -51,7 +51,7 @@ test.describe('3D keyboard controls', () => {
     await page.goto(`${APP_ORIGIN}/?mode=3d&host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
 
     await page.waitForFunction(
-      () => window.__hudesClient && window.__hudesClient.ControlType,
+      () => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
       { timeout: 10000 },
     );
 

@@ -220,13 +220,13 @@ def train(args):
                 }
             )
             print(
-                f"[eval@step {global_step}] val_ce={stats['val_ce']:.4f}  val_acc={stats['val_acc']*100:.2f}%"
+                f"[eval@step {global_step}] val_ce={stats['val_ce']:.4f}  val_acc={stats['val_acc'] * 100:.2f}%"
             )
 
             # Unlock next threshold if reached
             if next_idx < len(thresholds) and stats["val_ce"] <= thresholds[next_idx]:
                 th = thresholds[next_idx]
-                lvl_dir = os.path.join(levels_dir, f"L{next_idx+1:02d}_{th:.3f}")
+                lvl_dir = os.path.join(levels_dir, f"L{next_idx + 1:02d}_{th:.3f}")
                 os.makedirs(lvl_dir, exist_ok=True)
                 # Write metrics.json (data only)
                 write_json(
@@ -248,7 +248,7 @@ def train(args):
                     {"matrix": stats["cm"]},
                 )
                 print(
-                    f"[level] unlocked L{next_idx+1:02d} at threshold ≤ {th:.3f} (step {global_step})"
+                    f"[level] unlocked L{next_idx + 1:02d} at threshold ≤ {th:.3f} (step {global_step})"
                 )
                 next_idx += 1
 
@@ -288,7 +288,7 @@ def train(args):
 
         # End-of-epoch progress line
         print(
-            f"[epoch {epoch}] avg_train_ce={running_sum/max(seen,1):.4f}  levels_captured={next_idx}/30"
+            f"[epoch {epoch}] avg_train_ce={running_sum / max(seen, 1):.4f}  levels_captured={next_idx}/30"
         )
 
     # If not early-exited, write final summary at the end

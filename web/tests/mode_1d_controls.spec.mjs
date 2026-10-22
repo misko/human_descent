@@ -9,7 +9,7 @@ test.describe('1D keyboard controls', () => {
     await page.goto(`${APP_ORIGIN}/?mode=1d&host=${SERVER_HOST}&port=${SERVER_PORT}&help=off&debug=1`);
 
   await page.waitForFunction(
-    () => window.__hudesClient && window.__hudesClient.ControlType,
+    () => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
     { timeout: 10000 },
   );
 

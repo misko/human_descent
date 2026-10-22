@@ -23,7 +23,7 @@ test.describe('Highscores API insertion', () => {
 
     // Load app and start a speed run
     await page.goto(`${APP_ORIGIN}/?host=${SERVER_HOST}&port=${SERVER_PORT}&help=off`);
-    await page.waitForFunction(() => window.__hudesClient && window.__hudesClient.ControlType);
+    await page.waitForFunction(() => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands());
     await page.keyboard.press('KeyZ');
 
     // Wait for the name modal and submit our unique name

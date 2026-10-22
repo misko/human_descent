@@ -11,7 +11,7 @@ test.describe('1D keyboard controls (alt keys)', () => {
     );
 
     await page.waitForFunction(
-      () => window.__hudesClient && window.__hudesClient.ControlType,
+      () => window.__hudesClient && window.__hudesClient.ControlType && window.__hudesClient._canSendUserCommands(),
       { timeout: 10000 },
     );
 

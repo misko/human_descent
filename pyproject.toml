@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [tool.hatch.metadata]
@@ -12,26 +12,37 @@ packages = ["hudes/"]
 name = "hudes"
 version = "0.0.1"
 dependencies = [
- "pytest",
- "numpy>=1.25",
- "matplotlib==3.9.2",
- "pyyaml",
- "torch>=2.2",
- "torchvision",
- "websockets",
- "pytest-asyncio",
- "protobuf>=5.28",
- "pygame==2.6",
- "PyOpenGL==3.1.7",
- "pytest-timeout"
+ "pytest==9.1.1",
+ "numpy==2.5.4",
+ "matplotlib==3.11.2",
+ "pyyaml==6.0.3",
+ "torch==2.14.1",
+ "torchvision==0.29.1",
+ "websockets==17.3",
+ "pytest-asyncio==1.4.0",
+ "protobuf==7.36.2",
+ "pygame==2.6.1",
+ "PyOpenGL==3.1.10",
+ "pytest-timeout==2.4.0",
+ "Pillow==13.0.0",
+ "certifi==2026.10.19",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 description = "Human descent"
 readme = "README.md"
+
+[dependency-groups]
+dev = ["grpcio-tools==1.84.0", "pip-audit==2.10.1", "ruff==0.17.1", "pre-commit==4.7.0"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 target-version = "py312"
 
 [tool.ruff.lint]
+# Preserve the existing core checks when upgrading Ruff.
+select = ["E4", "E7", "E9", "F"]
 extend-ignore = ["F403", "F405"]
 exclude = ["hudes/model_first/benchmark_cnn.ipynb"]
