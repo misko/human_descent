@@ -83,6 +83,10 @@ For CPU tests, pass `--target test --build-arg TORCH_BACKEND=cpu
 installed from hashed locks. Production images omit pip; rebuild the image to
 update dependencies.
 
+The system and certifi CA bundles share the corrected OS trust store, with the
+affected emSign G1/G3 roots disabled. Build-time assertions check both trust paths;
+Requests, HTTPX and pip also receive explicit CA bundle settings.
+
 Keep ports 10000 (WebSocket) and 10001 (HTTP API) on loopback at the host and
 forward them through the TLS proxy. Persist the MNIST data and high score database
 under `/data`. Set `HIGH_SCORES_PATH` if using a different database location.

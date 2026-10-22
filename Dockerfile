@@ -30,6 +30,8 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 RUN python -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt SSL_CERT_DIR=/etc/ssl/certs \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 RUN pip install --upgrade pip==26.2.2
 WORKDIR /src
 COPY requirements.lock requirements-cpu.lock ./
@@ -37,6 +39,8 @@ RUN pip install --require-hashes --extra-index-url https://download.pytorch.org/
 COPY pyproject.toml README.md ./
 COPY hudes ./hudes
 RUN pip install --no-deps . && pip check
+# Requests and explicit certifi users must share the distrusted system store.
+RUN python -c "import certifi,pathlib,ssl; p=pathlib.Path(certifi.where()); p.unlink(); p.symlink_to('/etc/ssl/certs/ca-certificates.crt'); assert not any('emSign Root CA - G1' in str(c['subject']) or 'emSign ECC Root CA - G3' in str(c['subject']) for c in ssl.create_default_context(cafile=certifi.where()).get_ca_certs())"
 
 FROM python-base AS runtime
 ARG BUILD_REVISION=unknown
@@ -55,6 +59,8 @@ COPY --from=builder /opt/venv /opt/venv
 # install dependencies. Remove both copies of pip, including vendored code.
 RUN /opt/venv/bin/python -m pip uninstall -y pip \
     && /usr/local/bin/python -m pip uninstall -y pip
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt SSL_CERT_DIR=/etc/ssl/certs \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /data
 USER 1000:1000
 EXPOSE 10000 10001
