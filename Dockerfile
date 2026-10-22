@@ -9,6 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY docker/build-pcre2.sh /build-pcre2.sh
 RUN sh /build-pcre2.sh
 
+FROM pcre2-builder AS expat-builder
+RUN apt-get update && apt-get install -y --no-install-recommends g++ \
+    && rm -rf /var/lib/apt/lists/*
+COPY docker/build-expat.sh /build-expat.sh
+RUN sh /build-expat.sh
+
 # Ubuntu 26.04 provides current native graphics/XML libraries. Copy the
 # official CPython build; Ubuntu's newer glibc supports its binary ABI.
 FROM ubuntu:26.04 AS python-base
@@ -68,6 +74,10 @@ RUN dpkg -i /tmp/pcre2.deb && ldconfig && rm /tmp/pcre2.deb \
        coreutils-from-gnu coreutils-from-uutils- rust-coreutils- \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/venv /opt/venv
+COPY --from=expat-builder /out/libexpat1_*.deb /tmp/expat.deb
+COPY --from=expat-builder /out/expat-build.json /usr/local/share/security/expat-build.json
+RUN dpkg -i /tmp/expat.deb && ldconfig && rm /tmp/expat.deb \
+    && python -c "import ctypes; lib=ctypes.CDLL('libexpat.so.1'); lib.XML_ExpatVersion.restype=ctypes.c_char_p; assert lib.XML_ExpatVersion()==b'expat_2.9.0'"
 # Package installation happens in the builder; the deployed service cannot
 # install dependencies. Remove both copies of pip, including vendored code.
 RUN /opt/venv/bin/python -m pip uninstall -y pip \

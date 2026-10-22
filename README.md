@@ -91,6 +91,10 @@ The runtime builds PCRE2 10.49 from its pinned upstream source digest and runs
 the upstream test suite before packaging the library. It uses Ubuntu's GNU
 coreutils provider to avoid the affected Rust coreutils implementation. These
 changes apply to the container; they do not replace host operating system tools.
+The shared Expat library also uses verified upstream 2.9.0 with its test suite
+run during the build, matching the version already bundled by CPython. The
+upstream XML complexity issue remains open; this update does not clear that
+remaining finding.
 
 Keep ports 10000 (WebSocket) and 10001 (HTTP API) on loopback at the host and
 forward them through the TLS proxy. Persist the MNIST data and high score database
