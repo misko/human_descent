@@ -57,6 +57,12 @@ RUN pip install --no-deps . && pip check
 # Requests and explicit certifi users must share the distrusted system store.
 RUN python -c "import certifi,pathlib,ssl; p=pathlib.Path(certifi.where()); p.unlink(); p.symlink_to('/etc/ssl/certs/ca-certificates.crt'); assert not any('emSign Root CA - G1' in str(c['subject']) or 'emSign ECC Root CA - G3' in str(c['subject']) for c in ssl.create_default_context(cafile=certifi.where()).get_ca_certs())"
 
+# Reuse the existing graphics development headers; only the shared library is
+# copied into production, not the compiler or development environment.
+FROM builder AS xrender-builder
+COPY docker/build-xrender.sh /build-xrender.sh
+RUN sh /build-xrender.sh
+
 FROM python-base AS runtime
 ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 HIGH_SCORES_PATH=/data/high_scores.sqlite3 \
@@ -78,6 +84,10 @@ COPY --from=expat-builder /out/libexpat1_*.deb /tmp/expat.deb
 COPY --from=expat-builder /out/expat-build.json /usr/local/share/security/expat-build.json
 RUN dpkg -i /tmp/expat.deb && ldconfig && rm /tmp/expat.deb \
     && python -c "import ctypes; lib=ctypes.CDLL('libexpat.so.1'); lib.XML_ExpatVersion.restype=ctypes.c_char_p; assert lib.XML_ExpatVersion()==b'expat_2.9.0'"
+COPY --from=xrender-builder /out-xrender/*.deb /tmp/xrender.deb
+COPY --from=xrender-builder /out-xrender/xrender-build.json /usr/local/share/security/xrender-build.json
+RUN dpkg -i /tmp/xrender.deb && ldconfig && rm /tmp/xrender.deb \
+    && python -c "import ctypes; assert ctypes.CDLL('libXrender.so.1').XRenderQueryVersion"
 # Package installation happens in the builder; the deployed service cannot
 # install dependencies. Remove both copies of pip, including vendored code.
 RUN /opt/venv/bin/python -m pip uninstall -y pip \

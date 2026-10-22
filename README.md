@@ -95,6 +95,9 @@ The shared Expat library also uses verified upstream 2.9.0 with its test suite
 run during the build, matching the version already bundled by CPython. The
 upstream XML complexity issue remains open; this update does not clear that
 remaining finding.
+The Xrender library uses verified upstream 0.9.13, fixing CVE-2026-88807 in
+X11 reply parsing. Its build reuses the graphics headers already needed by
+Pygame; compilers and development headers stay outside the runtime image.
 
 Keep ports 10000 (WebSocket) and 10001 (HTTP API) on loopback at the host and
 forward them through the TLS proxy. Persist the MNIST data and high score database
