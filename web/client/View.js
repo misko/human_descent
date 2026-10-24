@@ -112,4 +112,9 @@ export default class ViewRouter {
         return this.impl?.showLevelUp?.(...args);
     }
 
+    configureTeam(...args) { return this.impl?.configureTeam?.(...args); }
+    setTeamReadiness(...args) { return this.impl?.setTeamReadiness?.(...args); }
+    selectGrid(...args) { return this.impl?.selectGrid?.(...args); }
+    destroy() { this.impl?.destroy?.(); }
+
 }

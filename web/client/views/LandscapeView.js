@@ -25,7 +25,8 @@ import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Import OrbitControls
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'; // Import CSS2DRenderer for annotations
-import { CONTROL_GROUPS, formatHudMarkup, MOBILE_CONTROL_GROUPS, MOBILE_HUD_BUTTONS, escapeHtml } from '../hud.js';
+import { TEAM_CONTROL_GROUPS, CONTROL_GROUPS, formatHudMarkup, MOBILE_CONTROL_GROUPS, MOBILE_HUD_BUTTONS, escapeHtml } from '../hud.js';
+import { selectableTeamPanels } from '../teamPanels.js';
 import {
     BRAND_TAGLINE,
     SPLASH_LOGO_URL,
@@ -118,6 +119,11 @@ Chart.register(
 
 export default class LandscapeView {
     constructor(gridSize, numGrids, clientState, options = {}) {
+        this._destroyed = false;
+        this._timers = new Set();
+        this.teamMode = Boolean(options.teamMode);
+        this.teamReadiness = new Map();
+        this.readyFrames = [];
         this.mode = (options.mode || '3d').toLowerCase();
         this.gridSize = gridSize;
         this.numGrids = numGrids;
@@ -169,7 +175,7 @@ export default class LandscapeView {
         this.tutorialToastEl = null;
         this.tutorialComplete = false;
         if (!this.initialTourDisabled && typeof window !== 'undefined') {
-            window.requestAnimationFrame(() => this._setTourFlow('initial'));
+            this._initialTourFrame = window.requestAnimationFrame(() => { if (!this._destroyed) this._setTourFlow('initial'); });
         }
         this.levelToastTimeout = null;
         this.levelModalTimeout = null;
@@ -299,7 +305,8 @@ export default class LandscapeView {
             this.angleV = this.defaultAngleV;
             // Start rendering loop
             this.render();
-            window.addEventListener('resize', this.onWindowResize.bind(this), false);
+            this._boundResize = this.onWindowResize.bind(this);
+            window.addEventListener('resize', this._boundResize, false);
         }
     }
 
@@ -811,7 +818,9 @@ export default class LandscapeView {
         }
         let controls;
         let hudButtons = [];
-        if (this.mode === '1d') {
+        if (this.teamMode) {
+            controls = TEAM_CONTROL_GROUPS;
+        } else if (this.mode === '1d') {
             controls = this._build1DControlGroups();
         } else if (this.mobileMode) {
             controls = MOBILE_CONTROL_GROUPS;
@@ -1338,9 +1347,7 @@ export default class LandscapeView {
 
 
     updateMeshGrids(meshGrids = null) {
-        if (this.mode === '1d') {
-            return;
-        }
+        if (this._destroyed || this.mode === '1d') return;
         if (this.scene == null) {
             return;
         }
@@ -1374,13 +1381,16 @@ export default class LandscapeView {
         // Remove old grids and spheres if re-initializing
         if (this.gridObjects.length > 0) {
             this.gridObjects.forEach(grid => {
+                this._disposeObject(grid);
                 this.scene.remove(grid);
             });
             this.gridObjects = [];
+            this.readyFrames = [];
         }
 
         if (this.sphereObjects && this.sphereObjects.length > 0) {
             this.sphereObjects.forEach(sphere => {
+                this._disposeObject(sphere);
                 this.scene.remove(sphere);
             });
             this.sphereObjects = [];
@@ -1505,6 +1515,22 @@ export default class LandscapeView {
             // Add new grid to scene and store it for later reference
             this.scene.add(mesh);
             this.gridObjects.push(mesh);
+            if (this.teamMode) {
+                // Separate persistent geometry, independent of transient movement glows.
+                const half = this.gridSize / 2;
+                const geometry = new BufferGeometry();
+                geometry.setAttribute('position', new BufferAttribute(new Float32Array([
+                    -half, -half, .1, half, -half, .1, half, -half, .1, half, half, .1,
+                    half, half, .1, -half, half, .1, -half, half, .1, -half, -half, .1,
+                ]), 3));
+                const frame = new LineSegments(geometry, new LineBasicMaterial({ color: 0x36ed75, depthTest: false, depthWrite: false }));
+                frame.name = 'team-ready-frame';
+                frame.userData.panelIndex = i;
+                frame.visible = this.teamReadiness.get(i) === true;
+                frame.renderOrder = 20;
+                mesh.add(frame);
+                this.readyFrames[i] = frame;
+            }
 
             // Create a red sphere to represent the center point of each grid
             const sphereGeometry = new SphereGeometry(1, 16, 16); // Radius = 1, segments for smoother look
@@ -1553,16 +1579,26 @@ export default class LandscapeView {
 
     // Function to increment selected grid
     incrementSelectedGrid() {
-        this.selectedGridIndex = (this.selectedGridIndex + 1) % this.effectiveGrids;
+        this._cycleSelectedGrid(1);
     }
 
     // Function to decrement selected grid
     decrementSelectedGrid() {
-        this.selectedGridIndex = (this.selectedGridIndex - 1 + this.effectiveGrids) % this.effectiveGrids; // Adding effectiveGrids to ensure non-negative index
+        this._cycleSelectedGrid(-1);
+    }
+
+    _cycleSelectedGrid(direction) {
+        const panels = this.teamMode ? (this.teamSelectablePanels || [])
+            : Array.from({ length: this.effectiveGrids }, (_, panel) => panel);
+        if (!panels.length) return;
+        const current = Math.max(0, panels.indexOf(this.selectedGridIndex));
+        this.setSelectedGrid(panels[(current + direction + panels.length) % panels.length]);
     }
 
     // Function to set the selected grid
     setSelectedGrid(gridIdx) {
+        if (!Number.isInteger(gridIdx) || gridIdx < 0 || gridIdx >= this.effectiveGrids) return;
+        if (this.teamMode && !this.teamSelectablePanels?.includes(gridIdx)) return;
         this.selectedGridIndex = gridIdx;
     }
 
@@ -1608,7 +1644,7 @@ export default class LandscapeView {
             debugSelection(`[View] selectGridAt: grid ${gridIndex} already selected`);
         }
 
-        return gridIndex;
+        return this.selectedGridIndex;
     }
 
     updateLossLines(lines, { stepSpacing, labels } = {}) {
@@ -1887,7 +1923,8 @@ export default class LandscapeView {
         }
     }
     render() {
-        requestAnimationFrame(() => this.render());
+        if (this._destroyed) return;
+        this._renderFrame = requestAnimationFrame(() => this.render());
 
         const now = performance.now();
         let maxIntensity = 0;
@@ -2294,10 +2331,12 @@ export default class LandscapeView {
         const screen = document.createElement('div');
         screen.className = 'tour-screen tour-screen--splash';
         screen.classList.add('tour-screen--splash-active');
+        this._splashTeardown?.();
         const teardown = () => {
             window.removeEventListener('keydown', handleKey, true);
             window.removeEventListener('pointerdown', handlePointer, true);
         };
+        this._splashTeardown = teardown;
         const logo = document.createElement('img');
         logo.className = 'tour-splash__logo';
         logo.src = SPLASH_LOGO_URL;
@@ -2309,13 +2348,13 @@ export default class LandscapeView {
             screen.classList.add('tour-screen--splash-fade');
             teardown();
             clearTimeout(autoTimer);
-            setTimeout(() => this._advanceHelpScreen(), 450);
+            this._setTimeout(() => this._advanceHelpScreen(), 450);
         };
         const handleKey = () => dismiss();
         const handlePointer = () => dismiss();
         window.addEventListener('keydown', handleKey, true);
         window.addEventListener('pointerdown', handlePointer, true);
-        const autoTimer = setTimeout(dismiss, 500);
+        const autoTimer = this._setTimeout(dismiss, 500);
         return screen;
     }
 
@@ -2436,6 +2475,12 @@ export default class LandscapeView {
             return;
         }
         this.helpOverlayContent.innerHTML = '';
+        if (this.teamMode && tabId === 'controls') {
+            const panel = document.createElement('p');
+            panel.textContent = 'WASD or scrolling moves the enlarged landscape. Use left/right Shift, click a landscape, or right-click to select your assigned landscape or an unassigned one. With one player you can use all three; with two players the third is shared; with three players each controls their own. Selecting a landscape costs no switches. Space requests new dimensions once per generation. A green box marks a player’s request on their assigned landscape; everyone must request before the directions change. You can keep moving while waiting. [ and ] adjust the shared step size; Enter changes the shared training batch. Batch size and precision use the match preset. The server controls the countdown and final validation score.';
+            this.helpOverlayContent.appendChild(panel);
+            return;
+        }
         if (tabId === 'how') {
             const panel = document.createElement('div');
             panel.className = 'help-tab help-tab--how';
@@ -2828,7 +2873,7 @@ export default class LandscapeView {
                 if (this.levelToastTimeout) {
                     clearTimeout(this.levelToastTimeout);
                 }
-                this.levelToastTimeout = setTimeout(() => {
+                this.levelToastTimeout = this._setTimeout(() => {
                     toast.classList.remove('visible');
                     this.levelToastTimeout = null;
                 }, 8000);
@@ -2854,7 +2899,7 @@ export default class LandscapeView {
                 }
 
                 // Auto-close after 15 seconds
-                this.levelModalTimeout = setTimeout(() => {
+                this.levelModalTimeout = this._setTimeout(() => {
                     modal.classList.remove('visible');
                     this.levelModalTimeout = null;
                 }, 15000);
@@ -2872,6 +2917,85 @@ export default class LandscapeView {
                 }
             }
         }
+    }
+
+    configureTeam(team) {
+        if (this._destroyed) return;
+        const firstConfiguration = !this._teamConfigured;
+        this._teamConfigured = true;
+        this.teamMode = true;
+        const gridSize = Number(team.config.meshGridSize || this.gridSize);
+        const grids = Number(team.config.meshGrids);
+        const layoutChanged = gridSize !== this.gridSize || grids !== this.numGrids;
+        this.gridSize = gridSize;
+        this.numGrids = this.effectiveGrids = grids;
+        this.teamSelectablePanels = selectableTeamPanels(team.panelIndex, team.roster, grids);
+        if (firstConfiguration || !this.teamSelectablePanels.includes(this.selectedGridIndex)) {
+            this.selectedGridIndex = team.panelIndex;
+        }
+        // Admission may supply a different resolution. Votes and status updates
+        // do not change the solo camera or reinitialize its rendering surfaces.
+        if (layoutChanged && this.camera) this.onWindowResize();
+    }
+
+    selectGrid(panel) {
+        this.setSelectedGrid(panel);
+    }
+
+    setTeamReadiness(roster) {
+        this.teamReadiness = new Map(roster.map(member => [Number(member.panelIndex), Boolean(member.voted)]));
+        this.readyFrames.forEach((frame, panel) => { if (frame) frame.visible = this.teamReadiness.get(panel) === true; });
+    }
+
+    _setTimeout(callback, delay) {
+        if (this._destroyed) return null;
+        const id = setTimeout(() => { this._timers.delete(id); if (!this._destroyed) callback(); }, delay);
+        this._timers.add(id);
+        return id;
+    }
+
+    _disposeObject(object) {
+        object?.traverse?.(child => {
+            child.geometry?.dispose?.();
+            for (const material of Array.isArray(child.material) ? child.material : [child.material]) {
+                if (!material) continue;
+                for (const value of Object.values(material)) if (value?.isTexture) value.dispose();
+                material.dispose?.();
+            }
+            child.element?.remove?.();
+        });
+    }
+
+    destroy() {
+        if (this._destroyed) return;
+        this._destroyed = true;
+        if (this._renderFrame != null) cancelAnimationFrame(this._renderFrame);
+        if (this._initialTourFrame != null) cancelAnimationFrame(this._initialTourFrame);
+        if (this._boundResize) window.removeEventListener('resize', this._boundResize);
+        this._detachHelpKeyListener();
+        this._splashTeardown?.();
+        for (const id of this._timers) clearTimeout(id);
+        this._timers.clear();
+        for (const chart of [this.lossChart, this.lastStepsChart, this.stepSizeChart,
+            this.dimsAndStepsChart, this.confusionMatrixChart, ...this.exampleCharts]) chart?.destroy?.();
+        this.controls?.dispose?.();
+        this._disposeObject(this.scene);
+        for (const pass of this.composer?.passes || []) pass.dispose?.();
+        this.composer?.dispose?.();
+        this.renderer?.dispose?.();
+        this.renderer?.forceContextLoss?.();
+        this.renderer?.domElement?.remove();
+        this.labelRenderer?.domElement?.remove();
+        this.helpOverlay?.remove();
+        document.body?.classList?.remove('help-overlay-open');
+        if (this._levelDismissHandler) document.getElementById('levelCloseBtn')?.removeEventListener('click', this._levelDismissHandler);
+        document.getElementById('levelModal')?.classList?.remove('visible');
+        document.getElementById('levelToast')?.classList?.remove('visible');
+        this.tutorialToastEl?.remove();
+        this.levelToastEl?.remove();
+        this.previousMeshGrids = null;
+        this.gridObjects = [];
+        this.readyFrames = [];
     }
 
 }

@@ -1,0 +1,181 @@
+{
+  "admit": {
+    "type": 110,
+    "requestIdx": 0,
+    "teamAdmission": {
+      "matchId": "match-1",
+      "sessionId": "session-blue-1",
+      "playerId": "alice",
+      "token": "fixture-only-not-a-real-credential"
+    }
+  },
+  "move": {
+    "type": 0,
+    "requestIdx": 1,
+    "teamMatchId": "match-1",
+    "teamSessionId": "session-blue-1",
+    "generation": 0,
+    "dimsAndSteps": [
+      {
+        "dim": 0,
+        "step": 0.025
+      }
+    ]
+  },
+  "vote": {
+    "type": 102,
+    "requestIdx": 2,
+    "teamMatchId": "match-1",
+    "teamSessionId": "session-blue-1",
+    "generation": 0
+  },
+  "teamState": {
+    "type": 111,
+    "requestIdx": 2,
+    "teamSessionId": "session-blue-1",
+    "teamMatchId": "match-1",
+    "generation": 0,
+    "modelRevision": 1,
+    "teamState": {
+      "matchId": "match-1",
+      "sessionId": "session-blue-1",
+      "teamId": "blue",
+      "playerId": "alice",
+      "panelIndex": 0,
+      "generation": 0,
+      "dimsOffset": 0,
+      "modelRevision": 1,
+      "phase": "running",
+      "startAt": 1700000000,
+      "deadline": 1700000120,
+      "roster": [
+        {
+          "playerId": "alice",
+          "name": "Alice",
+          "panelIndex": 0,
+          "voted": true,
+          "connected": true
+        },
+        {
+          "playerId": "bob",
+          "name": "Bob",
+          "panelIndex": 1,
+          "voted": false,
+          "connected": true
+        }
+      ],
+      "config": {
+        "seed": 0,
+        "dimsAtATime": 6,
+        "meshGridSize": 15,
+        "meshStepSize": 0.1,
+        "meshGrids": 3,
+        "batchSize": 32,
+        "dtype": "float32",
+        "meshEnabled": true,
+        "lossLines": 0,
+        "resumeSupported": true
+      }
+    }
+  },
+  "limitedTeamState": {
+    "type": 111,
+    "requestIdx": 2,
+    "teamSessionId": "session-blue-1",
+    "teamMatchId": "match-1",
+    "generation": 0,
+    "modelRevision": 1,
+    "teamState": {
+      "matchId": "match-1",
+      "sessionId": "session-blue-1",
+      "teamId": "blue",
+      "playerId": "alice",
+      "panelIndex": 0,
+      "generation": 0,
+      "dimsOffset": 0,
+      "modelRevision": 1,
+      "phase": "running",
+      "startAt": 1700000000,
+      "deadline": 1700000120,
+      "roster": [
+        {
+          "playerId": "alice",
+          "name": "Alice",
+          "panelIndex": 0,
+          "voted": true,
+          "connected": true
+        },
+        {
+          "playerId": "bob",
+          "name": "Bob",
+          "panelIndex": 1,
+          "voted": false,
+          "connected": true
+        }
+      ],
+      "config": {
+        "seed": 0,
+        "dimsAtATime": 6,
+        "meshGridSize": 15,
+        "meshStepSize": 0.1,
+        "meshGrids": 3,
+        "batchSize": 32,
+        "dtype": "float32",
+        "meshEnabled": true,
+        "lossLines": 0,
+        "resumeSupported": true
+      },
+      "dimensionSwitchesRemaining": 2
+    }
+  },
+  "exhaustedTeamState": {
+    "type": 111,
+    "requestIdx": 2,
+    "teamSessionId": "session-blue-1",
+    "teamMatchId": "match-1",
+    "generation": 0,
+    "modelRevision": 1,
+    "teamState": {
+      "matchId": "match-1",
+      "sessionId": "session-blue-1",
+      "teamId": "blue",
+      "playerId": "alice",
+      "panelIndex": 0,
+      "generation": 0,
+      "dimsOffset": 0,
+      "modelRevision": 1,
+      "phase": "running",
+      "startAt": 1700000000,
+      "deadline": 1700000120,
+      "roster": [
+        {
+          "playerId": "alice",
+          "name": "Alice",
+          "panelIndex": 0,
+          "voted": true,
+          "connected": true
+        },
+        {
+          "playerId": "bob",
+          "name": "Bob",
+          "panelIndex": 1,
+          "voted": false,
+          "connected": true
+        }
+      ],
+      "config": {
+        "seed": 0,
+        "dimsAtATime": 6,
+        "meshGridSize": 15,
+        "meshStepSize": 0.1,
+        "meshGrids": 3,
+        "batchSize": 32,
+        "dtype": "float32",
+        "meshEnabled": true,
+        "lossLines": 0,
+        "resumeSupported": true
+      },
+      "dimensionSwitchesRemaining": 0
+    }
+  }
+}

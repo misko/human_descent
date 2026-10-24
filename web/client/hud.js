@@ -17,6 +17,16 @@ export const CONTROL_GROUPS = [
   ...SHARED_COMMANDS,
 ];
 
+export const TEAM_CONTROL_GROUPS = [
+  { keys: ['W', 'A', 'S', 'D', 'Scroll'], label: 'Move selected landscape' },
+  { keys: ['Shift', 'Click'], label: 'Select own or unassigned landscape' },
+  { keys: ['SPACE'], label: 'Request New Dims (everyone)' },
+  { keys: ['[', ']'], label: 'Shared Step ±' },
+  { keys: ['Enter'], label: 'Shared Batch' },
+  { keys: ['⬆️', '⬇️', '⬅️', '➡️', '🐁'], label: 'Rotate' },
+  { keys: ['X'], label: 'Team Help' },
+];
+
 export const MOBILE_CONTROL_GROUPS = [];
 
 export const MOBILE_HUD_BUTTONS = [

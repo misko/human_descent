@@ -19,6 +19,7 @@ Human Descent opens the door for you to explore neural network optimization in h
 
 - **3D landscape (default):** renders three coupled loss surfaces that update in real time while you explore six random directions.
 - **1D slices (experimental):** renders six fast-updating loss curves, one per dimension. Launch with `?mode=1d` (e.g. `http://localhost:5173/?mode=1d`) or use the View toggle in the header to switch between modes.
+- **Team lobby (desktop only):** open `?lobby=1` or choose Lobby on desktop. Captains create and name teams, invite up to two teammates, and start a team speed run or challenge another team. Unequal teams are supported. Each player controls one landscape; everyone shares the team's model, batch and loss. New Dimensions advances once everyone votes, with green borders showing the current votes. Mobile supports solo play only. See [multiplayer architecture and testing](docs/multiplayer.md).
 
 ## Batch-parameterized PyTorch layers
 
@@ -59,7 +60,8 @@ For example its possible to train a 26,000 parameter MNIST model using a 6 dimen
 
 ## Testing
 
-- Run all frontend checks with `cd web && npm test` (wrap in the repo's virtualenv so the backend can start).
+- Run frontend units with `cd web && npm run test:unit`. Browser tests require a compatible Python environment or the test container described below.
+- Run multiplayer browser tests with `cd web && HUDES_TEST_IMAGE=hudes-test npm run test:multiplayer`. These use real sockets and services with a deterministic inference engine; separate Python tests exercise real PyTorch inference.
 - When iterating on the speed-run or highscores flows, capture deterministic Playwright logs with:
 
 ```
@@ -67,7 +69,7 @@ cd web
 (npm run -s test:e2e:chromium -- tests/speedrun.spec.mjs) 2>&1 3>&1 | tee /tmp/play-speedrun.log >/dev/null
 ```
 
-That command mirrors what we use in CI so any browser/server output is preserved under `/tmp/play-speedrun.log` for later debugging.
+This preserves browser/server output under `/tmp/play-speedrun.log` for later debugging. See [the multiplayer testing guide](docs/multiplayer.md) for the separate unit, wire, service, browser and numerical checks.
 
 ## Current runtime and security maintenance
 
@@ -113,7 +115,7 @@ batches and dimension vectors so repeated navigation cannot grow them indefinite
 and size limit. Invalid tensor types and nonfinite numeric values are rejected
 before shared inference work is scheduled.
 
-Browser tests use ports 18100/18101, a separate high score database, and wait for
+Browser tests allocate isolated ports and a separate high score database, and wait for
 the connection to be ready before sending game controls. They never terminate a
 production listener. `HUDES_BACKEND_COMMAND` can supply a containerized GPU server
 for testing, while `HUDES_PYTHON` selects the protobuf compiler's interpreter.

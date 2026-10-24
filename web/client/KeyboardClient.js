@@ -58,8 +58,7 @@ export default class KeyboardClient extends HudesClient {
 
     const defaultBatchSize =
       this.renderMode === '1d' ? 512 : this.isMobile ? 32 : 256;
-    this.state.setBatchSize(defaultBatchSize);
-    this.state.setDtype('float16');
+    if (!this.team) { this.state.setBatchSize(defaultBatchSize); this.state.setDtype('float16'); }
 
   }
 
@@ -129,9 +128,8 @@ GOOD LUCK!
   }
 
   _applyDimStep(dim, sign) {
-    if (this.state.helpScreenIdx !== -1) {
-      return;
-    }
+    if (this._destroyed || this._textCaptureActive || this.state.helpScreenIdx !== -1) return;
+    if (this.team && !this.team.ownsDimension(dim)) return;
     const delta = this.state.stepSize * sign;
     if (this.debug) {
       const before = Array.isArray(this.dimsAndStepsOnCurrentDims)
@@ -162,13 +160,13 @@ GOOD LUCK!
   }
 
   _startRepeat(key, action) {
-    if (!key || typeof action !== 'function') {
+    if (this._destroyed || this._textCaptureActive || !key || typeof action !== 'function') {
       return;
     }
     this._stopRepeat(key);
     const entry = { timeout: null, interval: null };
     const fire = () => {
-      if (this.state.helpScreenIdx !== -1) {
+      if (this._destroyed || this._textCaptureActive || this.state.helpScreenIdx !== -1) {
         return;
       }
       if (this.debug) {
@@ -182,9 +180,9 @@ GOOD LUCK!
         `[KeyboardClient] start repeat key=${key} delay=${this.keyRepeatDelayMs} interval=${this.keyRepeatIntervalMs}`,
       );
     }
-    entry.timeout = setTimeout(() => {
+    entry.timeout = this._setTimeout(() => {
       fire();
-      entry.interval = setInterval(fire, this.keyRepeatIntervalMs);
+      entry.interval = this._setInterval(fire, this.keyRepeatIntervalMs);
       entry.timeout = null;
       this.activeRepeats.set(key, entry);
     }, this.keyRepeatDelayMs);
@@ -211,4 +209,11 @@ GOOD LUCK!
     }
     this.activeRepeats.delete(key);
   }
+  destroy() {
+    if (this._destroyed) return;
+    for (const key of this.activeRepeats.keys()) this._stopRepeat(key);
+    window.removeEventListener('keyup', this._handleKeyUpOverride);
+    super.destroy();
+  }
+
 }

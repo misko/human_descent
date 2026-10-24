@@ -42,7 +42,7 @@ jobs:
         run: docker run --rm --shm-size=1g hudes-test
 
   web-tests:
-    name: Web HUD Tests
+    name: Frontend, protocol and multiplayer browser tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -57,10 +57,44 @@ jobs:
         working-directory: web
         run: npm ci
 
-      - name: Run HUD markup test
-        working-directory: web
-        run: node tests/hud_markup.test.mjs
+      - name: Set up protocol and fake server Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.14.9"
 
-      - name: Run mouse controls test
+      - name: Install protocol compiler and transport dependencies
+        run: python -m pip install grpcio-tools==1.84.0 protobuf==7.36.2 websockets==17.3
+
+      - name: Run all frontend unit tests
         working-directory: web
-        run: node tests/mouse_controls.test.mjs
+        run: npm run test:unit
+
+      - name: Build frontend with canonical generated protocol
+        working-directory: web
+        env:
+          HUDES_PYTHON: python
+        run: npm run build
+
+      - name: Verify JavaScript and Python wire compatibility
+        working-directory: web
+        env:
+          HUDES_PYTHON: python
+        run: npm run test:protocol
+
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run real transport multiplayer browser flows
+        working-directory: web
+        env:
+          HUDES_PYTHON: python
+        run: npm run test:multiplayer
+
+      - name: Retain failed browser traces
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: multiplayer-browser-results
+          path: web/test-results
+          retention-days: 7

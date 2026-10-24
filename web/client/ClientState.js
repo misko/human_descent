@@ -25,6 +25,10 @@ export default class ClientState {
 
     toString() {
         const secs = Number(this.speedRunSecondsRemaining ?? 0);
+        if (this.teamMode) {
+            const loss = Number.isFinite(this.sharedLoss) ? this.sharedLoss.toFixed(4) : '—';
+            return `Shared training loss: ${loss} · ${this.teamPhase === 'running' ? `${secs.toFixed(1)}s` : this.teamPhase} · Batch ${this.batchSize} · Step ${this.stepSize.toExponential(2)} · ${this.dtype}`;
+        }
         const timer = this.speedRunActive
             ? `, SPEED RUN: ${secs.toFixed(1)}s`
             : '';

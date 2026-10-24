@@ -116,11 +116,13 @@ export function installTouchControls(target, { onVector, intervalMs = DEFAULT_IN
   target.addEventListener('touchend', handleEnd, { passive: false });
   target.addEventListener('touchcancel', handleCancel, { passive: false });
 
-  return () => {
+  const destroy = () => {
     stopLoop();
     target.removeEventListener('touchstart', handleStart);
     target.removeEventListener('touchmove', handleMove);
     target.removeEventListener('touchend', handleEnd);
     target.removeEventListener('touchcancel', handleCancel);
   };
+  destroy.reset = clearState;
+  return destroy;
 }

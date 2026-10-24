@@ -105,5 +105,7 @@ CMD ["python", "-m", "hudes.websocket_server", "--device=cuda", "--model=cnn3", 
 
 FROM runtime AS test
 COPY --chown=1000:1000 tests /tests
-ENV SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy PYGAME_HIDE_SUPPORT_PROMPT=1
+COPY pyproject.toml /pyproject.toml
+ENV SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy PYGAME_HIDE_SUPPORT_PROMPT=1 \
+    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 CMD ["python", "-m", "pytest", "/tests", "-q"]

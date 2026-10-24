@@ -1,12 +1,27 @@
 import ClientState from './ClientState.js';
 import { loadProto } from './ProtoLoader.js';
-import { sleep } from '../utils/sleep.js';
 import { log } from '../utils/logger.js';
 import View from './View.js';
 import { SHARE_TEXT } from './helpTour.js';
+import TeamGameState from './TeamGameState.js';
+import TeamGameHud from './TeamGameHud.js';
+import { supportsMultiplayer } from '../mobile.js';
 
 export default class HudesClient {
     constructor(addr, port, options = {}) {
+        if (options.launchDescriptor && !supportsMultiplayer()) {
+            const error = new Error('Multiplayer is available on desktop only.');
+            error.code = 'desktop_required';
+            throw error;
+        }
+        this._destroyed = false;
+        this._timers = new Set();
+        this._intervals = new Set();
+        this._blockedCodes = new Set();
+        this._pressedCodes = new Set();
+        this._abortController = new AbortController();
+        this.team = options.launchDescriptor ? new TeamGameState(options.launchDescriptor) : null;
+        this.onReturnToLobby = options.onReturnToLobby;
         // Allow ws/wss based on environment and accept absolute URL or host/port
         try {
             // Allow overriding via URL: ?host=...&port=... (useful in tests)
@@ -16,8 +31,8 @@ export default class HudesClient {
                 const qpPort = params.get('port');
                 const qpMode = params.get('mode');
                 const qpHideHud = params.get('hideHUD');
-                if (qpHost) addr = qpHost;
-                if (qpPort) port = Number(qpPort);
+                if (qpHost && !this.team) addr = qpHost;
+                if (qpPort && !this.team) port = Number(qpPort);
                 if (qpMode) options.renderMode = qpMode.toLowerCase();
                 if (qpHideHud) options.hideHud = /^(1|true|yes|on)$/i.test(qpHideHud);
             }
@@ -35,6 +50,11 @@ export default class HudesClient {
             ?? (addr?.startsWith?.('ws')
                 ? addr
                 : `${this.wsScheme}://${this.backendHost}${this.backendPort ? `:${this.backendPort}` : ''}${normalizedWsPath}`);
+        if (this.team) {
+            const endpoint = new URL(this.team.launch.wsUrl || '/ws', options.wsUrl || this.socketUrl || window.location.href);
+            endpoint.protocol = ['https:', 'wss:'].includes(endpoint.protocol) ? 'wss:' : 'ws:';
+            this.socketUrl = endpoint.href;
+        }
         this.socket = null;
         this.requestIdx = 0;
         this.running = true;
@@ -44,10 +64,10 @@ export default class HudesClient {
         this._sessionStorageAvailable = typeof window !== 'undefined' && !!window.sessionStorage;
         this._sessionTokenKey = 'hudes.tab.sessionToken';
         this._resumeTokenKey = 'hudes.resume.token';
-        this._clientSessionToken = this._loadSessionToken();
+        this._clientSessionToken = this.team ? null : this._loadSessionToken();
         this._pendingSessionToken = null;
-        this._resumeToken = this._loadPersistedResumeToken();
-        if (this._didReload()) {
+        this._resumeToken = this.team ? null : this._loadPersistedResumeToken();
+        if (!this.team && this._didReload()) {
             this._clearResumeToken();
         }
         this._resumeInFlight = false;
@@ -56,8 +76,8 @@ export default class HudesClient {
         this._protoReadyPromise = this.loadProto();
         this.apiBase = this.httpBase || this._apiBase(this.backendHost, this.backendPort);
 
-        const renderMode = (options.renderMode || '3d').toLowerCase();
-        this.isMobile = Boolean(options.isMobile);
+        const renderMode = this.team ? '3d' : (options.renderMode || '3d').toLowerCase();
+        this.isMobile = !this.team && Boolean(options.isMobile);
         this.debug = Boolean(options.debug);
         this.renderMode = renderMode === '1d' ? '1d' : '3d';
         this.hideHud = Boolean(options.hideHud);
@@ -80,7 +100,7 @@ export default class HudesClient {
             }
         } catch { }
         disableInitialTour = disableInitialTour || this.state.helpScreenIdx === -1;
-        this.grids = this.meshEnabled ? (options.meshGrids ?? 3) : 0;
+        this.grids = this.team ? 3 : this.meshEnabled ? (options.meshGrids ?? 3) : 0;
         this.grid_size = options.gridSize ?? 31;
         this.rowSpacing = options.rowSpacing;
         this.depthStep = options.depthStep;
@@ -97,8 +117,10 @@ export default class HudesClient {
             altKeys: this.altKeys,
             mobile: this.isMobile,
             hideHud: this.hideHud,
-            disableInitialTour,
+            disableInitialTour: this.team ? true : disableInitialTour,
+            teamMode: Boolean(this.team),
         });
+        if (this.team) this.state.closeHelpScreens();
         if (this.hideHud && typeof document !== 'undefined') {
             document.body.classList.add('hudes-hide-hud');
         }
@@ -135,14 +157,21 @@ export default class HudesClient {
         this.levels = [];
         this.bestSessionLoss = Infinity;
         this._loadLevels();
+        if (this.team) {
+            this.teamHud = new TeamGameHud(() => this.onReturnToLobby?.());
+            this._teamTicker = this._setInterval(() => this._updateTeamClock(), 100);
+        }
         this._connectSocket();
     }
 
     async _loadLevels() {
         try {
-            const res = await fetch('./levels.json');
+            const res = await fetch('./levels.json', { signal: this._abortController.signal });
+            if (this._destroyed) return;
             if (res.ok) {
-                this.levels = await res.json();
+                const levels = await res.json();
+                if (this._destroyed) return;
+                this.levels = levels;
                 // Sort descending by loss (e.g. 2.3, 2.1, ... 1.0)
                 this.levels.sort((a, b) => b.loss - a.loss);
                 // Assign level numbers: Level 1 is best (lowest loss), Level N is worst
@@ -167,6 +196,7 @@ export default class HudesClient {
         const target = event.target?.closest?.('[data-hud-action]');
         if (!target) return;
         const action = target.dataset.hudAction;
+        if (this._destroyed || (this.team && !['next-dims', 'next-batch', 'step-plus', 'step-minus', 'toggle-help', 'show-tutorial'].includes(action))) return;
         const refreshHud = () => {
             try {
                 this.view?.annotateBottomScreen?.(this.state.toString());
@@ -184,6 +214,7 @@ export default class HudesClient {
                 break;
             case 'step-plus':
                 event.preventDefault();
+                if (this.team) { this.adjustTeamStep(1); break; }
                 if (typeof this.state?.increaseStepSize === 'function') {
                     this.state.increaseStepSize(this.stepSizeMultiplier || 1);
                     try { this.sendConfig(); } catch { }
@@ -193,6 +224,7 @@ export default class HudesClient {
                 break;
             case 'step-minus':
                 event.preventDefault();
+                if (this.team) { this.adjustTeamStep(-1); break; }
                 if (typeof this.state?.decreaseStepSize === 'function') {
                     this.state.decreaseStepSize(this.stepSizeMultiplier || 1);
                     try { this.sendConfig(); } catch { }
@@ -227,6 +259,7 @@ export default class HudesClient {
 
     async loadProto() {
         const { Control, ControlType, root } = await loadProto('hudes.proto');
+        if (this._destroyed) return;
         this.Control = Control;
         this.ControlType = ControlType;
         try {
@@ -248,6 +281,7 @@ export default class HudesClient {
         log("[HudesClient] Proto file and enums loaded successfully.");
     }
     _handleMessage(event) {
+        if (this._destroyed || !this.Control) return;
         try {
             const buffer = new Uint8Array(event.data);
             const message = this.Control.decode(buffer); // Decode the protobuf message
@@ -261,7 +295,15 @@ export default class HudesClient {
                     window.__hudesMsgCounts[t] = (window.__hudesMsgCounts[t] || 0) + 1;
                 }
             } catch { }
-            if (typeof message.resumeToken === 'string' && message.resumeToken.length > 0) {
+            if (this.team) {
+                if (message.type === this.ControlType.values.CONTROL_TEAM_STATE) { this._handleTeamState(message); return; }
+                if (message.type === this.ControlType.values.CONTROL_TEAM_ERROR) {
+                    if (this.teamHud?.hint) this.teamHud.hint.textContent = message.errorMessage || 'Game request rejected';
+                    return;
+                }
+                if (!this.team.acceptsResult(message)) return;
+            }
+            if (!this.team && typeof message.resumeToken === 'string' && message.resumeToken.length > 0) {
                 this._persistResumeToken(message.resumeToken);
             }
             if (typeof message.requestIdx === 'number') {
@@ -271,6 +313,7 @@ export default class HudesClient {
                 );
             }
 
+            const resultIndex = this.team ? Number(message.jobId || 0) : message.requestIdx;
             //log("Decoded Message:", message);
 
             switch (message.type) {
@@ -298,13 +341,14 @@ export default class HudesClient {
 
                     // Update client state with SGD steps and losses
                     this.state.sgdSteps = message.totalSgdSteps;
+                    if (this.team) this.state.sharedLoss = this.team.currentLoss = message.trainLossAndPreds.trainLoss;
 
                     if (
                         this.trainSteps.length === 0 ||
-                        this.trainSteps[this.trainSteps.length - 1] < message.requestIdx
+                        this.trainSteps[this.trainSteps.length - 1] < resultIndex
                     ) {
                         this.trainLosses.push(message.trainLossAndPreds.trainLoss);
-                        this.trainSteps.push(message.requestIdx);
+                        this.trainSteps.push(resultIndex);
                         //log(`Train Loss: ${message.trainLossAndPreds.trainLoss}`);
                     }
 
@@ -341,7 +385,7 @@ export default class HudesClient {
                     // Update validation loss
                     while (this.valLosses.length < this.trainSteps.length) {
                         this.valLosses.push(message.valLoss.valLoss);
-                        this.valSteps.push(message.requestIdx);
+                        this.valSteps.push(resultIndex);
                     }
                     // if (this.valLosses.length>1) {
                     //     var diffLoss = this.valLosses[this.valLosses.length-1]-this.valLosses[this.valLosses.length-2];
@@ -358,7 +402,7 @@ export default class HudesClient {
 
                     // Check for level up
                     const currentValLoss = this.valLosses[this.valLosses.length - 1];
-                    if (this.levels && this.levels.length > 0) {
+                    if (!this.team && this.levels && this.levels.length > 0) {
                         // Find the best level we have achieved (loss <= level.loss)
                         // Since levels are sorted descending (2.3, 2.1, ...), we want the LAST one that matches (lowest loss)
                         // Or we can just find the one with the lowest loss that is >= currentValLoss?
@@ -493,6 +537,7 @@ export default class HudesClient {
 
             // Update the view with the reshaped mesh grid results
             this.view.updateMeshGrids(meshGridResults);
+            if (this.team) { this.team.updating = false; this._readyForInput = this.team.inputEnabled; this.teamHud?.update(this.team); }
 
             // Update local countdown but do not end until server signals finish
             this._updateSpeedRunFromMessage(message);
@@ -542,6 +587,7 @@ export default class HudesClient {
 }
     }
 _updateSpeedRunFromMessage(message) {
+    if (this.team || this._destroyed) return;
     try {
         const hasFinished = Object.prototype.hasOwnProperty.call(
             message,
@@ -614,7 +660,7 @@ _updateSpeedRunFromMessage(message) {
                 this.speedRunSecondsRemaining = srs;
                 this.state.speedRunSecondsRemaining = srs;
                 let lastShown = srs;
-                this._srsInterval = setInterval(() => {
+                this._srsInterval = this._setInterval(() => {
                     const now = Date.now();
                     const remainMs = Math.max(0, (this._srsEndAt ?? now) - now);
                     const remain = Math.max(0, Math.floor(remainMs / 1000));
@@ -659,6 +705,7 @@ _promptAndSubmitHighScore(finalValLoss, rank, totalScores) {
 }
 
 requestLeaderboard() {
+    if (this.team || this._destroyed) return;
     try {
         if (!this.Control || !this.ControlType) return;
         const payload = {
@@ -675,6 +722,7 @@ _createOverlay() {
         overlay.id = 'modalOverlay';
         document.body.appendChild(overlay);
     }
+    this._ownedModal = overlay;
     return overlay;
 }
 
@@ -752,7 +800,7 @@ _showSpeedRunResults({ finalValLoss, rank, totalScores }) {
             await navigator.clipboard.writeText(shareText);
             const original = copyBtn.textContent;
             copyBtn.textContent = 'Copied!';
-            setTimeout(() => copyBtn.textContent = original, 2000);
+            this._setTimeout(() => copyBtn.textContent = original, 2000);
         } catch (err) {
             console.error('Failed to copy:', err);
         }
@@ -913,16 +961,17 @@ _reshapeArray(flatArray, shape) {
 
 
 _connectSocket() {
-    if (!this._shouldReconnect) {
+    if (this._destroyed || !this._shouldReconnect) {
         return;
     }
     try {
         log(`[HudesClient] Connecting WebSocket to ${this.socketUrl}`);
         this.socket = new WebSocket(this.socketUrl);
         this.socket.binaryType = 'arraybuffer';
-        this.socket.onopen = () => this._handleSocketOpen();
-        this.socket.onclose = (event) => this._handleSocketClose(event);
-        this.socket.onmessage = (event) => this._handleMessage(event);
+        const socket = this.socket;
+        this.socket.onopen = () => { if (!this._destroyed && this.socket === socket) this._handleSocketOpen(); };
+        this.socket.onclose = (event) => { if (!this._destroyed && this.socket === socket) this._handleSocketClose(event); };
+        this.socket.onmessage = (event) => { if (!this._destroyed && this.socket === socket) this._handleMessage(event); };
         this.socket.onerror = (error) =>
             log(`[HudesClient] WebSocket error: ${error?.message ?? error}`, null, 'error');
     } catch (err) {
@@ -951,7 +1000,15 @@ _handleSocketOpen() {
     this._readyForInput = false;
     (async () => {
         try {
+            const socket = this.socket;
             await this._protoReadyPromise;
+            if (this._destroyed || this.socket !== socket || socket.readyState !== WebSocket.OPEN) return;
+            if (this.team) {
+                this.sendQ({ type: this.ControlType.values.CONTROL_TEAM_ADMIT, teamAdmission: {
+                    matchId: this.team.launch.matchId, sessionId: this.team.launch.sessionId,
+                    playerId: this.team.launch.playerId, token: this.team.launch.token } });
+                return;
+            }
             if (this._resumeToken) {
                 this._resumeInFlight = true;
                 this._sendResumeRequest();
@@ -969,6 +1026,8 @@ _handleSocketOpen() {
 _handleSocketClose(event) {
     log(`[HudesClient] WebSocket disconnected (code=${event?.code ?? 'n/a'})`);
     this._connected = false;
+    if (this.team) { this.team.updating = true; this.team.voteSentGeneration = null; }
+    this._stopHeldInput();
     try {
         if (typeof window !== 'undefined') {
             const el = document.querySelector('.connection-status');
@@ -989,12 +1048,13 @@ _handleSocketClose(event) {
 }
 
 _scheduleReconnect() {
+    if (this._destroyed || !this._shouldReconnect) return;
     this._reconnectAttempts += 1;
     const delay = Math.min(1000 * this._reconnectAttempts, 5000);
     if (this._reconnectTimer) {
         clearTimeout(this._reconnectTimer);
     }
-    this._reconnectTimer = setTimeout(() => this._connectSocket(), delay);
+    this._reconnectTimer = this._setTimeout(() => this._connectSocket(), delay);
 }
 
 _sendResumeRequest() {
@@ -1219,7 +1279,7 @@ _runSpeedRunCountdown() {
         }
         const frame = frames[idx++];
         this._showCountdownFrame(frame.text, frame.variant);
-        this._speedRunCountdownTimer = setTimeout(step, frame.duration);
+        this._speedRunCountdownTimer = this._setTimeout(step, frame.duration);
     };
     step();
 }
@@ -1287,6 +1347,7 @@ _generateSessionToken() {
 
 _canSendUserCommands() {
     return (
+        !this._destroyed && (!this.team || this.team.inputEnabled) &&
         this.socket &&
         this.socket.readyState === WebSocket.OPEN &&
         !this._resumeInFlight &&
@@ -1300,10 +1361,15 @@ initKeys() {
 
     window.addEventListener("keydown", this._handleKeyDown);
     window.addEventListener("keyup", this._handleKeyUp);
+    this._handleBlur = () => this._stopHeldInput();
+    this._handleFocusIn = event => { if (this._shouldIgnoreKeyEvent(event)) this._stopHeldInput(); };
+    window.addEventListener('blur', this._handleBlur);
+    document.addEventListener('focusin', this._handleFocusIn);
 }
 
 _setTextCaptureActive(active) {
     this._textCaptureActive = Boolean(active);
+    if (active) this._stopHeldInput();
 }
 
 _shouldIgnoreKeyEvent(event) {
@@ -1311,7 +1377,7 @@ _shouldIgnoreKeyEvent(event) {
         return true;
     }
     const target = event?.target;
-    if (target && target instanceof HTMLElement) {
+    if (target && (typeof HTMLElement === 'undefined' || target instanceof HTMLElement)) {
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
             return true;
         }
@@ -1366,14 +1432,17 @@ checkKeyHoldTime(event, key, currentTime, holdTimeSec) {
 }
 
 setN(n) {
-    n = Math.max(6, n); // Ensure minimum value of 6
+    n = this.team ? (this.team.roster.length || 3) * 2 : Math.max(6, n); // Ensure minimum value of 6
     this.state.n = n;
     this.zeroDimsAndStepsOnCurrentDims();
 }
 _handleKeyDown(event) {
-    if (this._shouldIgnoreKeyEvent(event)) {
-        return;
-    }
+    if (this._destroyed) return;
+    this._pressedCodes.add(event.code);
+    if (this._shouldIgnoreKeyEvent(event)) { this._stopHeldInput(); return; }
+    if (this._blockedCodes.has(event.code)) return;
+    if (this.team && !this.team.inputEnabled) { this._blockedCodes.add(event.code); return; }
+    if (event.code === 'Space' && event.repeat) return;
     const currentTime = performance.now();
     if (!this.keyHolds[event.code]) {
         this.keyHolds[event.code] = { firstPress: currentTime, lastExec: 0 };
@@ -1384,9 +1453,8 @@ _handleKeyDown(event) {
 }
 
 _handleKeyUp(event) {
-    if (this._shouldIgnoreKeyEvent(event)) {
-        return;
-    }
+    this._pressedCodes.delete(event.code);
+    this._blockedCodes.delete(event.code);
     if (this.keyHolds[event.code]) {
         this.keyHolds[event.code].firstPress = -1;
     }
@@ -1408,6 +1476,7 @@ processCommonKeys(event) {
     if (event.metaKey || event.ctrlKey) {
         return;
     }
+    if (this.team && ['KeyZ', 'KeyY', 'Backspace', 'Delete', 'Quote', 'Semicolon'].includes(event.code)) return;
     const currentTime = Date.now();
 
     // Check cooldown
@@ -1466,6 +1535,7 @@ processCommonKeys(event) {
                 if (currentTime - keyInfo.firstPress > 1000) {
                     log("Quitting...");
                     this.running = false;
+                    this._finishRunLoop?.();
                 }
                 break;
 
@@ -1488,6 +1558,7 @@ processCommonKeys(event) {
                 break;
 
             case "BracketLeft":
+                if (this.team) { this.adjustTeamStep(1); break; }
                 log("[HudesClient] Increasing step size.");
                 this.state.increaseStepSize(this.stepSizeMultiplier);
                 this.sendConfig();
@@ -1495,6 +1566,7 @@ processCommonKeys(event) {
                 break;
 
             case "BracketRight":
+                if (this.team) { this.adjustTeamStep(-1); break; }
                 log("[HudesClient] Decreasing step size.");
                 this.state.decreaseStepSize(this.stepSizeMultiplier);
                 this.sendConfig();
@@ -1583,6 +1655,7 @@ processCommonKeys(event) {
 }
 
 waitForWebSocket(callback) {
+    if (this._destroyed) return;
     const checkInterval = 50; // Check every 50ms
     const maxWaitTime = 5000; // Maximum wait time of 5 seconds
     let elapsedTime = 0;
@@ -1592,12 +1665,14 @@ waitForWebSocket(callback) {
         console.error("WebSocket is not initialized.");
         return;
     }
-    if (this.socket.readyState === WebSocket.OPEN) {
+    if (this.socket.readyState === WebSocket.OPEN && !this._destroyed) {
         callback();
         return;
     }
 
-    const interval = setInterval(() => {
+    const socket = this.socket;
+    const interval = this._setInterval(() => {
+        if (this.socket !== socket) { clearInterval(interval); this._intervals.delete(interval); return; }
         if (!this.socket) {
             clearInterval(interval);
             console.error("WebSocket instance missing during wait.");
@@ -1614,13 +1689,20 @@ waitForWebSocket(callback) {
     }, checkInterval);
 }
 sendQ(payload) {
+    if (this._destroyed) return;
+    if (this.team && payload.type !== this.ControlType?.values.CONTROL_TEAM_ADMIT) {
+        payload.teamSessionId = this.team.launch.sessionId;
+        payload.teamMatchId = this.team.launch.matchId;
+        payload.generation = this.team.generation ?? 0;
+        payload.modelRevision = this.team.modelRevision;
+    }
     if (!this.Control || !this.ControlType) {
         console.error("Proto definitions not loaded. Cannot send message.");
         return;
     }
 
     // Add requestIdx to the payload if not already present
-    payload.requestIdx = this.requestIdx;
+    payload.requestIdx = this.requestIdx++;
 
     // Verify the payload
     const errMsg = this.Control.verify(payload);
@@ -1635,14 +1717,14 @@ sendQ(payload) {
 
     // Send the message over WebSocket
     this.waitForWebSocket(() => {
+        if (this._destroyed || (this.team && payload.type !== this.ControlType.values.CONTROL_TEAM_ADMIT && payload.generation !== this.team.generation)) return;
         try {
             const t = Object.keys(this.ControlType.values).find(
                 k => this.ControlType.values[k] === payload.type
             );
             log(`[HudesClient] send ${t ?? payload.type} reqIdx=${payload.requestIdx ?? this.requestIdx}`);
         } catch { }
-        this.socket.send(buffer);
-        this.requestIdx++;
+        if (!this._destroyed) this.socket.send(buffer);
     });
     //console.log("Message sent:", payload);
 }
@@ -1661,6 +1743,7 @@ nextDimsMessage(requestIdx) {
 }
 
 getSGDStep() {
+    if (this.team || this._destroyed) return;
     if (!this.Control || !this.ControlType) {
         console.error("Proto definitions not loaded. Cannot send SGD step message.");
         return;
@@ -1714,10 +1797,14 @@ getNextBatch() {
         return;
     }
 
+    if (this.team) {
+        if (!this.team.canVote) return;
+        this.team.voteSentGeneration = this.team.generation;
+        this.sendQ({ type: this.ControlType.values.CONTROL_NEXT_DIMS });
+        return;
+    }
     // Create payload
-    const payload = {
-        type: this.ControlType.values.CONTROL_NEXT_DIMS,
-    };
+    const payload = { type: this.ControlType.values.CONTROL_NEXT_DIMS };
 
     // Use sendQ to handle sending
     this.sendQ(payload);
@@ -1732,6 +1819,7 @@ getNextBatch() {
 }
 
 startSpeedRun() {
+    if (this.team || this._destroyed) return;
     if (!this.Control || !this.ControlType) {
         console.error("Proto definitions not loaded. Cannot start Speed Run.");
         return;
@@ -1753,6 +1841,7 @@ startSpeedRun() {
 }
 
 _sendSpeedRunStart() {
+    if (this.team || this._destroyed) return;
     this.highScoreSubmitted = false;
     if (this._srsInterval) {
         try {
@@ -1775,6 +1864,7 @@ _sendSpeedRunStart() {
 }
 
 cancelSpeedRun() {
+    if (this.team || this._destroyed) return;
     if (!this.Control || !this.ControlType) {
         console.error("Proto definitions not loaded. Cannot cancel Speed Run.");
         return;
@@ -1806,6 +1896,7 @@ cancelSpeedRun() {
 }
 
 submitHighScore(name) {
+    if (this.team || this._destroyed) return;
     if (!this.Control || !this.ControlType) {
         console.error("Proto definitions not loaded. Cannot submit High Score.");
         return;
@@ -1852,6 +1943,8 @@ dimsAndStepsUpdated() {
             return;
         }
 
+        if (this.team && Object.entries(dimsAndSteps).some(([dim, step]) => !this.team.ownsDimension(Number(dim)) || !Number.isFinite(step))) return;
+        const generation = this.team?.generation;
         // Construct the payload
         const payload = {
             type: this.ControlType.values.CONTROL_DIMS,
@@ -1868,7 +1961,7 @@ dimsAndStepsUpdated() {
         this.sendQ(payload);
 
         // Simulate delay for synchronization
-        await sleep(10);
+        if (this._destroyed || (this.team && this.team.generation !== generation)) return;
 
         // Update local state
         for (const [dim, step] of Object.entries(dimsAndSteps)) {
@@ -1889,6 +1982,7 @@ dimsAndStepsUpdated() {
 
 
     async sendConfig() {
+    if (this.team || this._destroyed) return;
     if (!this.Control || !this.ControlType) {
         console.error("Proto definitions not loaded. Cannot send config.");
         return;
@@ -1923,12 +2017,99 @@ dimsAndStepsUpdated() {
 
 
 
+    adjustTeamStep(direction) {
+        if (!this.team || !this._canSendUserCommands()) return;
+        const logStep = Math.log10(this.state.stepSize) + direction * this.state.stepSizeResolution;
+        const step = Math.pow(10, Math.max(this.state.minLogStepSize, Math.min(this.state.maxLogStepSize, logStep)));
+        this.sendQ({ type: this.ControlType.values.CONTROL_CONFIG, teamMeshStepSize: step });
+    }
+    _setTimeout(callback, delay) {
+        if (this._destroyed) return null;
+        const id = setTimeout(() => { this._timers.delete(id); if (!this._destroyed) callback(); }, delay);
+        this._timers.add(id);
+        return id;
+    }
+    _setInterval(callback, delay) {
+        if (this._destroyed) return null;
+        const id = setInterval(() => { if (!this._destroyed) callback(); }, delay);
+        this._intervals.add(id);
+        return id;
+    }
+    _stopHeldInput() {
+        for (const code of this._pressedCodes || []) this._blockedCodes.add(code);
+        for (const key of this.activeRepeats?.keys?.() || []) this._stopRepeat(key);
+        for (const hold of Object.values(this.keyHolds || {})) hold.firstPress = -1;
+        this._touchControls?.reset?.();
+    }
+    _handleTeamState(message) {
+        const transition = this.team.apply(message.teamState, message.jobId);
+        if (!transition || this._destroyed) return;
+        this.requestIdx = Math.max(this.requestIdx, Number(message.requestIdx || 0) + 1);
+        const config = this.team.config;
+        this.state.n = Number(config.dimsAtATime);
+        this.grids = Number(config.meshGrids);
+        this.grid_size = Number(config.meshGridSize || this.grid_size);
+        this.state.batchSize = Number(config.batchSize);
+        this.state.dtype = config.dtype;
+        this.state.stepSize = Number(config.meshStepSize);
+        this.state.stepSizeIdx = Math.log10(this.state.stepSize) / this.state.stepSizeResolution;
+        this.state.teamMode = true;
+        this.state.teamPhase = this.team.phase;
+        this.state.speedRunActive = this.team.phase === 'running';
+        this.dimsOffset = this.team.dimsOffset;
+        this.state.dimsUsed = this.dimsOffset;
+        this.view.configureTeam?.(this.team);
+        if (transition.generationChanged) {
+            this._stopHeldInput();
+            this.zeroDimsAndStepsOnCurrentDims();
+            this.dimsAndStepsUpdated();
+        }
+        this.view.setTeamReadiness?.(this.team.roster);
+        this._readyForInput = this.team.inputEnabled;
+        if (this.team.terminal) { this._stopHeldInput(); this._hideCountdownOverlay(); }
+        this._updateTeamClock();
+    }
+    _updateTeamClock() {
+        if (!this.team || this._destroyed) return;
+        this.state.speedRunSecondsRemaining = Math.max(0, this.team.deadline - Date.now() / 1000);
+        if (this.team.phase === 'countdown') this._showCountdownFrame(String(Math.max(0, Math.ceil(this.team.startAt - Date.now() / 1000))), 'count');
+        else this._hideCountdownOverlay();
+        this.teamHud?.update(this.team);
+        this.view?.annotateBottomScreen?.(this.state.toString());
+    }
+    destroy() {
+        if (this._destroyed) return;
+        this._destroyed = true;
+        this.running = false;
+        this._shouldReconnect = false;
+        this._connected = false;
+        this._readyForInput = false;
+        this._stopHeldInput();
+        this._abortController?.abort();
+        for (const id of this._timers) clearTimeout(id);
+        for (const id of this._intervals) clearInterval(id);
+        this._timers.clear();
+        this._intervals.clear();
+        window.removeEventListener('keydown', this._handleKeyDown);
+        window.removeEventListener('keyup', this._handleKeyUp);
+        window.removeEventListener('blur', this._handleBlur);
+        document.removeEventListener('focusin', this._handleFocusIn);
+        document.removeEventListener('click', this._handleHudAction);
+        if (this.socket) {
+            this.socket.onopen = this.socket.onclose = this.socket.onmessage = this.socket.onerror = null;
+            this.socket.close();
+            this.socket = null;
+        }
+        this._speedRunCountdownOverlay?.remove();
+        this._ownedModal?.remove();
+        this.teamHud?.destroy();
+        this.view?.destroy?.();
+        document.body.classList.remove('speedrun-active', 'speedrun-countdown', 'hudes-hide-hud');
+        this._finishRunLoop?.();
+    }
     async runLoop() {
         await this._protoReadyPromise;
-        while (this.running) {
-            await sleep(10);
-        }
-        log("[HudesClient] Exiting run loop...");
+        if (this._destroyed) return;
+        return new Promise(resolve => { this._finishRunLoop = resolve; });
     }
-
 }

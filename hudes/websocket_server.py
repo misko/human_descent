@@ -792,7 +792,7 @@ async def inference_runner(
     process_or_thread.join()
 
 
-async def process_client(websocket, client_runner_q):
+async def process_client(websocket, client_runner_q, game_service=None):
     global client_idx
     client = None
     window_started = time.monotonic()
@@ -819,6 +819,29 @@ async def process_client(websocket, client_runner_q):
                 return
 
             if client is None:
+                if msg.type == hudes_pb2.Control.CONTROL_TEAM_ADMIT:
+                    if game_service is None:
+                        await websocket.close(
+                            code=1008, reason="team gameplay unavailable"
+                        )
+                        return
+                    from hudes.game.websocket import TeamWebSocketHandler
+
+                    await TeamWebSocketHandler(game_service)(
+                        websocket, first_message=message
+                    )
+                    return
+                if (
+                    msg.type
+                    in {
+                        hudes_pb2.Control.CONTROL_TEAM_STATE,
+                        hudes_pb2.Control.CONTROL_TEAM_ERROR,
+                    }
+                    or msg.HasField("team_mesh_step_size")
+                    or msg.HasField("generation")
+                ):
+                    await websocket.close(code=1008, reason="team admission required")
+                    return
                 if msg.type == hudes_pb2.Control.CONTROL_RESUME:
                     client = await _handle_resume_request(
                         msg, websocket, client_runner_q
@@ -844,6 +867,12 @@ async def process_client(websocket, client_runner_q):
                 )
                 active_clients[current_client] = client
                 logging.debug("process_client: start for client %s", client.client_id)
+
+            if msg.HasField("team_mesh_step_size") or msg.HasField("generation"):
+                await websocket.close(
+                    code=1008, reason="team control requires admission"
+                )
+                return
 
             client.last_seen = time.time()
 
@@ -1066,7 +1095,27 @@ async def process_client(websocket, client_runner_q):
                 _register_resume_token(client)
 
 
-async def run_server(stop, client_runner_q, server_port, ssl_pem):
+async def dispatch_connection(
+    websocket, client_runner_q, game_service=None, lobby_handler=None
+):
+    """Keep native root URLs and direct process_client callers compatible."""
+    request = getattr(websocket, "request", None)
+    path = getattr(request, "path", None) or getattr(websocket, "path", "/")
+    path = path.split("?", 1)[0]
+    if path == "/lobby/ws":
+        if lobby_handler is None:
+            await websocket.close(code=1013, reason="lobby unavailable")
+        else:
+            await lobby_handler(websocket)
+    elif path in {"/", "/ws"}:
+        await process_client(websocket, client_runner_q, game_service=game_service)
+    else:
+        await websocket.close(code=1008, reason="unknown websocket path")
+
+
+async def run_server(
+    stop, client_runner_q, server_port, ssl_pem, game_service=None, lobby_handler=None
+):
     # Standalone HTTP health server on a separate port to avoid interfering
     # with the WebSocket handshake. Defaults to server_port + 1.
     health_server = None
@@ -1285,7 +1334,12 @@ async def run_server(stop, client_runner_q, server_port, ssl_pem):
         )
 
     async with serve(
-        partial(process_client, client_runner_q=client_runner_q),
+        partial(
+            dispatch_connection,
+            client_runner_q=client_runner_q,
+            game_service=game_service,
+            lobby_handler=lobby_handler,
+        ),
         None,
         server_port,
         ssl=ssl_context,
@@ -1363,12 +1417,32 @@ async def run_wrapper(args, stop_future=None):
         configured_duration,
     )
     stop = stop_future or asyncio.get_running_loop().create_future()
-    await asyncio.gather(
-        run_server(stop, client_runner_q, args.port, args.ssl_pem),
-        inference_runner(
-            mad, run_in=args.run_in, client_runner_q=client_runner_q, stop=stop
-        ),
+    from hudes.game.engine import RealTeamEngine
+    from hudes.game.service import TeamGameService
+    from hudes.lobby import LobbyService, LobbyWebSocketHandler
+
+    game_service = TeamGameService(
+        RealTeamEngine.from_mad(mad, model_factory=lambda seed: type(model)(seed=seed))
     )
+    lobby = LobbyService(game_service)
+    await lobby.start()
+    try:
+        await asyncio.gather(
+            run_server(
+                stop,
+                client_runner_q,
+                args.port,
+                args.ssl_pem,
+                game_service=game_service,
+                lobby_handler=LobbyWebSocketHandler(lobby),
+            ),
+            inference_runner(
+                mad, run_in=args.run_in, client_runner_q=client_runner_q, stop=stop
+            ),
+        )
+    finally:
+        await lobby.close()
+        await game_service.close()
 
 
 if __name__ == "__main__":

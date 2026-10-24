@@ -49,6 +49,48 @@ message BatchExamples {
 
 }
 
+// Team gameplay only. Social lobby data uses its independent JSON transport.
+message TeamAdmission {
+  required string match_id = 1;
+  required string session_id = 2;
+  required string player_id = 3;
+  required string token = 4;
+}
+
+message TeamMember {
+  required string player_id = 1;
+  required string name = 2;
+  required uint32 panel_index = 3;
+  required bool voted = 4;
+  required bool connected = 5;
+}
+
+message TeamScore {
+  required string team_id = 1;
+  required double loss = 2;
+}
+
+message TeamState {
+  required string match_id = 1;
+  required string session_id = 2;
+  required string team_id = 3;
+  required string player_id = 4;
+  required uint32 panel_index = 5;
+  required uint32 generation = 6;
+  required uint32 dims_offset = 7;
+  required uint64 model_revision = 8;
+  required string phase = 9;
+  optional double start_at = 10;
+  optional double deadline = 11;
+  repeated TeamMember roster = 12;
+  required Config config = 13;
+  repeated TeamScore results = 14;
+  optional string reason = 15;
+  optional uint32 batch_idx = 16;
+  // Absent means unlimited. Zero explicitly means no further switches.
+  optional uint32 dimension_switches_remaining = 17;
+}
+
 message Control {
   enum Type {
     CONTROL_DIMS = 0;
@@ -69,6 +111,9 @@ message Control {
     CONTROL_SGD_STEP = 105;
     CONTROL_LOSS_LINE_RESULTS = 108;
     CONTROL_RESUME = 109;
+    CONTROL_TEAM_ADMIT = 110;
+    CONTROL_TEAM_STATE = 111;
+    CONTROL_TEAM_ERROR = 112;
     CONTROL_QUIT = 901;
   }
   required Type type = 1;
@@ -122,5 +167,16 @@ message Control {
   optional Resume resume = 218;
   optional string resume_token = 219;
   optional int32 total_eval_steps = 220;
+  optional TeamAdmission team_admission = 222;
+  optional TeamState team_state = 223;
+  optional string team_session_id = 224;
+  optional string team_match_id = 225;
+  optional uint32 generation = 226;
+  optional uint64 model_revision = 227;
+  optional uint64 job_id = 228;
+  optional string error_code = 229;
+  optional string error_message = 230;
+  optional float team_mesh_step_size = 231;
+  optional uint32 team_batch_idx = 232;
 
 }

@@ -1,0 +1,29 @@
+{
+  "request": {"v": 1, "type": "team.create", "requestId": "create-1", "payload": {"name": "Local Minima"}},
+  "success": {"v": 1, "type": "response", "requestId": "create-1", "ok": true, "payload": {}},
+  "error": {"v": 1, "type": "response", "requestId": "invite-2", "ok": false, "error": {"code": "not_captain", "message": "Only the captain may invite players."}},
+  "snapshot": {
+    "v": 1,
+    "type": "snapshot",
+    "seq": 3,
+    "payload": {
+      "you": {"id": "alice", "name": "Alice", "teamId": "blue"},
+      "players": [
+        {"id": "alice", "name": "Alice", "connected": true, "teamId": "blue"},
+        {"id": "bob", "name": "Bob", "connected": true, "teamId": "blue"},
+        {"id": "carol", "name": "Carol", "connected": true, "teamId": null}
+      ],
+      "teams": [{"id": "blue", "name": "Local Minima", "captainId": "alice", "memberIds": ["alice", "bob"], "revision": 2, "status": "available"}],
+      "invitations": [],
+      "challenges": [],
+      "matches": [],
+      "chat": [{"id": "chat-1", "playerId": "bob", "name": "Bob", "text": "Ready to descend?", "sentAt": 1700000000}]
+    }
+  },
+  "launch": {
+    "v": 1,
+    "type": "game.launch",
+    "seq": 4,
+    "payload": {"matchId": "match-1", "teamId": "blue", "playerId": "alice", "sessionId": "session-blue-1", "panelIndex": 0, "token": "fixture-only-not-a-real-credential", "wsUrl": "/ws"}
+  }
+}

@@ -47,6 +47,11 @@ export default defineConfig({
   ],
   server: {
     proxy: {
+      '/lobby/ws': {
+        target: `http://localhost:${devWsPort}`,
+        ws: true,
+        changeOrigin: true,
+      },
       '/ws': {
         target: `http://localhost:${devWsPort}`,
         ws: true,

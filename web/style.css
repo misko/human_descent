@@ -2,6 +2,59 @@
     --header-height: 25px;
 }
 
+[hidden] {
+    display: none !important;
+}
+
+#lobbyRoot {
+    position: fixed;
+    inset: var(--header-height) 0 0;
+    overflow: auto;
+}
+
+#gameRoot {
+    width: 100%;
+    height: 100%;
+}
+
+body.hudes-lobby .header-left-actions [data-hud-action],
+body.hudes-lobby .header-lobby,
+body.hudes-lobby .header-controls,
+body.hudes-lobby .connection-status {
+    display: none;
+}
+
+.app-error {
+    margin: 2rem;
+    padding: 1rem;
+    color: #ffb6b6;
+    background: #28151a;
+    border: 1px solid #b55;
+}
+
+.desktop-required {
+    max-width: 34rem;
+    margin: 12vh auto;
+    padding: 1.5rem;
+    line-height: 1.5;
+}
+
+.desktop-required h1 {
+    color: #ffd666;
+    font-size: 1.6rem;
+}
+
+.desktop-required a {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: .7rem 1.1rem;
+    border-radius: .5rem;
+    background: #ffd666;
+    color: #111;
+    font-weight: bold;
+    text-decoration: none;
+}
+
 body {
     margin: 0;
     padding: 0;
@@ -65,7 +118,7 @@ body {
     transform: translateY(-50%);
     display: flex;
     align-items: center;
-    gap: 1.6rem;
+    gap: clamp(8px, 1.6vw, 18px);
     flex-wrap: wrap;
 }
 
@@ -113,6 +166,16 @@ body.hudes-mobile .header-left-actions .header-source {
 .header-controls button.header-pill:focus,
 .header-left-actions .header-pill:focus {
     outline: none;
+}
+
+.header-left-actions .header-lobby {
+    padding: 3px 6px;
+    border: 1px solid #ffd66655;
+    border-radius: 4px;
+    background: #ffd66612;
+    font-size: 10px;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .header-controls .mode-toggle {
@@ -934,6 +997,51 @@ body.hudes-mobile #glContainer {
 .plot canvas {
     flex: 1;
 }
+
+/* A compact dock in the gap beneath the two loss plots. Leave the right-hand
+   prediction column and the existing plot/canvas geometry untouched. */
+#teamGameStatus {
+    position: absolute;
+    top: calc(var(--header-height) + 25vh + 18px);
+    left: 12px;
+    width: calc(66.666% - 24px);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 6px 9px;
+    border: 1px solid #91b5d51f;
+    border-radius: 9px;
+    background: #0b1420dc;
+    color: #bdcddd;
+    font: 11px/1.3 system-ui, sans-serif;
+    z-index: 3;
+}
+.team-hud-label { color: #7f96ac; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }
+.team-hud-members { display: flex; gap: 5px; flex: 1; min-width: 0; }
+.team-hud-members > span {
+    display: inline-flex; align-items: center; gap: 5px; min-width: 0;
+    padding: 3px 6px; border: 1px solid #91b5d52b; border-radius: 5px;
+    background: #abc9eb08; color: #dce8f2;
+}
+.team-hud-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
+.team-hud-dot { flex: 0 0 5px; width: 5px; height: 5px; border-radius: 50%; background: #64d8e2; }
+[data-panel-index="1"] > .team-hud-dot { background: #db94e8; }
+[data-panel-index="2"] > .team-hud-dot { background: #e4d77b; }
+.team-hud-members [data-voted="true"] { border-color: #36ed75; background: #36ed7510; }
+.team-hud-members [data-connected="false"] { opacity: .5; border-style: dashed; }
+.team-hud-you { font-size: 9px; color: #879eb3; }
+.team-hud-readiness { color: #92a9bd; white-space: nowrap; }
+.team-hud-switches { border-left: 1px solid #91b5d52b; padding-left: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#teamGameResults {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    box-sizing: border-box; width: min(380px, calc(100vw - 32px)); padding: 24px;
+    border: 1px solid #91b5d54d; border-radius: 14px; background: #101b2bf5;
+    box-shadow: 0 16px 60px #0009; text-align: center; font: 14px/1.5 system-ui, sans-serif;
+}
+#teamGameResults h2 { margin: 0 0 10px; color: #edf6ff; font-size: 20px; }
+#teamGameResults button { margin-top: 8px; padding: 8px 16px; border: 1px solid #91b5d566; border-radius: 7px; background: #22384e; color: #edf6ff; cursor: pointer; }
 
 .plot-title {
     font-size: 0.78rem;

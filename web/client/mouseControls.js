@@ -142,10 +142,14 @@ export function installMouseControls(
     target.addEventListener('pointercancel', handlePointerUp);
   }
 
-  element.addEventListener('mousedown', handleMouseDown);
-  target.addEventListener('mousemove', handleMouseMove);
-  target.addEventListener('mouseup', handleMouseUp);
-  target.addEventListener('mouseleave', handleMouseUp);
+  // Pointer-capable browsers also emit compatibility mouse events. Handling
+  // both would select twice after relayout and cycle twice on a right click.
+  if (!supportsPointer) {
+    element.addEventListener('mousedown', handleMouseDown);
+    target.addEventListener('mousemove', handleMouseMove);
+    target.addEventListener('mouseup', handleMouseUp);
+    target.addEventListener('mouseleave', handleMouseUp);
+  }
 
   element.addEventListener('wheel', handleWheel, { passive: false });
   element.addEventListener('contextmenu', handleContextMenu);

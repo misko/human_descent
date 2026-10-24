@@ -26,6 +26,17 @@ export const detectMobileMode = (params = new URLSearchParams()) => {
   return isPointerCoarse() || hasTouchPoints() || smallViewport();
 };
 
+// Multiplayer requires desktop input. Layout overrides and viewport width do
+// not change device eligibility (a narrow desktop window remains a desktop).
+export const supportsMultiplayer = () => {
+  if (typeof navigator === 'undefined') return true;
+  if (navigator.userAgentData?.mobile === true) return false;
+  if (/Android|iPhone|iPad|iPod|Mobile|IEMobile|Windows Phone/i.test(navigator.userAgent || '')) return false;
+  // iPadOS can identify itself as a Mac while retaining multiple touch points.
+  if (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1) return false;
+  return true;
+};
+
 export const setMobileFlag = (value) => {
   const enabled = Boolean(value);
   if (typeof window !== 'undefined') {

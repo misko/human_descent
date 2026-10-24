@@ -12,6 +12,13 @@ def validate_control(msg):
     if not msg.IsInitialized():
         raise ValueError("incomplete control message")
     if msg.type == hudes_pb2.Control.CONTROL_CONFIG:
+        if msg.HasField("team_mesh_step_size"):
+            if msg.HasField("config") or not (
+                math.isfinite(msg.team_mesh_step_size)
+                and 0 < msg.team_mesh_step_size <= 100
+            ):
+                raise ValueError("invalid team mesh step size")
+            return
         c = msg.config
         if not msg.HasField("config") or c.dtype not in {"float16", "float32"}:
             raise ValueError("invalid inference configuration")
@@ -38,3 +45,14 @@ def validate_control(msg):
     elif msg.type == hudes_pb2.Control.CONTROL_SGD_STEP:
         if not 0 <= msg.sgd_steps <= 32:
             raise ValueError("SGD request exceeds limits")
+    elif msg.type == hudes_pb2.Control.CONTROL_TEAM_ADMIT:
+        if not msg.HasField("team_admission") or any(
+            not value or len(value) > 256
+            for value in (
+                msg.team_admission.match_id,
+                msg.team_admission.session_id,
+                msg.team_admission.player_id,
+                msg.team_admission.token,
+            )
+        ):
+            raise ValueError("invalid team admission")

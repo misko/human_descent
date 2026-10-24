@@ -16,6 +16,25 @@ const createStubElement = () => {
   };
 };
 
+// Older browsers retain the mouse-only fallback and disposal removes it.
+(() => {
+  const element = createStubElement();
+  delete element.onpointerdown;
+  let clicks = 0;
+  let cycles = 0;
+  const controls = installMouseControls(element, {
+    onClick: () => clicks++, onContext: () => cycles++,
+  });
+  const down = element.listeners.get('mousedown');
+  down({ button: 0, clientX: 10, clientY: 15 });
+  down({ button: 2, preventDefault() {} });
+  if (clicks !== 1 || cycles !== 1 || element.listeners.has('pointerdown')) {
+    throw new Error('Mouse-only selection fallback failed');
+  }
+  controls.dispose();
+  if (element.listeners.size) throw new Error('Mouse fallback listeners leaked');
+})();
+
 // Dragging should report horizontal and vertical deltas
 (() => {
   const element = createStubElement();
@@ -29,6 +48,9 @@ const createStubElement = () => {
 
   if (!down || !move) {
     throw new Error('Mouse control listeners were not attached');
+  }
+  if (element.listeners.has('mousedown')) {
+    throw new Error('Pointer browsers must not handle compatibility mouse events twice');
   }
 
   down({ button: 0, clientX: 100, clientY: 100, pointerId: 1 });

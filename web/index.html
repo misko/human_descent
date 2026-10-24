@@ -14,6 +14,7 @@
 <body>
     <header class="site-header">
         <div class="header-left-actions">
+            <a class="header-pill header-lobby" href="?lobby=1" hidden>Multiplayer</a>
             <button type="button" class="header-pill" data-hud-action="toggle-help">Help</button>
             <button type="button" class="header-pill" data-hud-action="show-tutorial">Tutorial</button>
             <a class="header-pill header-source" href="https://github.com/misko/human_descent" target="_blank"
@@ -21,6 +22,8 @@
         </div>
         <img class="site-logo" src="/header.png" alt="humandescent.net">
     </header>
+    <main id="lobbyRoot" hidden aria-label="Multiplayer lobby"></main>
+    <div id="gameRoot">
     <div id="glContainer"></div>
 
     <!-- Top Container for Charts -->
@@ -78,6 +81,7 @@
     <div id="levelToast" class="level-toast">
         <div class="level-toast-eyebrow" id="levelToastEyebrow"></div>
         <h2 id="levelToastLevel"></h2>
+    </div>
     </div>
 
     <script type="module" src="./app.js"></script>

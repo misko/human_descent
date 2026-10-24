@@ -15,12 +15,11 @@ const debugMouse = (message) => {
 export default class KeyboardClientGL extends KeyboardClient {
     constructor(addr, port, options = {}) {
         const mergedOptions = { ...options, renderMode: '3d' };
-        if (options.isMobile) {
+        if (options.isMobile && !options.launchDescriptor) {
             mergedOptions.meshGrids = 1;
         }
         super(addr, port, mergedOptions);
-        this.isMobile = Boolean(options.isMobile);
-        this.initInput();
+        this.isMobile = !this.team && Boolean(options.isMobile);
 
     }
 
@@ -58,7 +57,6 @@ export default class KeyboardClientGL extends KeyboardClient {
                 });
                 this.__applyTouchVector = (vector) => this._applyTouchVector(vector);
                 this._installMobileUi();
-                this._installTouchRotationControls(canvas);
                 this._installTouchRotationControls(canvas);
             } else {
                 debugMouse('[KeyboardClientGL] installing mouse controls');
@@ -145,7 +143,9 @@ export default class KeyboardClientGL extends KeyboardClient {
       // Step in the selected grid with given s0 and s1 values
       stepInSelectedGrid(s0, s1) {
         try {
+            if (this._destroyed || this._textCaptureActive) return;
             const selectedGrid = this.view.getSelectedGrid();
+            if (this.team && !this.team.selectablePanels.includes(selectedGrid)) return;
             const stepSize = this.state.stepSize;
 
             // Prepare the steps dictionary similar to the Python version
@@ -320,7 +320,7 @@ export default class KeyboardClientGL extends KeyboardClient {
 
     _applyTouchVector(vector) {
         this._updateJoystickVisual(vector);
-        if (!vector || this.state.helpScreenIdx !== -1) {
+        if (this._destroyed || this._textCaptureActive || !vector || this.state.helpScreenIdx !== -1) {
             return;
         }
         const rawX = Number(vector.x) || 0;
@@ -539,7 +539,7 @@ export default class KeyboardClientGL extends KeyboardClient {
         this._installMobileJoystick();
         this._mobileUi = { panel, buttons };
         this._updateMobileUi();
-        this._mobileUiTicker = setInterval(() => this._updateMobileUi(), 800);
+        this._mobileUiTicker = this._setInterval(() => this._updateMobileUi(), 800);
     }
     _installMobileJoystick() {
         const existing = document.getElementById('joystickPad');
@@ -637,6 +637,19 @@ export default class KeyboardClientGL extends KeyboardClient {
             const moving = Math.abs(dx) > 1 || Math.abs(dy) > 1;
             this._joystickHint.classList.toggle('hidden', moving);
         }
+    }
+
+    destroy() {
+        if (this._destroyed) return;
+        this._mouseControls?.dispose();
+        this._mouseControls = null;
+        this._touchControls?.();
+        this._cleanupTouchRotation();
+        if (this._mobileUiTicker) clearInterval(this._mobileUiTicker);
+        this._mobileUi?.panel?.remove();
+        this._joystickPad?.remove();
+        this.__applyTouchVector = null;
+        super.destroy();
     }
 
 }

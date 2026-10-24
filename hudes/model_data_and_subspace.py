@@ -194,9 +194,12 @@ class ModelDataAndSubspace:
         self.set_parameters(weights, dtype)
         full_val_loss = 0
         n = 0
-        for batch_idx in range(self.batchers["val"].get_len(self.val_batch_size)):
+        # get_batch caps requests at max_batch_size. Count using that same size
+        # so the complete (possibly ragged) validation population is evaluated.
+        effective_batch_size = min(self.val_batch_size, self.max_batch_size)
+        for batch_idx in range(self.batchers["val"].get_len(effective_batch_size)):
             batch = self.get_batch(
-                batch_size=self.val_batch_size,
+                batch_size=effective_batch_size,
                 batch_idx=batch_idx,
                 dtype=dtype,
                 train_or_val="val",

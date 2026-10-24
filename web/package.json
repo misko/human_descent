@@ -19,7 +19,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test --project=chromium",
+    "test:multiplayer": "playwright test --config playwright.multiplayer.config.ts",
     "test:unit": "node ./tests/run-unit.mjs",
+    "test:protocol": "node ../scripts/test-multiplayer-wire.mjs",
     "test:frontend": "npm run -s test:unit && npm run -s test:e2e:chromium",
     "test": "npm run -s test:frontend"
   },
