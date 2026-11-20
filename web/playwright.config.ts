@@ -8,7 +8,7 @@ process.env.HUDES_SPEED_RUN_SECONDS = DEFAULT_SPEED_RUN_SECONDS;
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.mjs',
-  testIgnore: '**/multiplayer/**',
+  testIgnore: ['**/multiplayer/**', '**/staging/**'],
   // The CPU inference worker is shared by this suite; avoid queuing many
   // expensive full landscapes from otherwise independent browser tests.
   fullyParallel: false,
