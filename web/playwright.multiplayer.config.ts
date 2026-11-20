@@ -23,7 +23,8 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: 'bash ../scripts/test-python.sh -u -m scripts.multiplayer_test_server --port "$HUDES_PORT" --health-port "$HUDES_HEALTH_PORT" --duration ${HUDES_MULTIPLAYER_TEST_SECONDS:-6}',
+      // Allow time for live rendering, screenshots, and reconnects before natural expiry.
+      command: 'bash ../scripts/test-python.sh -u -m scripts.multiplayer_test_server --port "$HUDES_PORT" --health-port "$HUDES_HEALTH_PORT" --duration ${HUDES_MULTIPLAYER_TEST_SECONDS:-15}',
       url: `http://127.0.0.1:${runtime.healthPort}/health`,
       reuseExistingServer: false,
       timeout: 60_000,

@@ -1167,6 +1167,16 @@ async def run_server(
         first = (req or b"GET / HTTP/1.1\r\n").split(b"\r\n", 1)[0]
         parts = first.split()
         path = parts[1].decode("utf-8") if len(parts) >= 2 else "/health"
+        common_headers = (
+            "Connection: close\r\n"
+            "Access-Control-Allow-Origin: *\r\n"
+            "Access-Control-Allow-Methods: GET, OPTIONS, DELETE\r\n"
+            "Access-Control-Allow-Headers: *\r\n\r\n"
+        )
+
+        if first.startswith(b"OPTIONS"):
+            writer.write(f"HTTP/1.1 204 No Content\r\n{common_headers}".encode())
+            return
 
         def send_json(payload: str, status: str = "200 OK"):
             body = payload.encode("utf-8")
@@ -1174,16 +1184,9 @@ async def run_server(
                 f"HTTP/1.1 {status}\r\n"
                 "Content-Type: application/json; charset=utf-8\r\n"
                 f"Content-Length: {len(body)}\r\n"
-                "Connection: close\r\n"
-                "Access-Control-Allow-Origin: *\r\n"
-                "Access-Control-Allow-Methods: GET, OPTIONS, DELETE\r\n"
-                "Access-Control-Allow-Headers: *\r\n\r\n"
+                f"{common_headers}"
             ).encode()
             writer.write(headers + body)
-
-        if first.startswith(b"OPTIONS"):
-            send_json("", status="204 No Content")
-            return
 
         if first.startswith(b"DELETE") and path.startswith("/api/highscores"):
             if not admin_request_authorized(req):
